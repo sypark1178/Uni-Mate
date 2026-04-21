@@ -1,0 +1,21 @@
+# Frontend build and local runtime artifacts
+frontend/node_modules/
+frontend/.next/
+frontend/.logs/
+frontend/.data/
+frontend/.next-dev.stdout.log
+frontend/.next-dev.stderr.log
+frontend/tsconfig.tsbuildinfo
+
+# Local databases and Python caches
+backend/data/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local tools and downloaded runtimes
+tools/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
