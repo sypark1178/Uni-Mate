@@ -1,12 +1,13 @@
 import Link from "next/link";
+import Image from "next/image";
 import { PhoneFrame } from "@/components/phone-frame";
 
 export default function LandingPage() {
   return (
-    <PhoneFrame>
-      <section className="flex min-h-[720px] flex-col items-center justify-center rounded-[24px] bg-navy px-8 py-10 text-center text-white">
-        <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-[22px] bg-white text-2xl font-semibold text-navy">
-          U
+    <PhoneFrame fullBleed>
+      <section className="flex h-full flex-col items-center justify-center bg-navy px-8 pb-10 pt-[54px] text-center text-white">
+        <div className="mb-8 h-24 w-24 overflow-hidden rounded-[22px] bg-white">
+          <Image src="/unimate-logo-cropped.png" alt="Uni-Mate logo" width={96} height={96} className="h-full w-full object-contain" />
         </div>
         <h1 className="text-5xl font-semibold tracking-[-0.05em]">Uni-MATE</h1>
         <p className="mt-4 text-lg text-white/80">나의 입시 전략 파트너</p>
