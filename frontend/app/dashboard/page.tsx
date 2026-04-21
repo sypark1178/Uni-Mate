@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BottomNav } from "@/components/bottom-nav";
 import { EmptyState } from "@/components/empty-state";
 import { EvidenceModal } from "@/components/evidence-modal";
+import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import { ddayItems, emptyProfile, profile } from "@/lib/mock-data";
 import { buildGoalAnalyses, buildStrategyRecommendations, parseSeededGoals } from "@/lib/planning";
@@ -75,18 +76,8 @@ export default function DashboardPage() {
 
   return (
     <>
-      <main className="app-shell flex min-h-screen justify-center px-4 py-6">
-        <section className="relative w-full max-w-[430px] overflow-hidden rounded-phone border border-white/70 bg-white shadow-soft">
-          <div className="flex items-center justify-between px-6 pb-3 pt-5 text-sm font-semibold">
-            <span>9:41</span>
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-5 rounded bg-black" />
-              <span className="h-3 w-4 rounded bg-black" />
-              <span className="h-3 w-6 rounded border border-black bg-white" />
-            </div>
-          </div>
-
-          <div className="px-4 pb-28">
+      <PhoneFrame>
+        <div className="px-4 pb-28">
             <div className="mb-4 flex items-start justify-between gap-3 px-2">
               <div>
                 <div className="mb-1 text-base text-muted">안녕하세요</div>
@@ -275,9 +266,8 @@ export default function DashboardPage() {
                 <EmptyState />
               </div>
             )}
-          </div>
-        </section>
-      </main>
+        </div>
+      </PhoneFrame>
 
       <BottomNav />
       <EvidenceModal evidence={selected?.evidence ?? null} onClose={() => setSelected(null)} />
