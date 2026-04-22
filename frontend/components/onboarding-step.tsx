@@ -14,6 +14,7 @@ type OnboardingStepProps = {
   nextHref: string;
   nextLabel: string;
   helperLink?: { href: string; label: string };
+  onNext?: () => Promise<void> | void;
 };
 
 function mergeSearchParams(href: string, currentParams: URLSearchParams) {
@@ -46,7 +47,8 @@ export function OnboardingStep({
   prevLabel = "이전으로",
   nextHref,
   nextLabel,
-  helperLink
+  helperLink,
+  onNext
 }: OnboardingStepProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -65,6 +67,13 @@ export function OnboardingStep({
     }
   };
 
+  const handleNext = async () => {
+    if (onNext) {
+      await onNext();
+    }
+    safeNavigate(router, resolvedNextHref);
+  };
+
   return (
     <PhoneFrame title={title} subtitle={subtitle}>
       <div className="mb-5 h-2 overflow-hidden rounded-full bg-slate-200">
@@ -78,7 +87,7 @@ export function OnboardingStep({
       <div className="mt-8 space-y-3">
         <button
           type="button"
-          onClick={() => safeNavigate(router, resolvedNextHref)}
+          onClick={() => void handleNext()}
           className="flex w-full items-center justify-center rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white"
         >
           {nextLabel}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
 import { UploadDropzone } from "@/components/upload-dropzone";
@@ -35,6 +35,8 @@ function buildFixedSubjectSlots(subjects: SubjectScoreEntry[]) {
     entry: fixedSubjects[index] ?? null
   }));
 }
+
+const subjectGradeOptions = ["1", "2", "3", "4", "5"] as const;
 
 export default function OnboardingGradesPage() {
   const router = useRouter();
@@ -114,6 +116,21 @@ export default function OnboardingGradesPage() {
     () => activeScoreRecord?.subjects.filter((entry) => entry.isCustom && entry.subject.trim()) ?? [],
     [activeScoreRecord?.subjects]
   );
+  const selectedGradeSummary = useMemo(() => {
+    if (!activeScoreRecord) return [];
+    return activeScoreRecord.subjects
+      .filter((entry) => entry.subject.trim() && entry.score.trim())
+      .map((entry) => `${entry.subject}: ${entry.score}등급`);
+  }, [activeScoreRecord]);
+  const [overallAverageDraft, setOverallAverageDraft] = useState("");
+
+  useEffect(() => {
+    if (selectedTab === "studentRecord") {
+      setOverallAverageDraft("");
+      return;
+    }
+    setOverallAverageDraft(activeScoreRecord?.overallAverage ?? "");
+  }, [activeScoreRecord?.overallAverage, selectedTab]);
 
   const displayedSubjectCount = fixedSubjectSlots.length + customSubjects.length;
 
@@ -186,6 +203,21 @@ export default function OnboardingGradesPage() {
     matches.forEach((entry) => {
       removeSubject(selectedTab, selectedYear, selectedTerm, entry.id);
     });
+  };
+
+  const handleOverallAverageInput = (value: string) => {
+    const normalized = value.replace(",", ".");
+    if (!/^\d*\.?\d{0,2}$/.test(normalized)) {
+      return;
+    }
+    setOverallAverageDraft(normalized);
+  };
+
+  const handleOverallAverageBlur = () => {
+    if (selectedTab === "studentRecord") {
+      return;
+    }
+    updateOverallAverage(selectedTab, selectedYear, selectedTerm, overallAverageDraft.trim());
   };
 
   const uploadTitle = selectedTab === "studentRecord" ? "생기부 / 활동 자료 업로드" : "PDF / 사진 성적 업로드";
@@ -277,31 +309,39 @@ export default function OnboardingGradesPage() {
             {fixedSubjectSlots.map(({ label, entry }) => (
               <label key={label} className="space-y-2">
                 <span className="text-sm text-muted">{label}</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
+                <select
                   value={entry?.score ?? ""}
                   onChange={(event) => {
                     if (!entry) return;
                     updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, event.target.value);
                   }}
-                  placeholder="직접 입력"
-                  className="w-full rounded-xl border border-white bg-white px-4 py-3"
-                />
+                  className="w-full rounded-xl border border-white bg-white px-4 py-3 text-ink"
+                >
+                  <option value="">등급 선택</option>
+                  {subjectGradeOptions.map((grade) => (
+                    <option key={grade} value={grade}>
+                      {grade}
+                    </option>
+                  ))}
+                </select>
               </label>
             ))}
 
             {customSubjects.map((entry) => (
               <label key={entry.id} className="space-y-2">
                 <span className="text-sm text-muted">{entry.subject}</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
+                <select
                   value={entry.score}
                   onChange={(event) => updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, event.target.value)}
-                  placeholder="직접 입력"
-                  className="w-full rounded-xl border border-white bg-white px-4 py-3"
-                />
+                  className="w-full rounded-xl border border-white bg-white px-4 py-3 text-ink"
+                >
+                  <option value="">등급 선택</option>
+                  {subjectGradeOptions.map((grade) => (
+                    <option key={grade} value={grade}>
+                      {grade}
+                    </option>
+                  ))}
+                </select>
               </label>
             ))}
 
@@ -310,11 +350,13 @@ export default function OnboardingGradesPage() {
             <label className="space-y-2">
               <span className="text-sm text-muted">전체평균</span>
               <input
-                type="text"
+                type="number"
                 inputMode="decimal"
-                value={activeScoreRecord?.overallAverage ?? ""}
-                onChange={(event) => updateOverallAverage(selectedTab, selectedYear, selectedTerm, event.target.value)}
-                placeholder="직접 입력"
+                step="0.01"
+                value={overallAverageDraft}
+                onChange={(event) => handleOverallAverageInput(event.target.value)}
+                onBlur={handleOverallAverageBlur}
+                placeholder="예: 2.35"
                 className="w-full rounded-xl border border-white bg-white px-4 py-3"
               />
             </label>
@@ -345,6 +387,24 @@ export default function OnboardingGradesPage() {
       <p className="mt-3 text-xs leading-5 text-muted">
         이 화면의 입력값은 학년/학기 배열로 저장되며 설정 &gt; 성적정보와 AI 분석 직전까지 그대로 반영됩니다.
       </p>
+      <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-xs leading-5 text-muted shadow-soft">
+        <div>
+          현재 선택: {scoreTabOptions.find((tab) => tab.key === selectedTab)?.label} /{" "}
+          {gradeYearOptions.find((item) => item.value === selectedYear)?.label} /{" "}
+          {gradeTermOptions.find((item) => item.value === selectedTerm)?.label}
+        </div>
+        {selectedTab !== "studentRecord" ? (
+          <div className="mt-1">
+            입력된 등급: {selectedGradeSummary.length > 0 ? selectedGradeSummary.join(", ") : "아직 선택된 과목 등급이 없습니다."}
+            <br />
+            전체평균: {activeScoreRecord?.overallAverage || "-"}
+          </div>
+        ) : (
+          <div className="mt-1">
+            생기부 제목: {currentStudentRecord.title || "-"} / 메모: {currentStudentRecord.description || "-"}
+          </div>
+        )}
+      </div>
 
       <div className="mt-4">
         <UploadDropzone

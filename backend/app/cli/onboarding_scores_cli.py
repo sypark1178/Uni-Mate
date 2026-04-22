@@ -15,6 +15,12 @@ from backend.app.services.onboarding_score_store import OnboardingScoreStore
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Persist onboarding score snapshots.")
     parser.add_argument("command", choices=("get", "save"))
+    parser.add_argument(
+        "--entity",
+        dest="entity",
+        choices=("scores", "profile", "goals", "analysis"),
+        default="scores",
+    )
     parser.add_argument("--db-path", dest="db_path", default=None)
     parser.add_argument("--user-key", dest="user_key", default="local-user")
     return parser
@@ -29,9 +35,23 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "save":
         payload = json.load(sys.stdin)
-        result = store.save_snapshot(payload, user_key=args.user_key)
+        if args.entity == "profile":
+            result = store.save_profile(payload, user_key=args.user_key)
+        elif args.entity == "goals":
+            result = store.save_goals(payload, user_key=args.user_key)
+        elif args.entity == "analysis":
+            result = store.save_analysis_result(payload, user_key=args.user_key)
+        else:
+            result = store.save_snapshot(payload, user_key=args.user_key)
     else:
-        result = store.get_snapshot(user_key=args.user_key)
+        if args.entity == "profile":
+            result = store.get_profile(user_key=args.user_key)
+        elif args.entity == "goals":
+            result = store.get_goals(user_key=args.user_key)
+        elif args.entity == "analysis":
+            result = store.get_analysis_result(user_key=args.user_key)
+        else:
+            result = store.get_snapshot(user_key=args.user_key)
 
     json.dump(result, sys.stdout)
     sys.stdout.write("\n")

@@ -24,9 +24,9 @@ export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const seededGoals = parseSeededGoals(searchParams);
-  const { goals } = useGoals(seededGoals);
-  const { summary } = useScoreRecords();
-  const { studentProfile } = useStudentProfile();
+  const { goals, hydrated: goalsHydrated } = useGoals(seededGoals);
+  const { summary, hydrated: scoresHydrated } = useScoreRecords();
+  const { studentProfile, hydrated: profileHydrated } = useStudentProfile();
   const goalAnalyses = buildGoalAnalyses(goals);
   const [toggles, setToggles] = useState({
     guideline: true,
@@ -45,6 +45,7 @@ export default function SettingsPage() {
   const moveTo = (href: string) => mergeHrefWithSearchParams(href, cleanedSearchParams);
   const settingsReturnHref = moveTo("/settings");
   const chips = useMemo(() => [studentProfile.gradeLabel, `${String(studentProfile.targetYear).slice(2)}학년도 입시`], [studentProfile.gradeLabel, studentProfile.targetYear]);
+  const isHydrated = goalsHydrated && scoresHydrated && profileHydrated;
 
   const toggle = (key: keyof typeof toggles) => {
     setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -78,9 +79,11 @@ export default function SettingsPage() {
                   {studentProfile.name.slice(0, 1) || "?"}
                 </div>
                 <div>
-                  <div className="text-xl font-medium">{studentProfile.name}</div>
+                  <div className="text-xl font-medium">{isHydrated ? studentProfile.name : "불러오는 중..."}</div>
                   <div className="mt-1 text-sm text-muted">
-                    {studentProfile.region || "서울"} / {studentProfile.district || "강남구"} / {studentProfile.schoolName || "대치고등학교"}
+                    {isHydrated
+                      ? `${studentProfile.region || "서울"} / ${studentProfile.district || "강남구"} / ${studentProfile.schoolName || "대치고등학교"}`
+                      : "기본정보를 불러오는 중입니다."}
                   </div>
                 </div>
               </div>
@@ -96,11 +99,11 @@ export default function SettingsPage() {
           <div className="overflow-hidden rounded-[22px] border border-line bg-white shadow-soft">
             <div className="grid grid-cols-[1fr_1fr_auto] items-stretch max-sm:grid-cols-1">
               <div className="p-5">
-                <div className="text-xl font-medium">내신</div>
+                <div className="text-[18px] font-medium">내신</div>
                 <div className="mt-2 text-xl font-medium text-accent">{summary.schoolAverage}</div>
               </div>
               <div className="border-l border-slate-100 p-5 max-sm:border-l-0 max-sm:border-t">
-                <div className="text-xl font-medium">모의고사</div>
+                <div className="text-[18px] font-medium">모의고사</div>
                 <div className="mt-2 text-xl font-medium text-accent">{summary.mockAverage}</div>
                 <div className="mt-2 text-xs text-muted">
                   생기부 {summary.studentRecordCount}건 / 업로드 {summary.uploadCount}건
@@ -118,7 +121,7 @@ export default function SettingsPage() {
         <section className="mb-5">
           <h2 className="mb-3 text-lg font-semibold">목표정보</h2>
           <div className="space-y-3">
-            {goalAnalyses.map((item, index) => (
+            {goalAnalyses.length > 0 ? goalAnalyses.map((item, index) => (
               <div
                 key={item.id}
                 className="flex items-center justify-between gap-3 rounded-[22px] border border-line bg-white p-4 shadow-soft"
@@ -140,7 +143,11 @@ export default function SettingsPage() {
                   수정
                 </button>
               </div>
-            ))}
+            )) : (
+              <div className="rounded-[22px] border border-line bg-white p-4 text-sm text-muted shadow-soft">
+                저장된 목표대학/학과가 없습니다. 목표설정에서 먼저 선택해 주세요.
+              </div>
+            )}
             <button type="button" onClick={() => move("/onboarding/goals")} className={`${wideEditButtonClass} shadow-soft`}>
               + 목표대학 추가 / 전체 수정
             </button>

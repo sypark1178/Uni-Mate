@@ -11,6 +11,7 @@ import type {
   SubjectScoreEntry,
   UploadedRecordFile
 } from "@/lib/types";
+import { getDraftScores, setDraftScores } from "@/lib/draft-store";
 
 export const scoreStorageKey = "uni-mate-score-memory";
 
@@ -111,7 +112,8 @@ function normalizeSubjectEntries(raw: unknown): SubjectScoreEntry[] {
 
   return raw.map((item, index) => {
     const subject = typeof item === "object" && item && "subject" in item ? String(item.subject ?? "") : defaultSubjectNames[index] ?? "";
-    const score = typeof item === "object" && item && "score" in item ? String(item.score ?? "") : "";
+    const rawScore = typeof item === "object" && item && "score" in item ? String(item.score ?? "") : "";
+    const score = ["1", "2", "3", "4", "5"].includes(rawScore) ? rawScore : "";
     const id = typeof item === "object" && item && "id" in item ? String(item.id) : createSubjectId(subject, index);
     const isCustom = typeof item === "object" && item && "isCustom" in item ? Boolean(item.isCustom) : index >= defaultSubjectNames.length;
     return { id, subject, score, isCustom };
@@ -124,12 +126,17 @@ function normalizeGradeRecord(raw: unknown): GradePeriodRecord {
   const year = (gradeYearOptions.find((item) => item.value === rawYear)?.value ?? "1") as GradeYear;
   const term = (gradeTermOptions.find((item) => item.value === rawTerm)?.value ?? "1-midterm") as GradeTerm;
 
+  const rawOverallAverage = typeof raw === "object" && raw && "overallAverage" in raw ? String(raw.overallAverage ?? "").trim() : "";
+  const parsedOverallAverage = Number(rawOverallAverage);
+  const normalizedOverallAverage =
+    rawOverallAverage && Number.isFinite(parsedOverallAverage) ? parsedOverallAverage.toFixed(2) : rawOverallAverage;
+
   return {
     id: typeof raw === "object" && raw && "id" in raw ? String(raw.id) : buildKey(year, term),
     year,
     term,
     subjects: normalizeSubjectEntries(typeof raw === "object" && raw && "subjects" in raw ? raw.subjects : []),
-    overallAverage: typeof raw === "object" && raw && "overallAverage" in raw ? String(raw.overallAverage ?? "") : "",
+    overallAverage: normalizedOverallAverage,
     updatedAt: typeof raw === "object" && raw && "updatedAt" in raw ? String(raw.updatedAt) : nowIso()
   };
 }
@@ -350,7 +357,9 @@ export function useScoreRecords() {
       }
 
       const serverStore = await loadServerStore();
-      const resolvedStore = getStoreTimestamp(serverStore) > getStoreTimestamp(localStore) ? serverStore : localStore;
+      const draftStore = getDraftScores<ScoreMemoryStore>();
+      const candidate = getStoreTimestamp(serverStore) > getStoreTimestamp(localStore) ? serverStore : localStore;
+      const resolvedStore = getStoreTimestamp(draftStore) > getStoreTimestamp(candidate) ? draftStore : candidate;
 
       if (!cancelled) {
         setStore(resolvedStore ?? defaultScoreMemoryStore);
@@ -372,6 +381,7 @@ export function useScoreRecords() {
     setStore((previous) => {
       const nextStore = normalizeScoreStore(updater(previous));
       persistStore(nextStore);
+      setDraftScores(nextStore);
       return nextStore;
     });
   };
@@ -385,11 +395,12 @@ export function useScoreRecords() {
   };
 
   const updateSubjectScore = (tab: "schoolRecord" | "mockExam", year: GradeYear, term: GradeTerm, entryId: string, value: string) => {
+    const normalizedValue = ["1", "2", "3", "4", "5"].includes(value) ? value : "";
     commit((previous) => {
       const current = getScoreRecord(previous, tab, year, term);
       const nextRecord: GradePeriodRecord = {
         ...current,
-        subjects: current.subjects.map((entry) => (entry.id === entryId ? { ...entry, score: value } : entry)),
+        subjects: current.subjects.map((entry) => (entry.id === entryId ? { ...entry, score: normalizedValue } : entry)),
         updatedAt: nowIso()
       };
       return updateScoreRecordBucket(previous, tab, upsertScoreRecord(getScoreRecordBucket(previous, tab), nextRecord));
@@ -409,9 +420,17 @@ export function useScoreRecords() {
   };
 
   const updateOverallAverage = (tab: "schoolRecord" | "mockExam", year: GradeYear, term: GradeTerm, value: string) => {
+    const trimmed = value.trim();
+    let normalizedValue = "";
+    if (trimmed) {
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed)) {
+        normalizedValue = parsed.toFixed(2);
+      }
+    }
     commit((previous) => {
       const current = getScoreRecord(previous, tab, year, term);
-      const nextRecord: GradePeriodRecord = { ...current, overallAverage: value, updatedAt: nowIso() };
+      const nextRecord: GradePeriodRecord = { ...current, overallAverage: normalizedValue, updatedAt: nowIso() };
       return updateScoreRecordBucket(previous, tab, upsertScoreRecord(getScoreRecordBucket(previous, tab), nextRecord));
     });
   };

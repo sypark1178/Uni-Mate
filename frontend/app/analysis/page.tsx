@@ -9,12 +9,16 @@ import { RecommendationCard } from "@/components/recommendation-card";
 import { SectionTabs } from "@/components/section-tabs";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import { recommendations } from "@/lib/mock-data";
+import { parseSeededGoals } from "@/lib/planning";
+import { useGoals } from "@/lib/use-goals";
 import type { Recommendation } from "@/lib/types";
 
 export default function AnalysisPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Recommendation | null>(null);
+  const seededGoals = parseSeededGoals(searchParams);
+  const { goals } = useGoals(seededGoals);
   const analysisLoadingHref = mergeHrefWithSearchParams("/analysis/loading?source=analysis", searchParams);
 
   return (
@@ -28,6 +32,9 @@ export default function AnalysisPage() {
           ]}
         />
         <section className="rounded-[24px] bg-mist p-4">
+          <div className="mb-2 text-xs text-muted">
+            목표 입력: {goals.map((goal, index) => `${index + 1}순위 ${goal.university} ${goal.major}`).join(" / ")}
+          </div>
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm text-muted">탐색 요약</div>

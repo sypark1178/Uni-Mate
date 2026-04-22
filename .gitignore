@@ -15,6 +15,7 @@ backend/data/
 
 # Local tools and downloaded runtimes
 tools/
+.tools/
 
 # OS/editor noise
 .DS_Store

@@ -8,8 +8,11 @@ import { EmptyState } from "@/components/empty-state";
 import { EvidenceModal } from "@/components/evidence-modal";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
-import { ddayItems, emptyProfile, profile } from "@/lib/mock-data";
+import { ddayItems, emptyProfile } from "@/lib/mock-data";
 import { buildGoalAnalyses, buildStrategyRecommendations, parseSeededGoals } from "@/lib/planning";
+import { isDraftDirty, markDraftDirty } from "@/lib/draft-store";
+import { useStudentProfile } from "@/lib/profile-storage";
+import { useScoreRecords } from "@/lib/score-storage";
 import { useGoals } from "@/lib/use-goals";
 import type { Recommendation } from "@/lib/types";
 
@@ -25,12 +28,15 @@ export default function DashboardPage() {
   const [selected, setSelected] = useState<Recommendation | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [analysisNotice, setAnalysisNotice] = useState("");
+  const [saveNotice, setSaveNotice] = useState("");
 
   const isEmpty = searchParams.get("empty") === "1";
   const analysisDone = searchParams.get("analysis") === "done";
-  const currentProfile = isEmpty ? emptyProfile : profile;
+  const { studentProfile, hydrated: profileHydrated, flushProfileToServer } = useStudentProfile();
+  const { flushStoreToServer } = useScoreRecords();
+  const currentProfile = isEmpty ? emptyProfile : studentProfile;
   const seededGoals = parseSeededGoals(searchParams);
-  const { goals } = useGoals(seededGoals);
+  const { goals, flushGoalsToServer } = useGoals(seededGoals);
   const goalAnalyses = useMemo(() => buildGoalAnalyses(goals), [goals]);
   const strategyRecommendations = useMemo(() => buildStrategyRecommendations(goals), [goals]);
   const primaryGoal = goals[0];
@@ -53,26 +59,56 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
+    let cancelled = false;
+    const hydrateNotice = async () => {
+      try {
+        const response = await fetch("/api/analysis/result", { method: "GET", cache: "no-store" });
+        if (response.ok) {
+          const payload = (await response.json()) as { data?: { completedAt?: string; source?: string } | null };
+          if (!cancelled && payload.data?.completedAt) {
+            setAnalysisNotice(`최근 AI 분석 완료: ${payload.data.source ?? "unknown"} 기준 결과가 반영되었습니다.`);
+            return;
+          }
+        }
+      } catch {
+        // Fallback to localStorage below.
+      }
+
+      try {
+        const raw = window.localStorage.getItem("uni-mate-analysis-result");
+        if (!raw) {
+          if (!cancelled) setAnalysisNotice("");
+          return;
+        }
+        const parsed = JSON.parse(raw) as { completedAt?: string; source?: string };
+        if (!cancelled && parsed.completedAt) {
+          setAnalysisNotice(`최근 AI 분석 완료: ${parsed.source ?? "unknown"} 기준 결과가 반영되었습니다.`);
+          return;
+        }
+      } catch {
+        if (!cancelled) setAnalysisNotice("");
+      }
+    };
+
     if (analysisDone) {
       setAnalysisNotice("AI 분석이 완료되어 대시보드 결과가 새로 반영되었습니다.");
       return;
     }
-
-    try {
-      const raw = window.localStorage.getItem("uni-mate-analysis-result");
-      if (!raw) {
-        setAnalysisNotice("");
-        return;
-      }
-
-      const parsed = JSON.parse(raw) as { completedAt?: string; source?: string };
-      if (parsed.completedAt) {
-        setAnalysisNotice(`최근 AI 분석 완료: ${parsed.source ?? "unknown"} 기준 결과가 반영되었습니다.`);
-      }
-    } catch {
-      setAnalysisNotice("");
-    }
+    void hydrateNotice();
+    return () => {
+      cancelled = true;
+    };
   }, [analysisDone]);
+
+  const handleSaveAll = async () => {
+    await flushProfileToServer();
+    await flushStoreToServer();
+    await flushGoalsToServer();
+    // 저장 후에도 화면 표시 상태는 유지하고, "미저장 변경" 상태만 해제한다.
+    markDraftDirty(false);
+    setSaveNotice("변경사항을 저장했습니다.");
+    window.setTimeout(() => setSaveNotice(""), 2500);
+  };
 
   return (
     <>
@@ -124,7 +160,7 @@ export default function DashboardPage() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setShowSaveModal(true)}
+                    onClick={() => void handleSaveAll()}
                     className="min-w-[82px] rounded-lg border border-line bg-white px-4 py-2 text-base"
                   >
                     저장
@@ -135,9 +171,24 @@ export default function DashboardPage() {
 
             {!isEmpty ? (
               <div className="space-y-4">
+                {!profileHydrated ? (
+                  <section className="rounded-[18px] border border-line bg-white px-4 py-3 text-sm text-muted">
+                    최근 작업 정보를 불러오는 중입니다...
+                  </section>
+                ) : null}
                 {analysisNotice ? (
                   <section className="rounded-[18px] border border-[#b8d4ff] bg-[#f1f6ff] px-4 py-3 text-sm text-navy">
                     {analysisNotice}
+                  </section>
+                ) : null}
+                {saveNotice ? (
+                  <section className="rounded-[18px] border border-[#cbe7d0] bg-[#f1fcf4] px-4 py-3 text-sm text-[#166534]">
+                    {saveNotice}
+                  </section>
+                ) : null}
+                {!isEmpty && isDraftDirty() ? (
+                  <section className="rounded-[18px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-xs text-[#92400e]">
+                    저장되지 않은 변경사항이 있습니다. 종료 전 `저장` 버튼으로 DB에 반영해 주세요.
                   </section>
                 ) : null}
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { OnboardingStep } from "@/components/onboarding-step";
-import { onboardingTabs, universityMajorsMap, universityOptions } from "@/lib/admission-data";
+import { getMajorsByUniversity, onboardingTabs, universityOptions } from "@/lib/admission-data";
 import { parseSeededGoals } from "@/lib/planning";
 import { useGoals } from "@/lib/use-goals";
 
@@ -13,25 +13,34 @@ type GoalRankState = {
 };
 
 const initialUniversities = universityOptions.slice(0, 3);
+const fallbackUniversity = universityOptions[0] ?? "";
+
+function normalizeGoalRanks(input: GoalRankState[]): GoalRankState[] {
+  return input.map((item) => {
+    const university = universityOptions.includes(item.university) ? item.university : fallbackUniversity;
+    const major = item.major ?? "";
+    return { university, major };
+  });
+}
 
 export default function OnboardingGoalsPage() {
   const searchParams = useSearchParams();
   const focus = Number(searchParams.get("focus") ?? "1");
   const seededGoals = parseSeededGoals(searchParams);
-  const { goals, updateGoals, hydrated } = useGoals(seededGoals);
+  const { goals, updateGoals, hydrated, flushGoalsToServer } = useGoals(seededGoals);
   const [activeMode, setActiveMode] = useState<(typeof onboardingTabs)[number]>(onboardingTabs[1]);
   const [goalRanks, setGoalRanks] = useState<GoalRankState[]>(
     goals.length > 0
       ? goals
       : initialUniversities.map((university) => ({
           university,
-          major: universityMajorsMap[university][0]
+          major: getMajorsByUniversity(university)[0] ?? ""
         }))
   );
 
   useEffect(() => {
     if (hydrated && goals.length > 0) {
-      setGoalRanks(goals);
+      setGoalRanks(normalizeGoalRanks(goals));
     }
   }, [goals, hydrated]);
 
@@ -50,7 +59,7 @@ export default function OnboardingGoalsPage() {
       itemIndex === index
         ? {
             university,
-            major: universityMajorsMap[university]?.[0] ?? ""
+            major: ""
           }
         : item
     );
@@ -65,6 +74,10 @@ export default function OnboardingGoalsPage() {
     updateGoals(next);
   };
 
+  const handleNext = async () => {
+    await flushGoalsToServer();
+  };
+
   return (
     <OnboardingStep
       step="3/3"
@@ -73,6 +86,7 @@ export default function OnboardingGoalsPage() {
       prevHref="/onboarding/grades"
       nextHref="/analysis/loading?source=goals"
       nextLabel="AI 분석 시작"
+      onNext={handleNext}
     >
       <div className="grid grid-cols-3 gap-2">
         {onboardingTabs.map((label) => (
@@ -90,7 +104,8 @@ export default function OnboardingGoalsPage() {
       </div>
       <div className="rounded-[22px] bg-mist px-4 py-3 text-sm text-muted">{helperText}</div>
       {goalRanks.map((goalRank, index) => {
-        const majors = universityMajorsMap[goalRank.university] ?? [];
+        const majors = getMajorsByUniversity(goalRank.university);
+        const majorOptions = goalRank.major && !majors.includes(goalRank.major) ? [goalRank.major, ...majors] : majors;
 
         return (
           <div
@@ -117,7 +132,8 @@ export default function OnboardingGoalsPage() {
                 value={goalRank.major}
                 onChange={(event) => handleMajorChange(index, event.target.value)}
               >
-                {majors.map((item) => (
+                <option value="">학과를 선택해 주세요</option>
+                {majorOptions.map((item) => (
                   <option key={item} value={item}>
                     {item}
                   </option>
@@ -127,6 +143,10 @@ export default function OnboardingGoalsPage() {
           </div>
         );
       })}
+      <div className="rounded-[22px] bg-mist px-4 py-3 text-xs leading-5 text-muted">
+        현재 목표 요약:{" "}
+        {goalRanks.map((item, index) => `${index + 1}순위 ${item.university} ${item.major}`).join(" / ")}
+      </div>
     </OnboardingStep>
   );
 }

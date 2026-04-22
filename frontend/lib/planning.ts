@@ -16,7 +16,7 @@ const universityBaseScore: Record<string, number> = {
   성균관대: 74,
   한양대: 61,
   중앙대: 66,
-  경희대: 64,
+  경희대학교: 64,
   이화여대: 68,
   한국외대: 63,
   시립대: 62,
@@ -65,7 +65,7 @@ const strategyPoolByMajorKeyword: Record<string, StrategySeed[]> = {
 
 const fallbackStrategyPool: StrategySeed[] = [
   { university: "서강대", major: "경영학부", category: "도전" },
-  { university: "경희대", major: "경영학과", category: "도전" },
+  { university: "경희대학교", major: "경영학과", category: "도전" },
   { university: "한양대", major: "정책학과", category: "적정" },
   { university: "한국외대", major: "LD학부", category: "적정" },
   { university: "부산대", major: "경영학과", category: "안정" },

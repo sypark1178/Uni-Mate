@@ -33,7 +33,7 @@ export const onboardingTabs = ["학교 중심", "학과 중심", "둘 다"] as c
 export const universityMajorsMap: Record<string, string[]> = {
   "가천대": ["경영학과", "경제학과", "미디어커뮤니케이션학과", "간호학과", "컴퓨터공학부"],
   "건국대": ["경영학과", "경제학과", "국어국문학과", "수학과", "컴퓨터공학부"],
-  "경희대": ["경영학과", "회계세무학과", "한의예과", "간호학과", "소프트웨어융합학과"],
+  "경희대학교": ["경영학과", "회계세무학과", "한의예과", "간호학과", "소프트웨어융합학과"],
   "고려대": ["경영대학", "경제학부", "국어국문학과", "정치외교학과", "컴퓨터학과"],
   "광운대": ["경영학부", "국제통상학부", "전자공학과", "컴퓨터정보공학부", "화학공학과"],
   "국민대": ["경영학부", "행정학과", "시각디자인학과", "자동차융합대학", "소프트웨어학부"],
@@ -76,3 +76,20 @@ export const universityMajorsMap: Record<string, string[]> = {
 export const universityOptions = Object.keys(universityMajorsMap).sort((left, right) =>
   left.localeCompare(right, "ko-KR")
 );
+
+const universityAliasMap: Record<string, string> = {
+  경희대: "경희대학교",
+  시립대: "서울시립대",
+  외대: "한국외대",
+  서울과기대학교: "서울과기대"
+};
+
+export function normalizeUniversityName(university: string): string {
+  const trimmed = university.trim();
+  return universityAliasMap[trimmed] ?? trimmed;
+}
+
+export function getMajorsByUniversity(university: string): string[] {
+  const normalized = normalizeUniversityName(university);
+  return universityMajorsMap[normalized] ?? [];
+}

@@ -23,13 +23,17 @@ export default function AnalysisLoadingPage() {
 
     const finish = window.setTimeout(() => {
       setProgress(100);
-      window.localStorage.setItem(
-        "uni-mate-analysis-result",
-        JSON.stringify({
-          completedAt: new Date().toISOString(),
-          source
-        })
-      );
+      const resultPayload = {
+        completedAt: new Date().toISOString(),
+        source
+      };
+      window.localStorage.setItem("uni-mate-analysis-result", JSON.stringify(resultPayload));
+      void fetch("/api/analysis/result", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(resultPayload),
+        keepalive: true
+      });
       router.replace(dashboardHref);
     }, 2200);
 

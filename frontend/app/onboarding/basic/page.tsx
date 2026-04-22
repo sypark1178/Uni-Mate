@@ -103,6 +103,10 @@ export default function OnboardingBasicPage() {
           </option>
         ))}
       </select>
+      <div className="rounded-2xl bg-mist px-4 py-3 text-xs leading-5 text-muted">
+        현재 입력 정보: {studentProfile.name || "이름 미입력"} / {selectedGrade} / {selectedRegion} {selectedDistrict} {selectedSchool} /{" "}
+        {selectedYear}학년도
+      </div>
     </OnboardingStep>
   );
 }

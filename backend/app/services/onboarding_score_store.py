@@ -31,70 +31,384 @@ class OnboardingScoreStore:
 
     def _ensure_schema(self) -> None:
         with self._connect() as connection:
-            connection.execute(
+            connection.executescript(
                 """
-                CREATE TABLE IF NOT EXISTS onboarding_score_snapshots (
-                    user_key TEXT PRIMARY KEY,
-                    payload_json TEXT NOT NULL,
-                    active_tab TEXT,
-                    selected_year TEXT,
-                    selected_term TEXT,
-                    updated_at TEXT,
-                    saved_at TEXT NOT NULL,
-                    school_record_count INTEGER NOT NULL DEFAULT 0,
-                    mock_exam_count INTEGER NOT NULL DEFAULT 0,
-                    student_record_count INTEGER NOT NULL DEFAULT 0,
-                    upload_count INTEGER NOT NULL DEFAULT 0
-                )
+                PRAGMA foreign_keys = ON;
+
+                CREATE TABLE IF NOT EXISTS TB_UNIVERSITY (
+                    univ_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    univ_code TEXT NOT NULL UNIQUE,
+                    univ_name TEXT NOT NULL UNIQUE,
+                    univ_type TEXT NOT NULL DEFAULT '사립',
+                    region TEXT NOT NULL DEFAULT '미상',
+                    homepage_url TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_DEPARTMENT (
+                    dept_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    univ_id INTEGER NOT NULL,
+                    dept_name TEXT NOT NULL,
+                    college_name TEXT,
+                    major_field TEXT,
+                    dept_type TEXT,
+                    UNIQUE(univ_id, dept_name),
+                    FOREIGN KEY (univ_id) REFERENCES TB_UNIVERSITY(univ_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_ADMISSION_TYPE (
+                    admission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    dept_id INTEGER NOT NULL,
+                    admission_year INTEGER NOT NULL,
+                    admission_type TEXT NOT NULL DEFAULT '수시',
+                    admission_method TEXT,
+                    recruit_cnt INTEGER,
+                    doc_ratio REAL,
+                    interview_ratio REAL,
+                    csat_required INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (dept_id) REFERENCES TB_DEPARTMENT(dept_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_ADMISSION_CUTOFF (
+                    cutoff_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    admission_id INTEGER NOT NULL,
+                    cutoff_year INTEGER NOT NULL,
+                    cutoff_50 REAL,
+                    cutoff_70 REAL,
+                    cutoff_80 REAL,
+                    competition_ratio REAL,
+                    FOREIGN KEY (admission_id) REFERENCES TB_ADMISSION_TYPE(admission_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_USER (
+                    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    user_type TEXT NOT NULL DEFAULT '학생',
+                    phone TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_login_at TEXT,
+                    is_active INTEGER NOT NULL DEFAULT 1
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_STUDENT_PROFILE (
+                    student_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL UNIQUE,
+                    student_name TEXT NOT NULL,
+                    school_name TEXT,
+                    grade INTEGER,
+                    target_major TEXT,
+                    admission_year INTEGER,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    region TEXT,
+                    district TEXT,
+                    track TEXT,
+                    grade_label TEXT,
+                    UNIQUE(user_id),
+                    FOREIGN KEY (user_id) REFERENCES TB_USER(user_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_ACADEMIC_SCORE (
+                    score_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id INTEGER NOT NULL,
+                    semester TEXT NOT NULL,
+                    subject_name TEXT NOT NULL,
+                    subject_cat TEXT,
+                    raw_score REAL,
+                    grade INTEGER,
+                    credit_hours REAL,
+                    z_score REAL,
+                    FOREIGN KEY (student_id) REFERENCES TB_STUDENT_PROFILE(student_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_CSAT_SCORE (
+                    csat_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id INTEGER NOT NULL,
+                    exam_year INTEGER,
+                    exam_type TEXT,
+                    korean_grade INTEGER,
+                    math_grade INTEGER,
+                    english_grade INTEGER,
+                    science_grade INTEGER,
+                    total_score REAL,
+                    percentile REAL,
+                    FOREIGN KEY (student_id) REFERENCES TB_STUDENT_PROFILE(student_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_STUDENT_RECORD (
+                    record_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id INTEGER NOT NULL,
+                    record_type TEXT,
+                    subject_name TEXT,
+                    content_body TEXT,
+                    academic_year INTEGER,
+                    semester INTEGER,
+                    FOREIGN KEY (student_id) REFERENCES TB_STUDENT_PROFILE(student_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_APPLICATION_LIST (
+                    application_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id INTEGER NOT NULL,
+                    admission_id INTEGER NOT NULL,
+                    strategy_type TEXT NOT NULL DEFAULT '적정',
+                    status TEXT NOT NULL DEFAULT 'active',
+                    priority_no INTEGER,
+                    note TEXT,
+                    FOREIGN KEY (student_id) REFERENCES TB_STUDENT_PROFILE(student_id),
+                    FOREIGN KEY (admission_id) REFERENCES TB_ADMISSION_TYPE(admission_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_AI_ANALYSIS (
+                    analysis_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id INTEGER NOT NULL,
+                    analysis_type TEXT,
+                    pass_prob REAL,
+                    score_gap REAL,
+                    model_version TEXT,
+                    summary_text TEXT,
+                    analyzed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (student_id) REFERENCES TB_STUDENT_PROFILE(student_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_RECOMMENDATION (
+                    rec_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id INTEGER NOT NULL,
+                    admission_id INTEGER NOT NULL,
+                    rec_score REAL,
+                    strategy_type TEXT,
+                    reason_text TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (student_id) REFERENCES TB_STUDENT_PROFILE(student_id),
+                    FOREIGN KEY (admission_id) REFERENCES TB_ADMISSION_TYPE(admission_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_CONSULTING_SESSION (
+                    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id INTEGER NOT NULL,
+                    consultant_id INTEGER,
+                    session_date TEXT,
+                    status TEXT,
+                    session_type TEXT,
+                    note TEXT,
+                    FOREIGN KEY (student_id) REFERENCES TB_STUDENT_PROFILE(student_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS TB_NOTIFICATION (
+                    noti_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    noti_type TEXT,
+                    title TEXT,
+                    body TEXT,
+                    is_read INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES TB_USER(user_id)
+                );
                 """
             )
+
+    def _ensure_user_and_student(self, connection: sqlite3.Connection, user_key: str) -> tuple[int, int]:
+        email = f"{user_key}@local.uni-mate"
+        connection.execute(
+            """
+            INSERT INTO TB_USER (email, password_hash, user_type, is_active)
+            VALUES (?, ?, '학생', 1)
+            ON CONFLICT(email) DO NOTHING
+            """,
+            (email, "local-only"),
+        )
+        user_row = connection.execute("SELECT user_id FROM TB_USER WHERE email = ?", (email,)).fetchone()
+        if user_row is None:
+            raise RuntimeError("failed to resolve user")
+        user_id = int(user_row["user_id"])
+
+        connection.execute(
+            """
+            INSERT INTO TB_STUDENT_PROFILE (user_id, student_name, school_name, grade, target_major, admission_year)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO NOTHING
+            """,
+            (user_id, "학생", "", None, "", None),
+        )
+        student_row = connection.execute(
+            "SELECT student_id FROM TB_STUDENT_PROFILE WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if student_row is None:
+            raise RuntimeError("failed to resolve student")
+        return user_id, int(student_row["student_id"])
+
+    def _infer_period(self, record: dict[str, Any]) -> tuple[int | None, int | None]:
+        year_raw = str(record.get("year") or "")
+        term_raw = str(record.get("term") or "")
+        year = int(year_raw) if year_raw.isdigit() else None
+        semester = 1 if term_raw.startswith("1-") else 2 if term_raw.startswith("2-") else None
+        return year, semester
+
+    def _upsert_score_payload(self, connection: sqlite3.Connection, student_id: int, payload: dict[str, Any]) -> None:
+        connection.execute("DELETE FROM TB_ACADEMIC_SCORE WHERE student_id = ?", (student_id,))
+        connection.execute("DELETE FROM TB_CSAT_SCORE WHERE student_id = ?", (student_id,))
+        connection.execute("DELETE FROM TB_STUDENT_RECORD WHERE student_id = ?", (student_id,))
+
+        school_records = payload.get("schoolRecords", [])
+        for record in school_records:
+            year, semester_no = self._infer_period(record)
+            semester_label = f"{year or 1}-{record.get('term', '1-midterm')}"
+            subjects = record.get("subjects", [])
+            for subject in subjects:
+                connection.execute(
+                    """
+                    INSERT INTO TB_ACADEMIC_SCORE (student_id, semester, subject_name, subject_cat, raw_score, grade, credit_hours, z_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        student_id,
+                        semester_label,
+                        str(subject.get("subject") or "미입력"),
+                        "내신",
+                        None,
+                        None,
+                        None,
+                        None,
+                    ),
+                )
+            overall = record.get("overallAverage")
+            if overall not in (None, ""):
+                try:
+                    total = float(overall)
+                except (TypeError, ValueError):
+                    total = None
+                connection.execute(
+                    """
+                    INSERT INTO TB_CSAT_SCORE (student_id, exam_year, exam_type, total_score)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (student_id, 2026 + (year or 1), "내신평균", total),
+                )
+
+        mock_records = payload.get("mockExams", [])
+        for record in mock_records:
+            year, _ = self._infer_period(record)
+            overall = record.get("overallAverage")
+            try:
+                total = float(overall) if overall not in (None, "") else None
+            except (TypeError, ValueError):
+                total = None
+            connection.execute(
+                """
+                INSERT INTO TB_CSAT_SCORE (student_id, exam_year, exam_type, total_score)
+                VALUES (?, ?, ?, ?)
+                """,
+                (student_id, 2026 + (year or 1), "모의고사", total),
+            )
+
+        student_records = payload.get("studentRecords", [])
+        for record in student_records:
+            year, semester_no = self._infer_period(record)
+            connection.execute(
+                """
+                INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, academic_year, semester)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    student_id,
+                    "활동",
+                    str(record.get("title") or "활동기록"),
+                    str(record.get("description") or ""),
+                    2026 + (year or 1),
+                    semester_no,
+                ),
+            )
+
+    def _resolve_goal_admission(self, connection: sqlite3.Connection, university: str, major: str, year: int) -> int:
+        univ_code = f"U{abs(hash(university)) % 10_000_000:07d}"
+        connection.execute(
+            """
+            INSERT INTO TB_UNIVERSITY (univ_code, univ_name, univ_type, region)
+            VALUES (?, ?, '사립', '미상')
+            ON CONFLICT(univ_name) DO NOTHING
+            """,
+            (univ_code, university),
+        )
+        univ_row = connection.execute("SELECT univ_id FROM TB_UNIVERSITY WHERE univ_name = ?", (university,)).fetchone()
+        if univ_row is None:
+            raise RuntimeError("failed to resolve university")
+        univ_id = int(univ_row["univ_id"])
+
+        connection.execute(
+            """
+            INSERT INTO TB_DEPARTMENT (univ_id, dept_name, college_name, major_field, dept_type)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(univ_id, dept_name) DO NOTHING
+            """,
+            (univ_id, major, "", "", ""),
+        )
+        dept_row = connection.execute(
+            "SELECT dept_id FROM TB_DEPARTMENT WHERE univ_id = ? AND dept_name = ?",
+            (univ_id, major),
+        ).fetchone()
+        if dept_row is None:
+            raise RuntimeError("failed to resolve department")
+        dept_id = int(dept_row["dept_id"])
+
+        admission_row = connection.execute(
+            """
+            SELECT admission_id
+            FROM TB_ADMISSION_TYPE
+            WHERE dept_id = ? AND admission_year = ? AND admission_type = '수시'
+            """,
+            (dept_id, year),
+        ).fetchone()
+        if admission_row is not None:
+            return int(admission_row["admission_id"])
+
+        cursor = connection.execute(
+            """
+            INSERT INTO TB_ADMISSION_TYPE
+                (dept_id, admission_year, admission_type, admission_method, recruit_cnt, doc_ratio, interview_ratio, csat_required)
+            VALUES (?, ?, '수시', '학생부교과', 0, 100.0, 0.0, 0)
+            """,
+            (dept_id, year),
+        )
+        return int(cursor.lastrowid)
 
     def save_snapshot(self, payload: dict[str, Any], user_key: str = "local-user") -> dict[str, Any]:
         saved_at = datetime.now(timezone.utc).isoformat()
         summary = build_payload_summary(payload)
 
         with self._connect() as connection:
+            user_id, student_id = self._ensure_user_and_student(connection, user_key)
+            self._upsert_score_payload(connection, student_id, payload)
             connection.execute(
                 """
-                INSERT INTO onboarding_score_snapshots (
-                    user_key,
-                    payload_json,
-                    active_tab,
-                    selected_year,
-                    selected_term,
-                    updated_at,
-                    saved_at,
-                    school_record_count,
-                    mock_exam_count,
-                    student_record_count,
-                    upload_count
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(user_key) DO UPDATE SET
-                    payload_json = excluded.payload_json,
-                    active_tab = excluded.active_tab,
-                    selected_year = excluded.selected_year,
-                    selected_term = excluded.selected_term,
-                    updated_at = excluded.updated_at,
-                    saved_at = excluded.saved_at,
-                    school_record_count = excluded.school_record_count,
-                    mock_exam_count = excluded.mock_exam_count,
-                    student_record_count = excluded.student_record_count,
-                    upload_count = excluded.upload_count
+                INSERT INTO TB_NOTIFICATION (user_id, noti_type, title, body, is_read)
+                VALUES (?, 'analysis', '성적 데이터가 저장되었습니다', ?, 0)
                 """,
                 (
-                    user_key,
-                    json.dumps(payload),
-                    payload.get("activeTab"),
-                    payload.get("selectedYear"),
-                    payload.get("selectedTerm"),
-                    payload.get("updatedAt"),
-                    saved_at,
-                    summary["schoolRecordCount"],
-                    summary["mockExamCount"],
-                    summary["studentRecordCount"],
-                    summary["uploadCount"],
+                    user_id,
+                    f"내신 {summary['schoolRecordCount']}건, 모의고사 {summary['mockExamCount']}건이 반영되었습니다.",
                 ),
+            )
+            connection.execute(
+                """
+                INSERT INTO TB_AI_ANALYSIS (student_id, analysis_type, pass_prob, score_gap, model_version, summary_text, analyzed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    student_id,
+                    "score_snapshot",
+                    None,
+                    None,
+                    "v1.0",
+                    f"score snapshot saved at {saved_at}",
+                    saved_at,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, academic_year, semester)
+                VALUES (?, 'snapshot', 'onboarding-json', ?, NULL, NULL)
+                """,
+                (student_id, json.dumps(payload, ensure_ascii=False)),
             )
 
         return {
@@ -107,37 +421,202 @@ class OnboardingScoreStore:
 
     def get_snapshot(self, user_key: str = "local-user") -> dict[str, Any]:
         with self._connect() as connection:
+            user_row = connection.execute(
+                "SELECT user_id FROM TB_USER WHERE email = ?",
+                (f"{user_key}@local.uni-mate",),
+            ).fetchone()
+            if user_row is None:
+                return {"ok": True, "source": "sqlite", "data": None}
+            student_row = connection.execute(
+                "SELECT student_id FROM TB_STUDENT_PROFILE WHERE user_id = ?",
+                (int(user_row["user_id"]),),
+            ).fetchone()
+            if student_row is None:
+                return {"ok": True, "source": "sqlite", "data": None}
+            student_id = int(student_row["student_id"])
             row = connection.execute(
                 """
                 SELECT
-                    payload_json,
-                    active_tab,
-                    selected_year,
-                    selected_term,
-                    updated_at,
-                    saved_at,
-                    school_record_count,
-                    mock_exam_count,
-                    student_record_count,
-                    upload_count
-                FROM onboarding_score_snapshots
-                WHERE user_key = ?
+                    content_body,
+                    rowid
+                FROM TB_STUDENT_RECORD
+                WHERE student_id = ? AND record_type = 'snapshot' AND subject_name = 'onboarding-json'
+                ORDER BY rowid DESC
+                LIMIT 1
                 """,
-                (user_key,),
+                (student_id,),
             ).fetchone()
 
         if row is None:
             return {"ok": True, "source": "sqlite", "data": None}
 
+        payload = json.loads(row["content_body"])
+        summary = build_payload_summary(payload)
         return {
             "ok": True,
             "source": "sqlite",
-            "savedAt": row["saved_at"],
-            "summary": {
-                "schoolRecordCount": row["school_record_count"],
-                "mockExamCount": row["mock_exam_count"],
-                "studentRecordCount": row["student_record_count"],
-                "uploadCount": row["upload_count"],
+            "savedAt": datetime.now(timezone.utc).isoformat(),
+            "summary": summary,
+            "data": payload,
+        }
+
+    def save_profile(self, payload: dict[str, Any], user_key: str = "local-user") -> dict[str, Any]:
+        saved_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            _, student_id = self._ensure_user_and_student(connection, user_key)
+            grade_label = str(payload.get("gradeLabel") or "")
+            grade_num = int(grade_label[1]) if grade_label.startswith("고") and len(grade_label) > 1 and grade_label[1].isdigit() else None
+            connection.execute(
+                """
+                UPDATE TB_STUDENT_PROFILE
+                SET student_name = ?,
+                    school_name = ?,
+                    grade = ?,
+                    admission_year = ?,
+                    region = ?,
+                    district = ?,
+                    track = ?,
+                    grade_label = ?
+                WHERE student_id = ?
+                """,
+                (
+                    str(payload.get("name") or "학생"),
+                    str(payload.get("schoolName") or ""),
+                    grade_num,
+                    payload.get("targetYear"),
+                    str(payload.get("region") or ""),
+                    str(payload.get("district") or ""),
+                    str(payload.get("track") or ""),
+                    grade_label,
+                    student_id,
+                ),
+            )
+        return {"ok": True, "source": "sqlite", "savedAt": saved_at, "data": payload}
+
+    def get_profile(self, user_key: str = "local-user") -> dict[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT sp.student_name, sp.school_name, sp.grade_label, sp.region, sp.district, sp.track, sp.admission_year
+                FROM TB_STUDENT_PROFILE sp
+                JOIN TB_USER u ON u.user_id = sp.user_id
+                WHERE u.email = ?
+                """,
+                (f"{user_key}@local.uni-mate",),
+            ).fetchone()
+        if row is None:
+            return {"ok": True, "source": "sqlite", "data": None}
+        return {
+            "ok": True,
+            "source": "sqlite",
+            "data": {
+                "name": row["student_name"] or "",
+                "schoolName": row["school_name"] or "",
+                "gradeLabel": row["grade_label"] or "고2",
+                "region": row["region"] or "서울",
+                "district": row["district"] or "강남구",
+                "track": row["track"] or "인문",
+                "targetYear": row["admission_year"] or 2027,
+                "hasRequiredInfo": True,
+                "hasScores": True,
             },
-            "data": json.loads(row["payload_json"]),
+        }
+
+    def save_goals(self, payload: list[dict[str, Any]], user_key: str = "local-user") -> dict[str, Any]:
+        saved_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            _, student_id = self._ensure_user_and_student(connection, user_key)
+            connection.execute("DELETE FROM TB_APPLICATION_LIST WHERE student_id = ?", (student_id,))
+            connection.execute("DELETE FROM TB_RECOMMENDATION WHERE student_id = ?", (student_id,))
+            for index, goal in enumerate(payload[:3]):
+                university = str(goal.get("university") or "").strip()
+                major = str(goal.get("major") or "").strip()
+                if not university or not major:
+                    continue
+                admission_id = self._resolve_goal_admission(connection, university, major, datetime.now(timezone.utc).year)
+                strategy = "도전" if index == 0 else "적정" if index == 1 else "안정"
+                connection.execute(
+                    """
+                    INSERT INTO TB_APPLICATION_LIST (student_id, admission_id, strategy_type, status, priority_no, note)
+                    VALUES (?, ?, ?, 'active', ?, ?)
+                    """,
+                    (student_id, admission_id, strategy, index + 1, f"{index + 1}순위 목표"),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO TB_RECOMMENDATION (student_id, admission_id, rec_score, strategy_type, reason_text)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (student_id, admission_id, 80 - index * 7, strategy, "목표 기반 추천"),
+                )
+        return {"ok": True, "source": "sqlite", "savedAt": saved_at, "data": payload}
+
+    def get_goals(self, user_key: str = "local-user") -> dict[str, Any]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT u.univ_name, d.dept_name
+                FROM TB_APPLICATION_LIST a
+                JOIN TB_STUDENT_PROFILE sp ON sp.student_id = a.student_id
+                JOIN TB_USER usr ON usr.user_id = sp.user_id
+                JOIN TB_ADMISSION_TYPE atp ON atp.admission_id = a.admission_id
+                JOIN TB_DEPARTMENT d ON d.dept_id = atp.dept_id
+                JOIN TB_UNIVERSITY u ON u.univ_id = d.univ_id
+                WHERE usr.email = ?
+                ORDER BY a.priority_no ASC, a.application_id ASC
+                LIMIT 3
+                """,
+                (f"{user_key}@local.uni-mate",),
+            ).fetchall()
+        data = [{"university": row["univ_name"], "major": row["dept_name"]} for row in rows]
+        return {"ok": True, "source": "sqlite", "data": data}
+
+    def save_analysis_result(self, payload: dict[str, Any], user_key: str = "local-user") -> dict[str, Any]:
+        saved_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            user_id, student_id = self._ensure_user_and_student(connection, user_key)
+            connection.execute(
+                """
+                INSERT INTO TB_AI_ANALYSIS (student_id, analysis_type, pass_prob, score_gap, model_version, summary_text, analyzed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    student_id,
+                    str(payload.get("source") or "analysis"),
+                    None,
+                    None,
+                    "v1.0",
+                    f"analysis completed at {payload.get('completedAt') or saved_at}",
+                    payload.get("completedAt") or saved_at,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO TB_NOTIFICATION (user_id, noti_type, title, body, is_read)
+                VALUES (?, 'analysis', 'AI 분석이 완료되었습니다', ?, 0)
+                """,
+                (user_id, str(payload.get("source") or "analysis")),
+            )
+        return {"ok": True, "source": "sqlite", "savedAt": saved_at, "data": payload}
+
+    def get_analysis_result(self, user_key: str = "local-user") -> dict[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT aa.analysis_type, aa.analyzed_at
+                FROM TB_AI_ANALYSIS aa
+                JOIN TB_STUDENT_PROFILE sp ON sp.student_id = aa.student_id
+                JOIN TB_USER u ON u.user_id = sp.user_id
+                WHERE u.email = ?
+                ORDER BY aa.analysis_id DESC
+                LIMIT 1
+                """,
+                (f"{user_key}@local.uni-mate",),
+            ).fetchone()
+        if row is None:
+            return {"ok": True, "source": "sqlite", "data": None}
+        return {
+            "ok": True,
+            "source": "sqlite",
+            "data": {"source": row["analysis_type"], "completedAt": row["analyzed_at"]},
         }

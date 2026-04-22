@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams } from "@/lib/navigation";
+import { parseSeededGoals } from "@/lib/planning";
+import { useGoals } from "@/lib/use-goals";
 
 type ExecutionItem = {
   title: string;
@@ -83,6 +85,8 @@ const statusLabelMap = {
 
 export default function ExecutionPage() {
   const searchParams = useSearchParams();
+  const seededGoals = parseSeededGoals(searchParams);
+  const { goals } = useGoals(seededGoals);
   const [mode, setMode] = useState<"week" | "month">("week");
   const [itemsByMode, setItemsByMode] = useState(() => ({
     week: executionData.week.items,
@@ -120,6 +124,9 @@ export default function ExecutionPage() {
   return (
     <>
       <PhoneFrame title="실행 관리" subtitle="체크리스트와 실행률을 주간 또는 월간 기준으로 확인할 수 있어요.">
+        <div className="mb-3 rounded-2xl bg-mist px-4 py-3 text-xs leading-5 text-muted">
+          목표 입력: {goals.map((goal, index) => `${index + 1}순위 ${goal.university} ${goal.major}`).join(" / ")}
+        </div>
         <div className="flex gap-2 rounded-full border border-line bg-white p-1 shadow-soft">
           {[
             { key: "week", label: "이번 주" },
