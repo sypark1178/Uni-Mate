@@ -328,6 +328,9 @@ async function persistStoreToServer(nextStore: ScoreMemoryStore) {
 }
 
 function parseNumber(input: string) {
+  if (!input.trim()) {
+    return null;
+  }
   const parsed = Number(input);
   return Number.isFinite(parsed) ? parsed : null;
 }

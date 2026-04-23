@@ -32,7 +32,7 @@ export default function LoginPage() {
     <PhoneFrame>
       <div className="pt-20 text-center">
         <h1 className="text-[32px] font-bold leading-[38px] text-navy">기존 회원 로그인</h1>
-        <p className="mt-3 text-base leading-6 text-[#333333]">
+        <p className="mt-3 text-base leading-6 text-white/90">
           아이디와 비밀번호로
           <br />
           Uni-Mate에 로그인하세요.
@@ -40,13 +40,13 @@ export default function LoginPage() {
       </div>
       <div className="mt-8 space-y-4">
         <input
-          className="w-full rounded-xl border border-line px-4 py-3"
+          className="w-full rounded-xl border border-line px-4 py-3 focus:border-line focus:outline-none focus:ring-0 focus-visible:outline-none"
           placeholder="아이디 입력"
           value={loginValue}
           onChange={(event) => setLoginValue(event.target.value)}
         />
         <input
-          className="w-full rounded-xl border border-line px-4 py-3"
+          className="w-full rounded-xl border border-line px-4 py-3 focus:border-line focus:outline-none focus:ring-0 focus-visible:outline-none"
           placeholder="비밀번호 입력"
           type="password"
           value={password}

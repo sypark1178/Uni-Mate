@@ -120,23 +120,29 @@ export function buildGoalAnalyses(goals: GoalChoice[]): Recommendation[] {
 }
 
 export function buildStrategyRecommendations(goals: GoalChoice[]): Recommendation[] {
+  const goalAnalyses = buildGoalAnalyses(goals);
   const firstMajor = goals[0]?.major ?? "";
   const matchedPool =
     Object.entries(strategyPoolByMajorKeyword).find(([keyword]) => firstMajor.includes(keyword))?.[1] ??
     fallbackStrategyPool;
 
-  return matchedPool.slice(0, 6).map((item, index) => {
-    const fitScore = item.category === "도전" ? 35 + index * 2 : item.category === "적정" ? 58 + index * 2 : 74 + index * 2;
+  const goalKeys = new Set(goalAnalyses.map((item) => `${item.university}|${item.major}`));
+  const supplemental = matchedPool.filter((item) => !goalKeys.has(`${item.university}|${item.major}`));
+
+  const supplementalCards = supplemental.slice(0, Math.max(0, 6 - goalAnalyses.length)).map((item, index) => {
+    const fitScore = Math.max(25, Math.min(88, getBaseScore(item.university) - (goalAnalyses.length + index) * 2));
     return {
-      id: `strategy-${index + 1}`,
+      id: `strategy-extra-${index + 1}`,
       university: item.university,
       major: item.major,
-      category: item.category,
+      category: getCategory(fitScore),
       fitScore,
-      notes: "학생부, 내신, 목표대학 조합을 기준으로 생성된 수시 6장 추천 카드입니다.",
+      notes: `${item.university} ${item.major} 기준 보완 추천 카드입니다.`,
       evidence: buildEvidence(item.university, item.major, fitScore)
     };
   });
+
+  return [...goalAnalyses.map((item, index) => ({ ...item, id: `strategy-goal-${index + 1}` })), ...supplementalCards].slice(0, 6);
 }
 
 export function parseSeededGoals(searchParams: URLSearchParams): GoalChoice[] {

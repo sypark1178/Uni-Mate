@@ -18,7 +18,7 @@ export function SimulationPanel({ baseRate }: SimulationPanelProps) {
   const diff = adjusted - baseRate;
 
   return (
-    <section className="rounded-[24px] bg-white p-4 shadow-sm">
+    <section className="rounded-[24px] bg-white p-4">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-semibold">시뮬레이션</h3>
         <span className="text-xs text-muted">가정값 즉시 반영</span>

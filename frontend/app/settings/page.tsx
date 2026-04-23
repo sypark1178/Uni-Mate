@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { PhoneFrame } from "@/components/phone-frame";
@@ -15,6 +15,10 @@ function getGoalBadgeTone(score: number) {
   if (score >= 72) return "bg-safe";
   if (score >= 55) return "bg-normal";
   return "bg-danger";
+}
+
+function shortenSchoolName(name: string) {
+  return name.replace(/등학교$/, "");
 }
 
 const editButtonClass =
@@ -37,6 +41,8 @@ export default function SettingsPage() {
   });
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [profileImageUrl, setProfileImageUrl] = useState("");
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const cleanedSearchParams = useMemo(() => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -61,6 +67,23 @@ export default function SettingsPage() {
     safeNavigate(router, moveTo(`${href}${href.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(settingsReturnHref)}`));
   };
 
+  const openAvatarPicker = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setProfileImageUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
+
   return (
     <>
       <PhoneFrame title="설정" subtitle="기본정보, 성적, 목표 대학과 알림 설정을 한곳에서 관리할 수 있어요.">
@@ -74,17 +97,47 @@ export default function SettingsPage() {
 
         <section className="mb-5">
           <h2 className="mb-3 text-lg font-semibold">기본정보</h2>
-          <div className="rounded-[22px] border border-line bg-white p-4 shadow-soft">
+          <div className="rounded-[22px] border border-line bg-white p-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="flex h-[59px] w-[59px] items-center justify-center rounded-full bg-[#0169C333] text-2xl font-semibold text-navy">
-                  {studentProfile.name.slice(0, 1) || "?"}
+                <div className="relative h-[59px] w-[59px] shrink-0">
+                  <button
+                    type="button"
+                    onClick={openAvatarPicker}
+                    className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#0169C333] text-2xl font-semibold text-navy"
+                    aria-label="프로필 사진 업로드"
+                  >
+                    {profileImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={profileImageUrl} alt="프로필 이미지" className="h-full w-full object-cover" />
+                    ) : (
+                      <span>{studentProfile.name.slice(0, 1) || "?"}</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openAvatarPicker}
+                    className="absolute bottom-0 right-0 flex h-5 w-5 items-center justify-center rounded-full border border-line bg-white text-[11px]"
+                    aria-label="사진 선택"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 7h3l1.2-2h7.6L17 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" />
+                      <circle cx="12" cy="13" r="3.2" />
+                    </svg>
+                  </button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarChange}
+                  />
                 </div>
                 <div>
                   <div className="text-xl font-medium">{isHydrated ? studentProfile.name : "불러오는 중..."}</div>
                   <div className="mt-1 text-sm text-muted">
                     {isHydrated
-                      ? `${studentProfile.region || "서울"} / ${studentProfile.district || "강남구"} / ${studentProfile.schoolName || "대치고등학교"}`
+                      ? `${studentProfile.region || "서울"} / ${studentProfile.district || "강남구"} / ${shortenSchoolName(studentProfile.schoolName || "대치고등학교")}`
                       : "기본정보를 불러오는 중입니다."}
                   </div>
                 </div>
@@ -98,7 +151,7 @@ export default function SettingsPage() {
 
         <section className="mb-5">
           <h2 className="mb-3 text-lg font-semibold">성적정보</h2>
-          <div className="overflow-hidden rounded-[22px] border border-line bg-white shadow-soft">
+          <div className="overflow-hidden rounded-[22px] border border-line bg-white">
             <div className="grid grid-cols-[1fr_1fr_auto] items-stretch max-sm:grid-cols-1">
               <div className="p-5">
                 <div className="text-[18px] font-medium">내신</div>
@@ -126,7 +179,7 @@ export default function SettingsPage() {
             {goalAnalyses.length > 0 ? goalAnalyses.map((item, index) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between gap-3 rounded-[22px] border border-line bg-white p-4 shadow-soft"
+                className="flex items-center justify-between gap-3 rounded-[22px] border border-line bg-white p-4"
               >
                 <div className="flex items-center gap-3">
                   <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${getGoalBadgeTone(item.fitScore)}`}>
@@ -146,11 +199,11 @@ export default function SettingsPage() {
                 </button>
               </div>
             )) : (
-              <div className="rounded-[22px] border border-line bg-white p-4 text-sm text-muted shadow-soft">
+              <div className="rounded-[22px] border border-line bg-white p-4 text-sm text-muted">
                 저장된 목표대학/학과가 없습니다. 목표설정에서 먼저 선택해 주세요.
               </div>
             )}
-            <button type="button" onClick={() => move("/onboarding/goals")} className={`${wideEditButtonClass} shadow-soft`}>
+            <button type="button" onClick={() => move("/onboarding/goals")} className={wideEditButtonClass}>
               + 목표대학 추가 / 전체 수정
             </button>
           </div>
@@ -166,7 +219,7 @@ export default function SettingsPage() {
             ].map((item) => (
               <div
                 key={item.key}
-                className="flex items-center justify-between gap-3 rounded-[22px] border border-line bg-white p-4 shadow-soft"
+                className="flex items-center justify-between gap-3 rounded-[22px] border border-line bg-white p-4"
               >
                 <div>
                   <div className="font-medium">{item.title}</div>
@@ -192,7 +245,7 @@ export default function SettingsPage() {
 
         <section className="mb-5">
           <h2 className="mb-3 text-lg font-semibold">데이터와 권한</h2>
-          <div className="rounded-[22px] border border-line bg-white p-4 shadow-soft">
+          <div className="rounded-[22px] border border-line bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="font-medium">공개 정보 설정</div>
@@ -222,7 +275,7 @@ export default function SettingsPage() {
 
         <section>
           <h2 className="mb-3 text-lg font-semibold">계정 관리</h2>
-          <div className="space-y-4 rounded-[22px] border border-line bg-white p-4 shadow-soft">
+          <div className="space-y-4 rounded-[22px] border border-line bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="font-medium">로그아웃</div>
@@ -264,7 +317,7 @@ export default function SettingsPage() {
 
       {showLogoutModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-5">
-          <div className="w-full max-w-[340px] rounded-[24px] bg-white p-5 shadow-soft">
+          <div className="w-full max-w-[340px] rounded-[24px] bg-white p-5">
             <h3 className="text-center text-2xl font-bold">로그아웃하시겠어요?</h3>
             <p className="mt-3 text-center text-sm leading-6 text-muted">로그아웃하면 다시 로그인해야 서비스를 이용할 수 있어요.</p>
             <div className="mt-5 flex gap-3">
@@ -293,7 +346,7 @@ export default function SettingsPage() {
 
       {showWithdrawModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-5">
-          <div className="w-full max-w-[340px] rounded-[24px] bg-white p-5 shadow-soft">
+          <div className="w-full max-w-[340px] rounded-[24px] bg-white p-5">
             <h3 className="text-center text-2xl font-bold">정말 탈퇴하시겠어요?</h3>
             <p className="mt-3 text-center text-sm leading-6 text-muted">
               탈퇴를 진행하면 30일 이후 계정과 데이터가 영구 삭제됩니다. 계속 진행하시려면 탈퇴를 눌러 주세요.

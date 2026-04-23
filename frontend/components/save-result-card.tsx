@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function SaveResultCard() {
   return (
-    <section className="rounded-[24px] border border-navy bg-white p-5 shadow-soft">
+    <section className="rounded-[24px] border border-navy bg-white p-5">
       <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Save Result</div>
       <h2 className="text-2xl font-semibold">분석 결과 저장</h2>
       <p className="mt-3 text-sm leading-6 text-muted">

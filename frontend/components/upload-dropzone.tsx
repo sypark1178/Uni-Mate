@@ -32,7 +32,7 @@ export function UploadDropzone({
   };
 
   return (
-    <section className="rounded-[24px] border border-dashed border-line bg-white p-6 text-center shadow-sm">
+    <section className="rounded-[24px] border border-dashed border-line bg-white p-6 text-center">
       <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-navy/10 text-xl font-semibold text-navy">
         PDF
       </div>

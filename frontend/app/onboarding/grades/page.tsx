@@ -404,7 +404,7 @@ export default function OnboardingGradesPage() {
       <p className="mt-3 text-xs leading-5 text-muted">
         이 화면의 입력값은 학년/학기 배열로 저장되며 설정 &gt; 성적정보와 AI 분석 직전까지 그대로 반영됩니다.
       </p>
-      <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-xs leading-5 text-muted shadow-soft">
+      <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-xs leading-5 text-muted">
         <div>
           현재 선택: {scoreTabOptions.find((tab) => tab.key === selectedTab)?.label} /{" "}
           {gradeYearOptions.find((item) => item.value === selectedYear)?.label} /{" "}

@@ -6,12 +6,20 @@ type PhoneFrameProps = {
   subtitle?: string;
   fullBleed?: boolean;
   statusBarClassName?: string;
+  bottomPaddingClassName?: string;
 };
 
-export function PhoneFrame({ children, title, subtitle, fullBleed = false, statusBarClassName = "bg-white" }: PhoneFrameProps) {
+export function PhoneFrame({
+  children,
+  title,
+  subtitle,
+  fullBleed = false,
+  statusBarClassName = "bg-white",
+  bottomPaddingClassName = "pb-[66px]"
+}: PhoneFrameProps) {
   return (
-    <main className="app-shell flex min-h-screen justify-center px-1 py-2">
-      <section className="relative h-[852px] w-[393px] overflow-hidden bg-navy shadow-soft">
+    <main className="app-shell flex min-h-screen justify-center px-1 py-0">
+      <section className="relative h-[852px] w-[393px] overflow-hidden bg-white">
         <header className={`absolute left-0 right-0 top-0 z-20 flex h-[44px] items-center justify-between px-[21px] ${statusBarClassName}`}>
           <div className="text-[15px] font-semibold text-black">9:41</div>
           <div className="flex items-center gap-[5px]">
@@ -39,7 +47,7 @@ export function PhoneFrame({ children, title, subtitle, fullBleed = false, statu
             </div>
           </div>
         </header>
-        <div className={fullBleed ? "h-full overflow-y-auto pb-[76px] pt-11" : "h-full overflow-y-auto px-4 pb-[76px] pt-14"}>
+        <div className={fullBleed ? `h-full overflow-y-auto ${bottomPaddingClassName} pt-11` : `h-full overflow-y-auto px-4 ${bottomPaddingClassName} pt-14`}>
           {(title || subtitle) && (
             <header className="pb-3">
               {title && <h1 className="text-[28px] font-semibold tracking-[-0.03em]">{title}</h1>}

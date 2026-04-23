@@ -24,7 +24,7 @@ export function RadarCard({ academicFit, majorFit, minRequirement }: RadarCardPr
     .join(" ");
 
   return (
-    <section className="rounded-[24px] bg-white p-4 shadow-sm">
+    <section className="rounded-[24px] bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-lg font-semibold">합격 가능성 레이더</h3>
         <span className="text-xs text-muted">W1 / W2 / W3 기반</span>

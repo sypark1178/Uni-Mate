@@ -73,7 +73,7 @@ export default function SettingsPrivacyPage() {
     <PhoneFrame title="정보 공개범위 설정" subtitle="온보딩에서 입력한 정보를 항목별로 선택해서 공개 범위를 조정할 수 있습니다.">
       <div className="space-y-4">
         {sections.map((item) => (
-          <section key={item.key} className="rounded-[22px] border border-line bg-white p-4 shadow-soft">
+          <section key={item.key} className="rounded-[22px] border border-line bg-white p-4">
             <div className="font-semibold">{item.title}</div>
             <p className="mt-2 text-sm leading-6 text-muted">{item.desc}</p>
             <div className="mt-4 grid gap-2">

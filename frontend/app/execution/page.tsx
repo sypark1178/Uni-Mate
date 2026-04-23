@@ -127,7 +127,7 @@ export default function ExecutionPage() {
         <div className="mb-3 rounded-2xl bg-mist px-4 py-3 text-xs leading-5 text-muted">
           목표 입력: {goals.map((goal, index) => `${index + 1}순위 ${goal.university} ${goal.major}`).join(" / ")}
         </div>
-        <div className="flex gap-2 rounded-full border border-line bg-white p-1 shadow-soft">
+        <div className="flex gap-2 rounded-full border border-line bg-white p-1">
           {[
             { key: "week", label: "이번 주" },
             { key: "month", label: "이번 달" }
@@ -145,7 +145,7 @@ export default function ExecutionPage() {
           ))}
         </div>
 
-        <section className="mt-4 rounded-[24px] border border-line bg-white p-5 shadow-soft">
+        <section className="mt-4 rounded-[24px] border border-line bg-white p-5">
           <div className="flex flex-col gap-5 md:flex-row md:items-center">
             <div className="relative h-32 w-32 shrink-0">
               <svg viewBox="0 0 120 120" className="h-32 w-32 -rotate-90">
@@ -226,7 +226,7 @@ export default function ExecutionPage() {
           </div>
         </section>
 
-        <section className="mt-4 rounded-[24px] border border-line bg-white p-5 shadow-soft">
+        <section className="mt-4 rounded-[24px] border border-line bg-white p-5">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-extrabold">{currentData.listTitle}</h3>

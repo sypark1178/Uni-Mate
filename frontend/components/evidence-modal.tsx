@@ -15,7 +15,7 @@ export function EvidenceModal({ evidence, onClose }: EvidenceModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
       <div
-        className="w-full max-w-[360px] rounded-[24px] border border-navy bg-white p-5 shadow-soft"
+        className="w-full max-w-[360px] rounded-[24px] border border-navy bg-white p-5"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Evidence Viewer</div>
