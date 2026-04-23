@@ -195,16 +195,25 @@ export default function DashboardPage() {
                 <section className="overflow-hidden rounded-[20px] bg-navy text-white shadow-soft ring-1 ring-white/15">
                   <div className="px-4 py-4">
                     <div className="text-sm font-bold">AI 전략 요약</div>
-                    <p className="mt-2 text-xs leading-6 text-white/80">
-                      1지망 목표 대학{" "}
-                      <span className="font-semibold text-white">{primaryGoal?.university ?? "미설정"}</span>{" "}
-                      {primaryGoal?.major?.trim() ? primaryGoal.major.trim() : ""}
-                    </p>
-                    <div className="mt-4 rounded-2xl bg-white/[0.08] px-4 py-4 ring-1 ring-white/10">
+                    <div className="mt-2">
+                      <div className="text-sm font-bold">1지망 목표 대학</div>
+                      <p className="mt-2 text-xs leading-6 text-white/80">
+                        <span className="font-semibold text-white">{primaryGoal?.university ?? "미설정"}</span>
+                        {primaryGoal?.major?.trim() ? (
+                          <>
+                            <br />
+                            <span>{primaryGoal.major.trim()}</span>
+                          </>
+                        ) : null}
+                      </p>
+                    </div>
+                    <div className="mt-4 rounded-2xl bg-gradient-to-br from-white/[0.14] to-white/[0.05] px-4 py-4 ring-1 ring-white/15">
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 h-10 w-1 shrink-0 rounded-full bg-[#FC8B00]" aria-hidden />
+                        <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FC8B00] text-sm font-bold text-white shadow-sm" aria-hidden>
+                          6
+                        </div>
                         <div className="min-w-0 flex-1">
-                          <h2 className="text-lg font-bold leading-snug tracking-tight">수시 6장 전략 준비중</h2>
+                          <h2 className="text-base font-bold leading-snug">수시 6장 전략 준비중</h2>
                           <p className="mt-2 text-xs leading-6 text-white/75">
                             안정 {summary.safe} / 적정 {summary.normal} / 도전 {summary.challenge}
                           </p>
