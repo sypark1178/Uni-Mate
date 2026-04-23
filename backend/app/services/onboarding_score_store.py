@@ -91,6 +91,17 @@ class OnboardingScoreStore:
                     is_active INTEGER NOT NULL DEFAULT 1
                 );
 
+                CREATE TABLE IF NOT EXISTS TB_USER_AUTH (
+                    auth_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL UNIQUE,
+                    login_id TEXT NOT NULL UNIQUE,
+                    password_hash TEXT,
+                    role TEXT NOT NULL DEFAULT '사용자',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES TB_USER(user_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS TB_STUDENT_PROFILE (
                     student_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL UNIQUE,
@@ -203,23 +214,104 @@ class OnboardingScoreStore:
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES TB_USER(user_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS TB_METADATA_FIELD_MAP (
+                    meta_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_name_en TEXT NOT NULL,
+                    table_name_ko TEXT,
+                    field_name_en TEXT NOT NULL,
+                    field_name_ko TEXT,
+                    source_file TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(table_name_en, field_name_en)
+                );
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO TB_USER (email, password_hash, user_type, is_active)
+                VALUES ('admin@unimate.local', 'admin', '관리자', 1)
+                ON CONFLICT(email) DO NOTHING
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO TB_USER_AUTH (user_id, login_id, password_hash, role)
+                SELECT
+                    u.user_id,
+                    CASE
+                        WHEN trim(coalesce(u.password_hash, '')) <> '' THEN trim(u.password_hash)
+                        ELSE printf('user-%d', u.user_id)
+                    END,
+                    NULL,
+                    CASE WHEN lower(u.email) = 'admin@unimate.local' THEN '관리자' ELSE '사용자' END
+                FROM TB_USER u
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM TB_USER_AUTH a WHERE a.user_id = u.user_id
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO TB_USER_AUTH (user_id, login_id, password_hash, role)
+                SELECT user_id, 'admin', NULL, '관리자'
+                FROM TB_USER
+                WHERE lower(email) = 'admin@unimate.local'
+                ON CONFLICT(user_id) DO UPDATE
+                SET login_id = excluded.login_id,
+                    password_hash = NULL,
+                    role = excluded.role,
+                    updated_at = CURRENT_TIMESTAMP
                 """
             )
 
+    def _resolve_user_id(self, connection: sqlite3.Connection, user_key: str) -> int | None:
+        normalized = str(user_key or "").strip()
+        if not normalized:
+            return None
+        lowered = normalized.lower()
+        email_candidate = lowered if "@" in lowered else f"{lowered}@local.uni-mate"
+        row = connection.execute(
+            """
+            SELECT u.user_id
+            FROM TB_USER u
+            LEFT JOIN TB_USER_AUTH a ON a.user_id = u.user_id
+            WHERE lower(coalesce(a.login_id, '')) = ?
+               OR lower(u.email) = ?
+            LIMIT 1
+            """,
+            (lowered, email_candidate),
+        ).fetchone()
+        if row is None:
+            return None
+        return int(row["user_id"])
+
     def _ensure_user_and_student(self, connection: sqlite3.Connection, user_key: str) -> tuple[int, int]:
-        email = f"{user_key}@local.uni-mate"
+        user_id = self._resolve_user_id(connection, user_key)
+        if user_id is None:
+            email = f"{user_key}@local.uni-mate"
+            connection.execute(
+                """
+                INSERT INTO TB_USER (email, password_hash, user_type, is_active)
+                VALUES (?, ?, '학생', 1)
+                ON CONFLICT(email) DO NOTHING
+                """,
+                (email, "local-only"),
+            )
+            user_row = connection.execute("SELECT user_id FROM TB_USER WHERE email = ?", (email,)).fetchone()
+            if user_row is None:
+                raise RuntimeError("failed to resolve user")
+            user_id = int(user_row["user_id"])
         connection.execute(
             """
-            INSERT INTO TB_USER (email, password_hash, user_type, is_active)
-            VALUES (?, ?, '학생', 1)
-            ON CONFLICT(email) DO NOTHING
+            INSERT INTO TB_USER_AUTH (user_id, login_id, password_hash, role)
+            VALUES (?, ?, NULL, '사용자')
+            ON CONFLICT(user_id) DO UPDATE
+            SET updated_at = CURRENT_TIMESTAMP
             """,
-            (email, "local-only"),
+            (user_id, str(user_key or "").strip() or f"user-{user_id}"),
         )
-        user_row = connection.execute("SELECT user_id FROM TB_USER WHERE email = ?", (email,)).fetchone()
-        if user_row is None:
-            raise RuntimeError("failed to resolve user")
-        user_id = int(user_row["user_id"])
 
         connection.execute(
             """
@@ -421,15 +513,12 @@ class OnboardingScoreStore:
 
     def get_snapshot(self, user_key: str = "local-user") -> dict[str, Any]:
         with self._connect() as connection:
-            user_row = connection.execute(
-                "SELECT user_id FROM TB_USER WHERE email = ?",
-                (f"{user_key}@local.uni-mate",),
-            ).fetchone()
-            if user_row is None:
+            user_id = self._resolve_user_id(connection, user_key)
+            if user_id is None:
                 return {"ok": True, "source": "sqlite", "data": None}
             student_row = connection.execute(
                 "SELECT student_id FROM TB_STUDENT_PROFILE WHERE user_id = ?",
-                (int(user_row["user_id"]),),
+                (user_id,),
             ).fetchone()
             if student_row is None:
                 return {"ok": True, "source": "sqlite", "data": None}
@@ -495,14 +584,16 @@ class OnboardingScoreStore:
 
     def get_profile(self, user_key: str = "local-user") -> dict[str, Any]:
         with self._connect() as connection:
+            user_id = self._resolve_user_id(connection, user_key)
+            if user_id is None:
+                return {"ok": True, "source": "sqlite", "data": None}
             row = connection.execute(
                 """
                 SELECT sp.student_name, sp.school_name, sp.grade_label, sp.region, sp.district, sp.track, sp.admission_year
                 FROM TB_STUDENT_PROFILE sp
-                JOIN TB_USER u ON u.user_id = sp.user_id
-                WHERE u.email = ?
+                WHERE sp.user_id = ?
                 """,
-                (f"{user_key}@local.uni-mate",),
+                (user_id,),
             ).fetchone()
         if row is None:
             return {"ok": True, "source": "sqlite", "data": None}
@@ -553,20 +644,22 @@ class OnboardingScoreStore:
 
     def get_goals(self, user_key: str = "local-user") -> dict[str, Any]:
         with self._connect() as connection:
+            user_id = self._resolve_user_id(connection, user_key)
+            if user_id is None:
+                return {"ok": True, "source": "sqlite", "data": []}
             rows = connection.execute(
                 """
                 SELECT u.univ_name, d.dept_name
                 FROM TB_APPLICATION_LIST a
                 JOIN TB_STUDENT_PROFILE sp ON sp.student_id = a.student_id
-                JOIN TB_USER usr ON usr.user_id = sp.user_id
                 JOIN TB_ADMISSION_TYPE atp ON atp.admission_id = a.admission_id
                 JOIN TB_DEPARTMENT d ON d.dept_id = atp.dept_id
                 JOIN TB_UNIVERSITY u ON u.univ_id = d.univ_id
-                WHERE usr.email = ?
+                WHERE sp.user_id = ?
                 ORDER BY a.priority_no ASC, a.application_id ASC
                 LIMIT 3
                 """,
-                (f"{user_key}@local.uni-mate",),
+                (user_id,),
             ).fetchall()
         data = [{"university": row["univ_name"], "major": row["dept_name"]} for row in rows]
         return {"ok": True, "source": "sqlite", "data": data}
@@ -601,17 +694,19 @@ class OnboardingScoreStore:
 
     def get_analysis_result(self, user_key: str = "local-user") -> dict[str, Any]:
         with self._connect() as connection:
+            user_id = self._resolve_user_id(connection, user_key)
+            if user_id is None:
+                return {"ok": True, "source": "sqlite", "data": None}
             row = connection.execute(
                 """
                 SELECT aa.analysis_type, aa.analyzed_at
                 FROM TB_AI_ANALYSIS aa
                 JOIN TB_STUDENT_PROFILE sp ON sp.student_id = aa.student_id
-                JOIN TB_USER u ON u.user_id = sp.user_id
-                WHERE u.email = ?
+                WHERE sp.user_id = ?
                 ORDER BY aa.analysis_id DESC
                 LIMIT 1
                 """,
-                (f"{user_key}@local.uni-mate",),
+                (user_id,),
             ).fetchone()
         if row is None:
             return {"ok": True, "source": "sqlite", "data": None}

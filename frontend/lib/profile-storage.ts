@@ -4,8 +4,25 @@ import { useEffect, useState } from "react";
 import type { StudentProfile } from "@/lib/types";
 import { profile as defaultProfile } from "@/lib/mock-data";
 import { getDraftProfile, setDraftProfile } from "@/lib/draft-store";
+import { getCurrentMember } from "@/lib/member-store";
 
 export const profileStorageKey = "uni-mate-profile-memory";
+function getCurrentUserKey() {
+  return getCurrentMember()?.userId?.trim() || "local-user";
+}
+function getScopedProfileStorageKey() {
+  return `${profileStorageKey}:${getCurrentUserKey()}`;
+}
+
+function withLoggedInMemberName(profile: StudentProfile): StudentProfile {
+  const memberName = getCurrentMember()?.name?.trim() || "";
+  if (!memberName) return profile;
+  const currentName = String(profile.name ?? "").trim();
+  if (!currentName || currentName === "학생") {
+    return { ...profile, name: memberName };
+  }
+  return profile;
+}
 
 function normalizeProfile(raw: unknown): StudentProfile {
   if (!raw || typeof raw !== "object") {
@@ -39,14 +56,18 @@ function normalizeProfile(raw: unknown): StudentProfile {
 
 function persistProfile(nextProfile: StudentProfile) {
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(profileStorageKey, JSON.stringify(nextProfile));
+    window.localStorage.setItem(getScopedProfileStorageKey(), JSON.stringify(nextProfile));
   }
 }
 
 async function loadProfileFromServer() {
   if (typeof window === "undefined") return null;
   try {
-    const response = await fetch("/api/onboarding/profile", { method: "GET", cache: "no-store" });
+    const response = await fetch("/api/onboarding/profile", {
+      method: "GET",
+      cache: "no-store",
+      headers: { "x-user-key": getCurrentUserKey() }
+    });
     if (!response.ok) return null;
     const payload = (await response.json()) as { data?: unknown };
     return payload.data ? normalizeProfile(payload.data) : null;
@@ -60,7 +81,7 @@ async function persistProfileToServer(nextProfile: StudentProfile) {
   try {
     await fetch("/api/onboarding/profile", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-user-key": getCurrentUserKey() },
       body: JSON.stringify(nextProfile),
       keepalive: true
     });
@@ -70,7 +91,7 @@ async function persistProfileToServer(nextProfile: StudentProfile) {
 }
 
 export function useStudentProfile() {
-  const [studentProfile, setStudentProfile] = useState<StudentProfile>(defaultProfile);
+  const [studentProfile, setStudentProfile] = useState<StudentProfile>(() => withLoggedInMemberName(defaultProfile));
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -78,17 +99,17 @@ export function useStudentProfile() {
     const hydrate = async () => {
       let localProfile: StudentProfile | null = null;
       try {
-        const raw = window.localStorage.getItem(profileStorageKey);
+        const raw = window.localStorage.getItem(getScopedProfileStorageKey());
         if (raw) {
           localProfile = normalizeProfile(JSON.parse(raw));
         }
       } catch {
-        window.localStorage.removeItem(profileStorageKey);
+        window.localStorage.removeItem(getScopedProfileStorageKey());
         localProfile = defaultProfile;
       }
       const serverProfile = await loadProfileFromServer();
       const draftProfile = getDraftProfile<StudentProfile>();
-      const resolved = draftProfile ?? serverProfile ?? localProfile ?? defaultProfile;
+      const resolved = withLoggedInMemberName(draftProfile ?? serverProfile ?? localProfile ?? defaultProfile);
       if (!cancelled) {
         persistProfile(resolved);
         setStudentProfile(resolved);

@@ -8,12 +8,13 @@ import { EmptyState } from "@/components/empty-state";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import { ddayItems, emptyProfile, initialSimulation } from "@/lib/mock-data";
-import { buildGoalAnalyses, buildStrategyRecommendations, estimateEnglishPaceDelta, parseSeededGoals } from "@/lib/planning";
+import { buildGoalAnalyses, buildStrategyRecommendations, estimateEnglishPaceDelta } from "@/lib/planning";
 import type { ScoreMemoryStore } from "@/lib/types";
 import { isDraftDirty, markDraftDirty } from "@/lib/draft-store";
 import { useStudentProfile } from "@/lib/profile-storage";
 import { useScoreRecords } from "@/lib/score-storage";
 import { useGoals } from "@/lib/use-goals";
+import { getCurrentMember } from "@/lib/member-store";
 
 function getCategoryToneByScore(score: number) {
   if (score >= 72) return "bg-safe";
@@ -25,6 +26,22 @@ function getCategoryTone(category: "도전" | "적정" | "안정") {
   if (category === "도전") return "bg-danger";
   if (category === "적정") return "bg-normal";
   return "bg-safe";
+}
+
+function normalizeGradeLabel(label: string) {
+  const raw = String(label ?? "").trim();
+  if (!raw) return "고2";
+  if (/^고\s*\d$/.test(raw)) {
+    return raw.replace(/\s+/g, "");
+  }
+  if (/^\d$/.test(raw)) {
+    return `고${raw}`;
+  }
+  const match = raw.match(/^(\d)\s*학년$/);
+  if (match) {
+    return `고${match[1]}`;
+  }
+  return raw;
 }
 
 function getLatestEnglishMockGrade(store: ScoreMemoryStore): number | null {
@@ -53,8 +70,12 @@ export default function DashboardPage() {
   const { studentProfile, hydrated: profileHydrated, flushProfileToServer } = useStudentProfile();
   const { store, summary: scoreSummary, flushStoreToServer } = useScoreRecords();
   const currentProfile = isEmpty ? emptyProfile : studentProfile;
-  const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
-  const { goals, flushGoalsToServer } = useGoals(seededGoals);
+  const memberDisplayName = useMemo(() => {
+    const memberName = getCurrentMember()?.name?.trim() || "";
+    return memberName || currentProfile.name;
+  }, [currentProfile.name]);
+  const gradeBadgeLabel = useMemo(() => normalizeGradeLabel(studentProfile.gradeLabel), [studentProfile.gradeLabel]);
+  const { goals, flushGoalsToServer } = useGoals();
   const goalAnalyses = useMemo(() => buildGoalAnalyses(goals), [goals]);
   const strategyRecommendations = useMemo(() => buildStrategyRecommendations(goals), [goals]);
   const primaryGoal = goals[0];
@@ -91,12 +112,13 @@ export default function DashboardPage() {
   }, [store, scoreSummary.mockAverage, primaryGoal?.university, primaryGoal?.major]);
 
   const profileSummaryLine = useMemo(() => {
-    const schoolAverage = scoreSummary.schoolAverage === "-" ? "미입력" : scoreSummary.schoolAverage;
-    const goalText = primaryGoal
-      ? `${primaryGoal.university}${primaryGoal.major?.trim() ? ` ${primaryGoal.major.trim()}` : ""} 목표`
-      : "목표 미설정";
-    return `내신 ${schoolAverage} / ${goalText}`;
-  }, [scoreSummary.schoolAverage, primaryGoal]);
+    if (!primaryGoal) {
+      return "목표대학/학과 미설정";
+    }
+    const university = primaryGoal.university?.trim() || "미설정";
+    const major = primaryGoal.major?.trim() || "미설정";
+    return `${university} ${major}`;
+  }, [primaryGoal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,10 +179,8 @@ export default function DashboardPage() {
               <div>
                 <div className="mb-0.5 text-base leading-tight text-muted">안녕하세요</div>
                 <div className="flex items-center gap-2">
-                  <div className="max-w-[170px] truncate text-[27px] font-bold leading-tight">{currentProfile.name}님</div>
-                  {!isEmpty ? (
-                    <div className="rounded-full bg-[#128F171F] px-3 py-1 text-xs leading-none">{currentProfile.gradeLabel}</div>
-                  ) : null}
+                  <div className="max-w-[170px] truncate text-[27px] font-bold leading-tight">{memberDisplayName}님</div>
+                  <div className="rounded-full bg-[#128F171F] px-3 py-1 text-xs leading-none">{gradeBadgeLabel}</div>
                 </div>
                 {!isEmpty ? <div className="mt-1 max-w-[240px] truncate whitespace-nowrap text-xs leading-tight text-muted">{profileSummaryLine}</div> : null}
               </div>

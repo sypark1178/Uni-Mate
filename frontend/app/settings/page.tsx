@@ -17,10 +17,6 @@ function getGoalBadgeTone(score: number) {
   return "bg-danger";
 }
 
-function shortenSchoolName(name: string) {
-  return name.replace(/등학교$/, "");
-}
-
 const editButtonClass =
   "inline-flex h-[41px] min-w-[74px] items-center justify-center rounded-lg border border-line bg-white px-4 text-sm text-muted";
 const wideEditButtonClass = `${editButtonClass} w-full`;
@@ -52,8 +48,15 @@ export default function SettingsPage() {
 
   const moveTo = (href: string) => mergeHrefWithSearchParams(href, cleanedSearchParams);
   const settingsReturnHref = moveTo("/settings");
-  const chips = useMemo(() => [studentProfile.gradeLabel, `${String(studentProfile.targetYear).slice(2)}학년도 입시`], [studentProfile.gradeLabel, studentProfile.targetYear]);
+  const chips = useMemo(() => [studentProfile.gradeLabel, `${studentProfile.targetYear}학년도 입시`], [studentProfile.gradeLabel, studentProfile.targetYear]);
   const isHydrated = goalsHydrated && scoresHydrated && profileHydrated;
+  const displayName = useMemo(() => studentProfile.name?.trim() || "학생", [studentProfile.name]);
+  const displayInitial = useMemo(() => displayName.slice(0, 1) || "?", [displayName]);
+  const residenceLine = useMemo(
+    () =>
+      `${studentProfile.region || "서울"} / ${studentProfile.district || "강남구"} / ${studentProfile.schoolName || "대치고등학교"}`,
+    [studentProfile.region, studentProfile.district, studentProfile.schoolName]
+  );
 
   const toggle = (key: keyof typeof toggles) => {
     setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -111,7 +114,7 @@ export default function SettingsPage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={profileImageUrl} alt="프로필 이미지" className="h-full w-full object-cover" />
                     ) : (
-                      <span>{studentProfile.name.slice(0, 1) || "?"}</span>
+                      <span>{displayInitial}</span>
                     )}
                   </button>
                   <button
@@ -134,10 +137,10 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div>
-                  <div className="text-xl font-medium">{isHydrated ? studentProfile.name : "불러오는 중..."}</div>
+                  <div className="text-xl font-medium">{isHydrated ? displayName : "불러오는 중..."}</div>
                   <div className="mt-1 text-sm text-muted">
                     {isHydrated
-                      ? `${studentProfile.region || "서울"} / ${studentProfile.district || "강남구"} / ${shortenSchoolName(studentProfile.schoolName || "대치고등학교")}`
+                      ? residenceLine
                       : "기본정보를 불러오는 중입니다."}
                   </div>
                 </div>

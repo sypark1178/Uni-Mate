@@ -8,9 +8,19 @@ const pythonPath = process.env.PYTHONPATH ? `${workspaceRoot}${path.delimiter}${
 
 type BridgeEntity = "scores" | "profile" | "goals" | "analysis";
 
-export function runPythonBridge(command: "get" | "save", entity: BridgeEntity, payload?: unknown): Promise<unknown> {
+export function runPythonBridge(
+  command: "get" | "save",
+  entity: BridgeEntity,
+  payload?: unknown,
+  userKey?: string
+): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const child = spawn(pythonCommand, [pythonCliPath, command, "--entity", entity], {
+    const args = [pythonCliPath, command, "--entity", entity];
+    const normalizedUserKey = String(userKey ?? "").trim();
+    if (normalizedUserKey) {
+      args.push("--user-key", normalizedUserKey);
+    }
+    const child = spawn(pythonCommand, args, {
       cwd: workspaceRoot,
       env: {
         ...process.env,

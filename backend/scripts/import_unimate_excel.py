@@ -92,6 +92,7 @@ def main() -> int:
             "TB_ADMISSION_CUTOFF",
             "TB_ADMISSION_TYPE",
             "TB_DEPARTMENT",
+            "TB_USER_AUTH",
             "TB_USER",
             "TB_UNIVERSITY",
         ):
@@ -203,6 +204,13 @@ def main() -> int:
             if uid_row is None:
                 raise RuntimeError(f"user insert failed for {ext}")
             ext_to_uid[ext] = int(uid_row["user_id"])
+            conn.execute(
+                """
+                INSERT INTO TB_USER_AUTH (user_id, login_id, password_hash, role)
+                VALUES (?, ?, NULL, '사용자')
+                """,
+                (int(uid_row["user_id"]), ext),
+            )
 
         sp = sheet("STUDENT_PROFILE")
         for _, r in sp.iterrows():

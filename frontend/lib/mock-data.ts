@@ -1,7 +1,7 @@
 import type { ChecklistItem, Recommendation, SimulationInput, StudentProfile } from "@/lib/types";
 
 export const profile: StudentProfile = {
-  name: "김민지",
+  name: "학생",
   gradeLabel: "고2",
   region: "서울",
   district: "강남구",
