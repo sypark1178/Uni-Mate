@@ -91,7 +91,7 @@ async function persistProfileToServer(nextProfile: StudentProfile) {
 }
 
 export function useStudentProfile() {
-  const [studentProfile, setStudentProfile] = useState<StudentProfile>(() => withLoggedInMemberName(defaultProfile));
+  const [studentProfile, setStudentProfile] = useState<StudentProfile>(defaultProfile);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {

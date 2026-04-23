@@ -4,12 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams } from "@/lib/navigation";
+import { getCurrentMember } from "@/lib/member-store";
 
 export default function AnalysisLoadingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [progress, setProgress] = useState(18);
   const source = searchParams.get("source") ?? "goals";
+  const currentUserKey = useMemo(() => getCurrentMember()?.userId?.trim() || "local-user", []);
+  const analysisStorageKey = useMemo(() => `uni-mate-analysis-result:${currentUserKey}`, [currentUserKey]);
 
   const dashboardHref = useMemo(() => {
     const mergedHref = mergeHrefWithSearchParams("/dashboard?analysis=done", searchParams);
@@ -27,10 +30,10 @@ export default function AnalysisLoadingPage() {
         completedAt: new Date().toISOString(),
         source
       };
-      window.localStorage.setItem("uni-mate-analysis-result", JSON.stringify(resultPayload));
+      window.localStorage.setItem(analysisStorageKey, JSON.stringify(resultPayload));
       void fetch("/api/analysis/result", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-user-key": currentUserKey },
         body: JSON.stringify(resultPayload),
         keepalive: true
       });
@@ -41,7 +44,7 @@ export default function AnalysisLoadingPage() {
       window.clearInterval(tick);
       window.clearTimeout(finish);
     };
-  }, [dashboardHref, router, source]);
+  }, [analysisStorageKey, currentUserKey, dashboardHref, router, source]);
 
   return (
     <PhoneFrame

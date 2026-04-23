@@ -12,8 +12,15 @@ import type {
   UploadedRecordFile
 } from "@/lib/types";
 import { getDraftScores, setDraftScores } from "@/lib/draft-store";
+import { getCurrentMember } from "@/lib/member-store";
 
 export const scoreStorageKey = "uni-mate-score-memory";
+function getCurrentUserKey() {
+  return getCurrentMember()?.userId?.trim() || "local-user";
+}
+function getScopedScoreStorageKey() {
+  return `${scoreStorageKey}:${getCurrentUserKey()}`;
+}
 
 export const scoreTabOptions: Array<{ key: ScoreTabKey; label: string }> = [
   { key: "schoolRecord", label: "내신" },
@@ -285,7 +292,7 @@ export function getStudentRecord(store: ScoreMemoryStore, year: GradeYear, term:
 
 function persistStore(nextStore: ScoreMemoryStore) {
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(scoreStorageKey, JSON.stringify(nextStore));
+    window.localStorage.setItem(getScopedScoreStorageKey(), JSON.stringify(nextStore));
   }
 }
 
@@ -297,7 +304,8 @@ async function loadServerStore() {
   try {
     const response = await fetch("/api/onboarding/scores", {
       method: "GET",
-      cache: "no-store"
+      cache: "no-store",
+      headers: { "x-user-key": getCurrentUserKey() }
     });
     if (!response.ok) {
       return null;
@@ -318,7 +326,7 @@ async function persistStoreToServer(nextStore: ScoreMemoryStore) {
   try {
     await fetch("/api/onboarding/scores", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-user-key": getCurrentUserKey() },
       body: JSON.stringify(nextStore),
       keepalive: true
     });
@@ -392,12 +400,12 @@ export function useScoreRecords() {
       let localStore: ScoreMemoryStore | null = null;
 
       try {
-        const raw = window.localStorage.getItem(scoreStorageKey);
+        const raw = window.localStorage.getItem(getScopedScoreStorageKey());
         if (raw) {
           localStore = normalizeScoreStore(JSON.parse(raw));
         }
       } catch {
-        window.localStorage.removeItem(scoreStorageKey);
+        window.localStorage.removeItem(getScopedScoreStorageKey());
       }
 
       const serverStore = await loadServerStore();

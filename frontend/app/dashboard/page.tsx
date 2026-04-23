@@ -70,10 +70,6 @@ export default function DashboardPage() {
   const { studentProfile, hydrated: profileHydrated, flushProfileToServer } = useStudentProfile();
   const { store, summary: scoreSummary, flushStoreToServer } = useScoreRecords();
   const currentProfile = isEmpty ? emptyProfile : studentProfile;
-  const memberDisplayName = useMemo(() => {
-    const memberName = getCurrentMember()?.name?.trim() || "";
-    return memberName || currentProfile.name;
-  }, [currentProfile.name]);
   const gradeBadgeLabel = useMemo(() => normalizeGradeLabel(studentProfile.gradeLabel), [studentProfile.gradeLabel]);
   const { goals, flushGoalsToServer } = useGoals();
   const goalAnalyses = useMemo(() => buildGoalAnalyses(goals), [goals]);
@@ -120,11 +116,18 @@ export default function DashboardPage() {
     return `${university} ${major}`;
   }, [primaryGoal]);
 
+  const currentUserKey = useMemo(() => getCurrentMember()?.userId?.trim() || "local-user", []);
+  const analysisStorageKey = useMemo(() => `uni-mate-analysis-result:${currentUserKey}`, [currentUserKey]);
+
   useEffect(() => {
     let cancelled = false;
     const hydrateNotice = async () => {
       try {
-        const response = await fetch("/api/analysis/result", { method: "GET", cache: "no-store" });
+        const response = await fetch("/api/analysis/result", {
+          method: "GET",
+          cache: "no-store",
+          headers: { "x-user-key": currentUserKey }
+        });
         if (response.ok) {
           const payload = (await response.json()) as { data?: { completedAt?: string; source?: string } | null };
           if (!cancelled && payload.data?.completedAt) {
@@ -137,7 +140,7 @@ export default function DashboardPage() {
       }
 
       try {
-        const raw = window.localStorage.getItem("uni-mate-analysis-result");
+        const raw = window.localStorage.getItem(analysisStorageKey);
         if (!raw) {
           if (!cancelled) setAnalysisNotice("");
           return;
@@ -160,7 +163,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [analysisDone]);
+  }, [analysisDone, analysisStorageKey, currentUserKey]);
 
   const handleSaveAll = async () => {
     await flushProfileToServer();
@@ -179,7 +182,7 @@ export default function DashboardPage() {
               <div>
                 <div className="mb-0.5 text-base leading-tight text-muted">안녕하세요</div>
                 <div className="flex items-center gap-2">
-                  <div className="max-w-[170px] truncate text-[27px] font-bold leading-tight">{memberDisplayName}님</div>
+                  <div className="max-w-[170px] truncate text-[27px] font-bold leading-tight">{currentProfile.name}님</div>
                   <div className="rounded-full bg-[#128F171F] px-3 py-1 text-xs leading-none">{gradeBadgeLabel}</div>
                 </div>
                 {!isEmpty ? <div className="mt-1 max-w-[240px] truncate whitespace-nowrap text-xs leading-tight text-muted">{profileSummaryLine}</div> : null}
