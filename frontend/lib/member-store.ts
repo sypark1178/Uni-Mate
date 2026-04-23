@@ -199,3 +199,10 @@ export function getCurrentMember() {
     return null;
   }
 }
+
+export function logoutMember() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.removeItem(currentMemberStorageKey);
+}

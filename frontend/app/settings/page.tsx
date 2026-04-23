@@ -9,6 +9,7 @@ import { buildGoalAnalyses, parseSeededGoals } from "@/lib/planning";
 import { useStudentProfile } from "@/lib/profile-storage";
 import { useScoreRecords } from "@/lib/score-storage";
 import { useGoals } from "@/lib/use-goals";
+import { logoutMember } from "@/lib/member-store";
 
 function getGoalBadgeTone(score: number) {
   if (score >= 72) return "bg-safe";
@@ -35,6 +36,7 @@ export default function SettingsPage() {
     privacy: true
   });
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const cleanedSearchParams = useMemo(() => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -220,20 +222,74 @@ export default function SettingsPage() {
 
         <section>
           <h2 className="mb-3 text-lg font-semibold">계정 관리</h2>
-          <div className="rounded-[22px] border border-line bg-white p-4 shadow-soft">
+          <div className="space-y-4 rounded-[22px] border border-line bg-white p-4 shadow-soft">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="font-medium">회원 탈퇴</div>
-                <div className="mt-1 text-sm text-muted">30일 뒤 복구 불가, 이후 영구 삭제</div>
+                <div className="font-medium">로그아웃</div>
+                <div className="mt-1 text-sm text-muted">이 기기에서 로그인을 종료합니다.</div>
               </div>
-              <button className={editButtonClass} onClick={() => setShowWithdrawModal(true)}>
-                탈퇴
+              <button
+                type="button"
+                className={editButtonClass}
+                onClick={() => {
+                  setShowWithdrawModal(false);
+                  setShowLogoutModal(true);
+                }}
+              >
+                로그아웃
               </button>
+            </div>
+            <div className="border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-medium">회원 탈퇴</div>
+                  <div className="mt-1 text-sm text-muted">30일 뒤 복구 불가, 이후 영구 삭제</div>
+                </div>
+                <button
+                  type="button"
+                  className={editButtonClass}
+                  onClick={() => {
+                    setShowLogoutModal(false);
+                    setShowWithdrawModal(true);
+                  }}
+                >
+                  탈퇴
+                </button>
+              </div>
             </div>
           </div>
         </section>
       </PhoneFrame>
       <BottomNav />
+
+      {showLogoutModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-5">
+          <div className="w-full max-w-[340px] rounded-[24px] bg-white p-5 shadow-soft">
+            <h3 className="text-center text-2xl font-bold">로그아웃하시겠어요?</h3>
+            <p className="mt-3 text-center text-sm leading-6 text-muted">로그아웃하면 다시 로그인해야 서비스를 이용할 수 있어요.</p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                className="h-11 flex-1 rounded-xl border border-line text-sm font-semibold"
+                onClick={() => setShowLogoutModal(false)}
+              >
+                아니오
+              </button>
+              <button
+                type="button"
+                className="h-11 flex-1 rounded-xl bg-navy text-sm font-semibold text-white"
+                onClick={() => {
+                  setShowLogoutModal(false);
+                  logoutMember();
+                  safeNavigate(router, "/login");
+                }}
+              >
+                예
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showWithdrawModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-5">
@@ -243,10 +299,11 @@ export default function SettingsPage() {
               탈퇴를 진행하면 30일 이후 계정과 데이터가 영구 삭제됩니다. 계속 진행하시려면 탈퇴를 눌러 주세요.
             </p>
             <div className="mt-5 flex gap-3">
-              <button className="h-11 flex-1 rounded-xl border border-line" onClick={() => setShowWithdrawModal(false)}>
+              <button type="button" className="h-11 flex-1 rounded-xl border border-line" onClick={() => setShowWithdrawModal(false)}>
                 취소
               </button>
               <button
+                type="button"
                 className="h-11 flex-1 rounded-xl border border-[#efc7c7] bg-[#fff5f5] text-[#b42318]"
                 onClick={() => setShowWithdrawModal(false)}
               >
