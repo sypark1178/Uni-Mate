@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
-import { gradeTermOptions, gradeYearOptions, scoreTabOptions, useScoreRecords } from "@/lib/score-storage";
+import { getGradeTermOptionsByTab, gradeTermOptions, gradeYearOptions, scoreTabOptions, useScoreRecords } from "@/lib/score-storage";
 import type { GradeTerm, GradeYear, ScoreTabKey } from "@/lib/types";
 
 function isScoreTabKey(value: string | null): value is ScoreTabKey {
@@ -30,7 +30,10 @@ export default function GradeUploadPage() {
 
   const tab = isScoreTabKey(requestedTab) ? requestedTab : store.activeTab;
   const year = isGradeYear(requestedYear) ? requestedYear : store.selectedYear;
-  const term = isGradeTerm(requestedTerm) ? requestedTerm : store.selectedTerm;
+  const availableTermOptions = getGradeTermOptionsByTab(tab, year);
+  const fallbackTerm = availableTermOptions[0]?.value ?? store.selectedTerm;
+  const candidateTerm = isGradeTerm(requestedTerm) ? requestedTerm : store.selectedTerm;
+  const term = availableTermOptions.some((item) => item.value === candidateTerm) ? candidateTerm : fallbackTerm;
 
   const existingFiles = useMemo(
     () =>
@@ -54,7 +57,7 @@ export default function GradeUploadPage() {
     >
       <div className="mb-3 rounded-2xl bg-mist px-4 py-3 text-sm text-muted">
         현재 대상: {scoreTabOptions.find((item) => item.key === tab)?.label} / {gradeYearOptions.find((item) => item.value === year)?.label} /{" "}
-        {gradeTermOptions.find((item) => item.value === term)?.label}
+        {availableTermOptions.find((item) => item.value === term)?.label ?? gradeTermOptions.find((item) => item.value === term)?.label}
       </div>
       <UploadDropzone
         title="PDF / 사진 자료 선택"

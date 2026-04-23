@@ -31,8 +31,45 @@ export const gradeTermOptions: Array<{ value: GradeTerm; label: string }> = [
   { value: "1-midterm", label: "1학기 중간" },
   { value: "1-final", label: "1학기 기말" },
   { value: "2-midterm", label: "2학기 중간" },
+  { value: "2-final", label: "2학기 기말" },
+  { value: "march", label: "3월" },
+  { value: "june", label: "6월" },
+  { value: "september", label: "9월" },
+  { value: "august-csat", label: "8월 수능" }
+];
+
+const schoolTermOptions: Array<{ value: GradeTerm; label: string }> = [
+  { value: "1-midterm", label: "1학기 중간" },
+  { value: "1-final", label: "1학기 기말" },
+  { value: "2-midterm", label: "2학기 중간" },
   { value: "2-final", label: "2학기 기말" }
 ];
+
+const mockTermOptionsByYear: Record<GradeYear, Array<{ value: GradeTerm; label: string }>> = {
+  "1": [
+    { value: "march", label: "3월" },
+    { value: "june", label: "6월" },
+    { value: "september", label: "9월" }
+  ],
+  "2": [
+    { value: "march", label: "3월" },
+    { value: "june", label: "6월" },
+    { value: "september", label: "9월" }
+  ],
+  "3": [
+    { value: "march", label: "3월" },
+    { value: "june", label: "6월" },
+    { value: "september", label: "9월" },
+    { value: "august-csat", label: "수능" }
+  ]
+};
+
+export function getGradeTermOptionsByTab(tab: ScoreTabKey, year: GradeYear) {
+  if (tab === "mockExam") {
+    return mockTermOptionsByYear[year];
+  }
+  return schoolTermOptions;
+}
 
 const defaultSubjectNames = ["국어", "수학", "영어", "사탐", "과탐"];
 
@@ -295,6 +332,10 @@ function parseNumber(input: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function formatSummaryAverage(value: number) {
+  return value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+}
+
 function computeAverage(records: GradePeriodRecord[]) {
   const values = records
     .map((record) => {
@@ -316,7 +357,7 @@ function computeAverage(records: GradePeriodRecord[]) {
   }
 
   const average = values.reduce((sum, value) => sum + value, 0) / values.length;
-  return average.toFixed(1);
+  return formatSummaryAverage(average);
 }
 
 export function buildScoreSummary(store: ScoreMemoryStore) {

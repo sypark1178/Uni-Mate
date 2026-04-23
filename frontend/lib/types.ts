@@ -34,7 +34,15 @@ export type ScoreTabKey = "schoolRecord" | "mockExam" | "studentRecord";
 
 export type GradeYear = "1" | "2" | "3";
 
-export type GradeTerm = "1-midterm" | "1-final" | "2-midterm" | "2-final";
+export type GradeTerm =
+  | "1-midterm"
+  | "1-final"
+  | "2-midterm"
+  | "2-final"
+  | "march"
+  | "june"
+  | "september"
+  | "august-csat";
 
 export type SubjectScoreEntry = {
   id: string;

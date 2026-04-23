@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import {
   getScoreRecord,
+  getGradeTermOptionsByTab,
   gradeTermOptions,
   gradeYearOptions,
   scoreTabOptions,
@@ -15,6 +16,20 @@ import {
 import type { GradeTerm, GradeYear, ScoreTabKey, SubjectScoreEntry } from "@/lib/types";
 
 const fixedScoreLabels = ["국어", "수학", "영어", "사탐", "과탐"] as const;
+const autoAverageSubjects = ["국어", "수학", "영어", "사탐"] as const;
+
+function parseNumericScore(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const numeric = Number(trimmed);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function formatAverageValue(value: number) {
+  return value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+}
 
 function isScoreTabKey(value: string | null): value is ScoreTabKey {
   return scoreTabOptions.some((item) => item.key === value);
@@ -60,6 +75,7 @@ export default function OnboardingGradesPage() {
   const selectedTab = store.activeTab;
   const selectedYear = store.selectedYear;
   const selectedTerm = store.selectedTerm;
+  const availableTermOptions = useMemo(() => getGradeTermOptionsByTab(selectedTab, selectedYear), [selectedTab, selectedYear]);
 
   useEffect(() => {
     const nextTab = searchParams.get("tab");
@@ -74,6 +90,13 @@ export default function OnboardingGradesPage() {
       setSelectedPeriod(isGradeYear(nextYear) ? nextYear : selectedYear, isGradeTerm(nextTerm) ? nextTerm : selectedTerm);
     }
   }, [searchParams, selectedTab, selectedTerm, selectedYear, setActiveTab, setSelectedPeriod]);
+
+  useEffect(() => {
+    const isCurrentTermAvailable = availableTermOptions.some((item) => item.value === selectedTerm);
+    if (!isCurrentTermAvailable) {
+      setSelectedPeriod(selectedYear, availableTermOptions[0].value);
+    }
+  }, [availableTermOptions, selectedTerm, selectedYear, setSelectedPeriod]);
 
   useEffect(() => {
     if (selectedTab === "studentRecord" || !currentScoreRecord) {
@@ -112,6 +135,22 @@ export default function OnboardingGradesPage() {
     [activeScoreRecord?.subjects]
   );
 
+  useEffect(() => {
+    if (!activeScoreRecord || selectedTab === "studentRecord") {
+      return;
+    }
+
+    const values = autoAverageSubjects
+      .map((subjectName) => activeScoreRecord.subjects.find((entry) => entry.subject.trim() === subjectName)?.score ?? "")
+      .map(parseNumericScore)
+      .filter((value): value is number => value !== null);
+
+    const nextAverage = values.length === 0 ? "" : formatAverageValue(values.reduce((sum, value) => sum + value, 0) / values.length);
+    if (activeScoreRecord.overallAverage !== nextAverage) {
+      updateOverallAverage(selectedTab, selectedYear, selectedTerm, nextAverage);
+    }
+  }, [activeScoreRecord, selectedTab, selectedTerm, selectedYear, updateOverallAverage]);
+
   const customSubjects = useMemo(
     () => activeScoreRecord?.subjects.filter((entry) => entry.isCustom && entry.subject.trim()) ?? [],
     [activeScoreRecord?.subjects]
@@ -122,16 +161,6 @@ export default function OnboardingGradesPage() {
       .filter((entry) => entry.subject.trim() && entry.score.trim())
       .map((entry) => `${entry.subject}: ${entry.score}등급`);
   }, [activeScoreRecord]);
-  const [overallAverageDraft, setOverallAverageDraft] = useState("");
-
-  useEffect(() => {
-    if (selectedTab === "studentRecord") {
-      setOverallAverageDraft("");
-      return;
-    }
-    setOverallAverageDraft(activeScoreRecord?.overallAverage ?? "");
-  }, [activeScoreRecord?.overallAverage, selectedTab]);
-
   const displayedSubjectCount = fixedSubjectSlots.length + customSubjects.length;
 
   const uploadHref = useMemo(() => {
@@ -205,21 +234,6 @@ export default function OnboardingGradesPage() {
     });
   };
 
-  const handleOverallAverageInput = (value: string) => {
-    const normalized = value.replace(",", ".");
-    if (!/^\d*\.?\d{0,2}$/.test(normalized)) {
-      return;
-    }
-    setOverallAverageDraft(normalized);
-  };
-
-  const handleOverallAverageBlur = () => {
-    if (selectedTab === "studentRecord") {
-      return;
-    }
-    updateOverallAverage(selectedTab, selectedYear, selectedTerm, overallAverageDraft.trim());
-  };
-
   const uploadTitle = selectedTab === "studentRecord" ? "생기부 / 활동 자료 업로드" : "PDF / 사진 성적 업로드";
   const uploadDescription =
     selectedTab === "studentRecord"
@@ -254,7 +268,12 @@ export default function OnboardingGradesPage() {
           <select
             className="w-full rounded-full border border-line bg-white px-4 py-3"
             value={selectedYear}
-            onChange={(event) => setSelectedPeriod(event.target.value as GradeYear, selectedTerm)}
+            onChange={(event) => {
+              const nextYear = event.target.value as GradeYear;
+              const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
+              const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
+              setSelectedPeriod(nextYear, nextTerm);
+            }}
           >
             {gradeYearOptions.map((item) => (
               <option key={item.value} value={item.value}>
@@ -270,7 +289,7 @@ export default function OnboardingGradesPage() {
             value={selectedTerm}
             onChange={(event) => setSelectedPeriod(selectedYear, event.target.value as GradeTerm)}
           >
-            {gradeTermOptions.map((item) => (
+            {availableTermOptions.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
               </option>
@@ -350,13 +369,11 @@ export default function OnboardingGradesPage() {
             <label className="space-y-2">
               <span className="text-sm text-muted">전체평균</span>
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="0.01"
-                value={overallAverageDraft}
-                onChange={(event) => handleOverallAverageInput(event.target.value)}
-                onBlur={handleOverallAverageBlur}
-                placeholder="예: 2.35"
+                value={activeScoreRecord?.overallAverage ?? ""}
+                readOnly
+                placeholder="자동 계산"
                 className="w-full rounded-xl border border-white bg-white px-4 py-3"
               />
             </label>
