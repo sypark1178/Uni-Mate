@@ -35,7 +35,7 @@ export default function DashboardPage() {
   const { studentProfile, hydrated: profileHydrated, flushProfileToServer } = useStudentProfile();
   const { flushStoreToServer } = useScoreRecords();
   const currentProfile = isEmpty ? emptyProfile : studentProfile;
-  const seededGoals = parseSeededGoals(searchParams);
+  const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
   const { goals, flushGoalsToServer } = useGoals(seededGoals);
   const goalAnalyses = useMemo(() => buildGoalAnalyses(goals), [goals]);
   const strategyRecommendations = useMemo(() => buildStrategyRecommendations(goals), [goals]);
@@ -192,29 +192,41 @@ export default function DashboardPage() {
                   </section>
                 ) : null}
 
-                <section className="rounded-[24px] bg-navy px-4 py-4 text-white">
-                  <div className="text-sm text-white/80">
-                    AI 전략 요약 / 1지망 목표 대학 {primaryGoal?.university ?? "미설정"} {primaryGoal?.major ?? ""}
-                  </div>
-                  <h1 className="mt-2 text-2xl font-bold">수시 6장 전략 준비중</h1>
-                  <p className="mt-2 text-sm text-white/80">
-                    안정 {summary.safe} / 적정 {summary.normal} / 도전 {summary.challenge}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => safeNavigate(router, strategyHref)}
-                      className="rounded-full bg-[#E6F1FB] px-3 py-2 text-xs font-bold text-navy"
-                    >
-                      수시 6장 보러가기
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => safeNavigate(router, analysisLoadingHref)}
-                      className="rounded-full bg-white/15 px-3 py-2 text-xs font-bold text-white"
-                    >
-                      AI 분석 다시하기
-                    </button>
+                <section className="overflow-hidden rounded-[20px] bg-navy text-white shadow-soft ring-1 ring-white/15">
+                  <div className="px-4 py-4">
+                    <div className="text-sm font-bold">AI 전략 요약</div>
+                    <p className="mt-2 text-xs leading-6 text-white/80">
+                      1지망 목표 대학{" "}
+                      <span className="font-semibold text-white">{primaryGoal?.university ?? "미설정"}</span>{" "}
+                      {primaryGoal?.major?.trim() ? primaryGoal.major.trim() : ""}
+                    </p>
+                    <div className="mt-4 rounded-2xl bg-white/[0.08] px-4 py-4 ring-1 ring-white/10">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 h-10 w-1 shrink-0 rounded-full bg-[#FC8B00]" aria-hidden />
+                        <div className="min-w-0 flex-1">
+                          <h2 className="text-lg font-bold leading-snug tracking-tight">수시 6장 전략 준비중</h2>
+                          <p className="mt-2 text-xs leading-6 text-white/75">
+                            안정 {summary.safe} / 적정 {summary.normal} / 도전 {summary.challenge}
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => safeNavigate(router, strategyHref)}
+                              className="rounded-full bg-[#E6F1FB] px-3 py-2 text-xs font-bold text-navy"
+                            >
+                              수시 6장 보러가기
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => safeNavigate(router, analysisLoadingHref)}
+                              className="rounded-full bg-white/15 px-3 py-2 text-xs font-bold text-white ring-1 ring-white/20"
+                            >
+                              AI 분석 다시하기
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </section>
 
