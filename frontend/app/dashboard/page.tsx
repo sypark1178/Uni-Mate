@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { BottomNav } from "@/components/bottom-nav";
 import { EmptyState } from "@/components/empty-state";
-import { EvidenceModal } from "@/components/evidence-modal";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import { ddayItems, emptyProfile } from "@/lib/mock-data";
@@ -14,7 +13,6 @@ import { isDraftDirty, markDraftDirty } from "@/lib/draft-store";
 import { useStudentProfile } from "@/lib/profile-storage";
 import { useScoreRecords } from "@/lib/score-storage";
 import { useGoals } from "@/lib/use-goals";
-import type { Recommendation } from "@/lib/types";
 
 function getCategoryToneByScore(score: number) {
   if (score >= 72) return "bg-safe";
@@ -25,7 +23,6 @@ function getCategoryToneByScore(score: number) {
 export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [selected, setSelected] = useState<Recommendation | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [analysisNotice, setAnalysisNotice] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
@@ -113,18 +110,18 @@ export default function DashboardPage() {
   return (
     <>
       <PhoneFrame>
-        <div className="px-4 pb-28">
-            <div className="mb-4 flex items-start justify-between gap-3 px-2">
+        <div className="px-4">
+            <div className="mb-3 flex items-center justify-between gap-3 px-2">
               <div>
-                <div className="mb-1 text-base text-muted">안녕하세요</div>
+                <div className="mb-0.5 text-base leading-tight text-muted">안녕하세요</div>
                 <div className="flex items-center gap-2">
-                  <div className="text-[27px] font-bold leading-none">{currentProfile.name}님</div>
+                  <div className="text-[27px] font-bold leading-tight">{currentProfile.name}님</div>
                   {!isEmpty ? (
-                    <div className="rounded-full bg-[#128F171F] px-3 py-1 text-xs">{currentProfile.gradeLabel}</div>
+                    <div className="rounded-full bg-[#128F171F] px-3 py-1 text-xs leading-none">{currentProfile.gradeLabel}</div>
                   ) : null}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
                   onClick={() => safeNavigate(router, signupEntryHref)}
@@ -170,7 +167,7 @@ export default function DashboardPage() {
             </div>
 
             {!isEmpty ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {!profileHydrated ? (
                   <section className="rounded-[18px] border border-line bg-white px-4 py-3 text-sm text-muted">
                     최근 작업 정보를 불러오는 중입니다...
@@ -193,72 +190,69 @@ export default function DashboardPage() {
                 ) : null}
 
                 <section className="overflow-hidden rounded-[20px] bg-navy text-white shadow-soft ring-1 ring-white/15">
-                  <div className="px-4 py-4">
-                    <div className="text-sm font-bold">AI 전략 요약</div>
-                    <div className="mt-2">
-                      <div className="text-sm font-bold">1지망 목표 대학</div>
-                      <p className="mt-2 text-xs leading-6 text-white/80">
+                  <div className="px-3 py-3">
+                    <div className="text-sm font-bold leading-tight">📊 AI 전략 요약</div>
+                    <div className="mt-1.5">
+                      <div className="text-sm font-bold leading-tight">1지망 목표 대학</div>
+                      <p className="mt-1 text-xs leading-snug text-white/85">
                         <span className="font-semibold text-white">{primaryGoal?.university ?? "미설정"}</span>
                         {primaryGoal?.major?.trim() ? (
-                          <>
-                            <br />
-                            <span>{primaryGoal.major.trim()}</span>
-                          </>
+                          <span className="text-white/90"> {primaryGoal.major.trim()}</span>
                         ) : null}
                       </p>
                     </div>
-                    <div className="mt-4 rounded-2xl bg-gradient-to-br from-white/[0.14] to-white/[0.05] px-4 py-4 ring-1 ring-white/15">
-                      <div className="flex items-start gap-3">
-                        <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FC8B00] text-sm font-bold text-white shadow-sm" aria-hidden>
-                          6
+                    <div className="mt-3 rounded-xl border border-white/15 bg-white/[0.1] px-3 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#FC8B00] text-xs font-bold leading-none text-white shadow-sm" aria-hidden>
+                          6장
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h2 className="text-base font-bold leading-snug">수시 6장 전략 준비중</h2>
-                          <p className="mt-2 text-xs leading-6 text-white/75">
-                            안정 {summary.safe} / 적정 {summary.normal} / 도전 {summary.challenge}
+                          <h2 className="text-sm font-bold leading-tight">수시 6장 전략 준비중</h2>
+                          <p className="mt-0.5 text-[11px] leading-snug text-white/75">
+                            안정 {summary.safe} · 적정 {summary.normal} · 도전 {summary.challenge}
                           </p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => safeNavigate(router, strategyHref)}
-                              className="rounded-full bg-[#E6F1FB] px-3 py-2 text-xs font-bold text-navy"
-                            >
-                              수시 6장 보러가기
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => safeNavigate(router, analysisLoadingHref)}
-                              className="rounded-full bg-white/15 px-3 py-2 text-xs font-bold text-white ring-1 ring-white/20"
-                            >
-                              AI 분석 다시하기
-                            </button>
-                          </div>
                         </div>
+                      </div>
+                      <div className="mt-2.5 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => safeNavigate(router, strategyHref)}
+                          className="min-h-[40px] rounded-lg bg-[#E6F1FB] px-2 py-2 text-center text-[11px] font-bold leading-tight text-navy"
+                        >
+                          수시 6장 보러가기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => safeNavigate(router, analysisLoadingHref)}
+                          className="min-h-[40px] rounded-lg bg-white/15 px-2 py-2 text-center text-[11px] font-bold leading-tight text-white ring-1 ring-white/25"
+                        >
+                          AI 분석 다시하기
+                        </button>
                       </div>
                     </div>
                   </div>
                 </section>
 
-                <section className="rounded-[20px] bg-[#F2B5B57A] px-4 py-4 shadow-soft">
-                  <div className="text-sm font-bold">입시 정보 업데이트</div>
-                  <p className="mt-2 text-xs leading-6">
+                <section className="rounded-[20px] bg-[#F2B5B57A] px-3 py-3 shadow-soft">
+                  <div className="text-sm font-bold leading-tight">📌 입시 정보 업데이트</div>
+                  <p className="mt-1 text-xs leading-snug">
                     목표 대학의 주요 입시 정보에 변경 가능성이 있습니다. {primaryGoal?.university ?? "목표대학"}{" "}
                     {primaryGoal?.major ?? ""} 모집요강 근거를 다시 확인해 주세요.
                   </p>
-                  <Link href="/evidence" className="mt-2 inline-block text-xs font-bold text-[#8C0000]">
+                  <Link href="/evidence" className="mt-1.5 inline-block text-xs font-bold leading-tight text-[#8C0000]">
                     확인하기
                   </Link>
                 </section>
 
-                <section className="rounded-[20px] bg-[#EBEBEB] px-4 py-4 shadow-soft">
-                  <div className="text-sm font-bold">AI 페이스메이커</div>
-                  <p className="mt-2 text-xs leading-6">
+                <section className="rounded-[20px] bg-[#EBEBEB] px-3 py-3 shadow-soft">
+                  <div className="text-sm font-bold leading-tight">⏱️ AI 페이스메이커</div>
+                  <p className="mt-1 text-xs leading-snug">
                     목표 대학 3개와 전략 6장을 분리해서 보면 우선순위가 더 선명해집니다.
                   </p>
                   <button
                     type="button"
                     onClick={() => safeNavigate(router, analysisLoadingHref)}
-                    className="mt-3 inline-block text-xs font-bold text-navy"
+                    className="mt-1.5 inline-block text-xs font-bold leading-tight text-navy"
                   >
                     AI 분석 이어서 보기
                   </button>
@@ -277,7 +271,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-3">
                     {goalAnalyses.map((item, index) => (
-                      <article key={item.id} className="rounded-[18px] border border-line bg-white px-4 py-4 shadow-soft">
+                      <article key={item.id} className="rounded-[18px] border border-line bg-white px-4 py-3 shadow-soft">
                         <div className="flex items-center gap-3">
                           <div
                             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${getCategoryToneByScore(
@@ -287,10 +281,9 @@ export default function DashboardPage() {
                             {index + 1}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="font-bold">
-                              {item.university} - {item.major}
+                            <div className="font-bold leading-tight">
+                              {item.university} {item.major}
                             </div>
-                            <div className="mt-1 text-sm text-muted">목표 카드 / 우선순위 {index + 1}</div>
                           </div>
                           <div
                             className={`inline-flex min-w-[72px] items-center justify-center rounded-full px-3 py-2 text-xs font-bold ${getCategoryToneByScore(
@@ -299,16 +292,6 @@ export default function DashboardPage() {
                           >
                             {item.category} {item.fitScore}%
                           </div>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-mist px-3 py-3">
-                          <div className="text-xs text-muted">{item.notes}</div>
-                          <button
-                            type="button"
-                            onClick={() => setSelected(item)}
-                            className="shrink-0 rounded-full border border-line bg-white px-3 py-2 text-xs font-bold text-navy"
-                          >
-                            근거 보기
-                          </button>
                         </div>
                       </article>
                     ))}
@@ -323,7 +306,7 @@ export default function DashboardPage() {
                         <span className="text-lg">{item.label}</span>
                         <span
                           className={`rounded-full px-3 py-2 text-xs font-bold ${
-                            index === 0 ? "bg-[#D30F0F4F]" : "bg-[#0169C34F]"
+                            index === 0 ? "bg-[#D30F0F4F]" : index === 2 ? "bg-safe text-navy" : "bg-[#0169C34F]"
                           }`}
                         >
                           {item.value}
@@ -342,8 +325,6 @@ export default function DashboardPage() {
       </PhoneFrame>
 
       <BottomNav />
-      <EvidenceModal evidence={selected?.evidence ?? null} onClose={() => setSelected(null)} />
-
       {showSaveModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setShowSaveModal(false)}>
           <div

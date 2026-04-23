@@ -39,7 +39,7 @@ export function PhoneFrame({ children, title, subtitle, fullBleed = false, statu
             </div>
           </div>
         </header>
-        <div className={fullBleed ? "h-full overflow-y-auto pb-28 pt-11" : "h-full overflow-y-auto px-4 pb-28 pt-14"}>
+        <div className={fullBleed ? "h-full overflow-y-auto pb-[76px] pt-11" : "h-full overflow-y-auto px-4 pb-[76px] pt-14"}>
           {(title || subtitle) && (
             <header className="pb-3">
               {title && <h1 className="text-[28px] font-semibold tracking-[-0.03em]">{title}</h1>}
