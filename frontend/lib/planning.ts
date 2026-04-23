@@ -38,6 +38,15 @@ const universityBaseScore: Record<string, number> = {
   경상국립대: 78
 };
 
+/** 모의·수능 등급(낮을수록 우수) 기준으로 목표 대학 대비 영어 쪽으로 더 끌어올려야 할 등급 폭(소수 첫째 자리)을 추정합니다. */
+export function estimateEnglishPaceDelta(university: string, currentGradePoint: number): number {
+  const base = universityBaseScore[university] ?? 70;
+  const tier = (100 - base) / 100;
+  const targetGrade = Math.round((1.5 + tier * 1.25) * 10) / 10;
+  const raw = currentGradePoint - targetGrade;
+  return Math.round(Math.max(0.1, raw) * 10) / 10;
+}
+
 type StrategySeed = {
   university: string;
   major: string;

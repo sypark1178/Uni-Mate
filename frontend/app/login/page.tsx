@@ -35,7 +35,7 @@ export default function LoginPage() {
         <p className="mt-3 text-base leading-6 text-[#333333]">
           아이디와 비밀번호로
           <br />
-          Uni-MATE에 로그인하세요.
+          Uni-Mate에 로그인하세요.
         </p>
       </div>
       <div className="mt-8 space-y-4">

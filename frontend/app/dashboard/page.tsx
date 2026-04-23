@@ -7,8 +7,9 @@ import { BottomNav } from "@/components/bottom-nav";
 import { EmptyState } from "@/components/empty-state";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
-import { ddayItems, emptyProfile } from "@/lib/mock-data";
-import { buildGoalAnalyses, buildStrategyRecommendations, parseSeededGoals } from "@/lib/planning";
+import { ddayItems, emptyProfile, initialSimulation } from "@/lib/mock-data";
+import { buildGoalAnalyses, buildStrategyRecommendations, estimateEnglishPaceDelta, parseSeededGoals } from "@/lib/planning";
+import type { ScoreMemoryStore } from "@/lib/types";
 import { isDraftDirty, markDraftDirty } from "@/lib/draft-store";
 import { useStudentProfile } from "@/lib/profile-storage";
 import { useScoreRecords } from "@/lib/score-storage";
@@ -18,6 +19,20 @@ function getCategoryToneByScore(score: number) {
   if (score >= 72) return "bg-safe";
   if (score >= 55) return "bg-normal";
   return "bg-danger";
+}
+
+function getLatestEnglishMockGrade(store: ScoreMemoryStore): number | null {
+  const exams = store.mockExams;
+  for (let i = exams.length - 1; i >= 0; i -= 1) {
+    const entry = exams[i]?.subjects.find((s) => s.subject.trim() === "영어" && s.score.trim());
+    if (entry?.score.trim()) {
+      const n = Number(entry.score.trim());
+      if (Number.isFinite(n) && n >= 1 && n <= 9) {
+        return n;
+      }
+    }
+  }
+  return null;
 }
 
 export default function DashboardPage() {
@@ -30,7 +45,7 @@ export default function DashboardPage() {
   const isEmpty = searchParams.get("empty") === "1";
   const analysisDone = searchParams.get("analysis") === "done";
   const { studentProfile, hydrated: profileHydrated, flushProfileToServer } = useStudentProfile();
-  const { flushStoreToServer } = useScoreRecords();
+  const { store, summary: scoreSummary, flushStoreToServer } = useScoreRecords();
   const currentProfile = isEmpty ? emptyProfile : studentProfile;
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
   const { goals, flushGoalsToServer } = useGoals(seededGoals);
@@ -42,6 +57,8 @@ export default function DashboardPage() {
   const dashboardCurrentHref = currentSearch ? `/dashboard?${currentSearch}` : "/dashboard";
   const strategyHref = mergeHrefWithSearchParams("/strategy", searchParams);
   const analysisLoadingHref = mergeHrefWithSearchParams("/analysis/loading?source=dashboard", searchParams);
+  const gradesReanalysisHref = mergeHrefWithSearchParams("/onboarding/grades", searchParams);
+  const simulationHref = mergeHrefWithSearchParams("/analysis/simulation", searchParams);
   const goalsBaseHref = mergeHrefWithSearchParams("/onboarding/goals", searchParams);
   const goalsHref = `${goalsBaseHref}${goalsBaseHref.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(dashboardCurrentHref)}`;
   const signupEntryHref = `/signup?returnTo=${encodeURIComponent(dashboardCurrentHref)}`;
@@ -54,6 +71,18 @@ export default function DashboardPage() {
     }),
     [strategyRecommendations]
   );
+
+  const paceMessage = useMemo(() => {
+    const uni = primaryGoal?.university ?? "목표 대학";
+    const major = primaryGoal?.major?.trim() ?? "";
+    const english = getLatestEnglishMockGrade(store);
+    const mockAvg = Number.parseFloat(scoreSummary.mockAverage);
+    const currentPoint =
+      english ?? (Number.isFinite(mockAvg) ? mockAvg : initialSimulation.mock);
+    const delta = estimateEnglishPaceDelta(uni, currentPoint);
+    const targetLine = major ? `${uni} ${major}` : uni;
+    return `영어(수능·모의) 등급을 ${delta}만 더 끌어올리면 1지망 ${targetLine} 합격 가능성에 한 걸음 더 가까워집니다.`;
+  }, [store, scoreSummary.mockAverage, primaryGoal?.university, primaryGoal?.major]);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,7 +155,7 @@ export default function DashboardPage() {
                   type="button"
                   onClick={() => safeNavigate(router, signupEntryHref)}
                   aria-label="회원가입"
-                  className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-white text-navy shadow-soft"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-white text-black shadow-soft"
                 >
                   <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
                     <path
@@ -193,12 +222,9 @@ export default function DashboardPage() {
                   <div className="px-3 py-3">
                     <div className="text-sm font-bold leading-tight">📊 AI 전략 요약</div>
                     <div className="mt-1.5">
-                      <div className="text-sm font-bold leading-tight">1지망 목표 대학</div>
-                      <p className="mt-1 text-xs leading-snug text-white/85">
-                        <span className="font-semibold text-white">{primaryGoal?.university ?? "미설정"}</span>
-                        {primaryGoal?.major?.trim() ? (
-                          <span className="text-white/90"> {primaryGoal.major.trim()}</span>
-                        ) : null}
+                      <p className="text-xs font-bold leading-snug text-white/95">
+                        1지망 목표 대학 - {primaryGoal?.university ?? "미설정"}
+                        {primaryGoal?.major?.trim() ? ` ${primaryGoal.major.trim()}` : ""}
                       </p>
                     </div>
                     <div className="mt-3 rounded-xl border border-white/15 bg-white/[0.1] px-3 py-3">
@@ -223,10 +249,10 @@ export default function DashboardPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => safeNavigate(router, analysisLoadingHref)}
+                          onClick={() => safeNavigate(router, gradesReanalysisHref)}
                           className="min-h-[40px] rounded-lg bg-white/15 px-2 py-2 text-center text-[11px] font-bold leading-tight text-white ring-1 ring-white/25"
                         >
-                          AI 분석 다시하기
+                          새로운 점수로 다시 분석
                         </button>
                       </div>
                     </div>
@@ -246,12 +272,10 @@ export default function DashboardPage() {
 
                 <section className="rounded-[20px] bg-[#EBEBEB] px-3 py-3 shadow-soft">
                   <div className="text-sm font-bold leading-tight">⏱️ AI 페이스메이커</div>
-                  <p className="mt-1 text-xs leading-snug">
-                    목표 대학 3개와 전략 6장을 분리해서 보면 우선순위가 더 선명해집니다.
-                  </p>
+                  <p className="mt-1 text-xs leading-snug">{paceMessage}</p>
                   <button
                     type="button"
-                    onClick={() => safeNavigate(router, analysisLoadingHref)}
+                    onClick={() => safeNavigate(router, simulationHref)}
                     className="mt-1.5 inline-block text-xs font-bold leading-tight text-navy"
                   >
                     AI 분석 이어서 보기
@@ -264,7 +288,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => safeNavigate(router, goalsHref)}
-                      className="rounded-full border border-line bg-white px-3 py-2 text-sm font-semibold text-navy"
+                      className="rounded-full border border-line bg-white px-3 py-2 text-sm font-semibold text-black"
                     >
                       수정
                     </button>
@@ -306,7 +330,7 @@ export default function DashboardPage() {
                         <span className="text-lg">{item.label}</span>
                         <span
                           className={`rounded-full px-3 py-2 text-xs font-bold ${
-                            index === 0 ? "bg-[#D30F0F4F]" : index === 2 ? "bg-safe text-navy" : "bg-[#0169C34F]"
+                            index === 0 ? "bg-[#D30F0F4F]" : index === 2 ? "bg-safe text-black" : "bg-[#0169C34F]"
                           }`}
                         >
                           {item.value}

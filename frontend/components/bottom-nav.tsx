@@ -12,7 +12,7 @@ const items = [
 ];
 
 function NavIcon({ icon, active }: { icon: string; active: boolean }) {
-  const strokeColor = active ? "white" : "black";
+  const strokeColor = active ? "white" : "#C9D7F0";
 
   if (icon === "home") {
     return (
@@ -69,24 +69,27 @@ export function BottomNav() {
   const searchParams = useSearchParams();
 
   return (
-    <nav className="pointer-events-auto fixed bottom-0 left-1/2 z-[70] flex h-[66px] w-full max-w-[393px] -translate-x-1/2 items-stretch justify-around border-t border-[#F0F0F0] bg-white px-0">
-      {items.map((item) => {
-        const resolvedHref = mergeHrefWithSearchParams(item.href, searchParams);
-        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-        return (
-          <button
-            key={item.href}
-            type="button"
-            onClick={() => safeNavigate(router, resolvedHref)}
-            className={`flex h-full w-1/5 flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${
-              isActive ? "bg-navy text-white" : "text-black"
-            }`}
-          >
-            <NavIcon icon={item.icon} active={isActive} />
-            <span>{item.label}</span>
-          </button>
-        );
-      })}
-    </nav>
+    <>
+      <div className="pointer-events-none fixed bottom-0 left-1/2 z-[69] h-[96px] w-full max-w-[393px] -translate-x-1/2 bg-navy" aria-hidden />
+      <nav className="pointer-events-auto fixed bottom-0 left-1/2 z-[70] grid h-[76px] w-full max-w-[393px] grid-cols-5 -translate-x-1/2 items-stretch border-t border-navy bg-navy px-0 pb-[10px]">
+        {items.map((item) => {
+          const resolvedHref = mergeHrefWithSearchParams(item.href, searchParams);
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return (
+            <button
+              key={item.href}
+              type="button"
+              onClick={() => safeNavigate(router, resolvedHref)}
+              className={`flex h-full w-full min-w-0 flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${
+                isActive ? "bg-[#163c77] text-white" : "text-[#C9D7F0]"
+              }`}
+            >
+              <NavIcon icon={item.icon} active={isActive} />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </>
   );
 }
