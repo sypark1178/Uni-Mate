@@ -158,11 +158,15 @@ export function SettingsView() {
             <div className="grid grid-cols-[1fr_1fr_auto] items-stretch max-sm:grid-cols-1">
               <div className="p-5">
                 <div className="text-[18px] font-medium">내신</div>
-                <div className="mt-2 text-xl font-medium text-accent">{summary.schoolAverage}</div>
+                <div className="mt-2 text-xl font-medium text-accent">
+                  {summary.settingsSchoolFromDb ?? summary.schoolAverage}
+                </div>
               </div>
               <div className="border-l border-slate-100 p-5 max-sm:border-l-0 max-sm:border-t">
                 <div className="text-[18px] font-medium">모의고사</div>
-                <div className="mt-2 text-xl font-medium text-accent">{summary.mockAverage}</div>
+                <div className="mt-2 text-xl font-medium text-accent">
+                  {summary.settingsMockFromDb ?? summary.mockAverage}
+                </div>
                 <div className="mt-2 text-xs text-muted">
                   생기부 {summary.studentRecordCount}건 / 업로드 {summary.uploadCount}건
                 </div>

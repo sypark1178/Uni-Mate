@@ -56,3 +56,44 @@ export function runPythonBridge(
     child.stdin.end();
   });
 }
+
+export function runPythonLogin(payload: { loginId: string; password: string }): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const args = [pythonCliPath, "login"];
+    if (process.env.UNI_MATE_DB_PATH?.trim()) {
+      args.push("--db-path", process.env.UNI_MATE_DB_PATH.trim());
+    }
+    const child = spawn(pythonCommand, args, {
+      cwd: workspaceRoot,
+      env: {
+        ...process.env,
+        PYTHONPATH: pythonPath
+      }
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr || `python cli exited with code ${code}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    child.stdin.write(JSON.stringify(payload));
+    child.stdin.end();
+  });
+}

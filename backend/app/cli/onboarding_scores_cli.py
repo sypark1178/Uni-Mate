@@ -14,7 +14,7 @@ from backend.app.services.onboarding_score_store import OnboardingScoreStore
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Persist onboarding score snapshots.")
-    parser.add_argument("command", choices=("get", "save"))
+    parser.add_argument("command", choices=("get", "save", "login"))
     parser.add_argument(
         "--entity",
         dest="entity",
@@ -32,6 +32,13 @@ def main(argv: list[str] | None = None) -> int:
 
     db_path = Path(args.db_path) if args.db_path else None
     store = OnboardingScoreStore(db_path=db_path)
+
+    if args.command == "login":
+        payload = json.load(sys.stdin)
+        result = store.try_login(str(payload.get("loginId") or ""), str(payload.get("password") or ""))
+        json.dump(result, sys.stdout)
+        sys.stdout.write("\n")
+        return 0
 
     if args.command == "save":
         payload = json.load(sys.stdin)

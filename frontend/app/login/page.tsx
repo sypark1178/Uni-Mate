@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PhoneFrame } from "@/components/phone-frame";
-import { ensureMemberSeeds, loginMember } from "@/lib/member-store";
+import { ensureMemberSeeds, loginMemberWithServerFallback } from "@/lib/member-store";
 
 export default function LoginPage() {
   const [loginValue, setLoginValue] = useState("");
@@ -19,8 +19,8 @@ export default function LoginPage() {
     window.location.replace(`${window.location.origin}/dashboard`);
   };
 
-  const handleLogin = () => {
-    const result = loginMember(loginValue, password);
+  const handleLogin = async () => {
+    const result = await loginMemberWithServerFallback(loginValue, password);
     if (!result.ok) {
       setErrorMessage(result.error);
       return;

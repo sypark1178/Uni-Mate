@@ -40,6 +40,42 @@ class OnboardingScoreStoreTests(unittest.TestCase):
         self.assertEqual(saved["source"], "sqlite")
         self.assertEqual(loaded["data"], self.payload)
         self.assertEqual(loaded["summary"]["uploadCount"], 1)
+        self.assertIn("settingsDisplay", loaded)
+        self.assertEqual(loaded["settingsDisplay"]["schoolGradeAverage"], "-")
+        self.assertEqual(loaded["settingsDisplay"]["latestMockFourGradeAverage"], "-")
+
+    def test_settings_display_uses_academic_grade_and_latest_csat_grades(self) -> None:
+        self.store.save_snapshot(self.payload, user_key="student-3")
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                "SELECT student_id FROM TB_STUDENT_PROFILE sp JOIN TB_USER u ON u.user_id = sp.user_id "
+                "WHERE lower(u.email) = ?",
+                ("student-3@local.uni-mate",),
+            ).fetchone()
+            self.assertIsNotNone(row)
+            sid = int(row["student_id"])
+            connection.execute(
+                """
+                INSERT INTO TB_ACADEMIC_SCORE
+                    (student_id, semester, subject_name, subject_cat, raw_score, grade, credit_hours, z_score)
+                VALUES (?, '2-1-midterm', '국어', '내신', NULL, 2, NULL, NULL),
+                       (?, '2-1-midterm', '수학', '내신', NULL, 3, NULL, NULL)
+                """,
+                (sid, sid),
+            )
+            connection.execute(
+                """
+                INSERT INTO TB_CSAT_SCORE
+                    (student_id, exam_year, exam_type, korean_grade, math_grade, english_grade, science_grade, total_score, percentile)
+                VALUES (?, 2026, '6월 모의', 2, 3, 2, 4, NULL, NULL)
+                """,
+                (sid,),
+            )
+            connection.commit()
+
+        loaded = self.store.get_snapshot(user_key="student-3")
+        self.assertEqual(loaded["settingsDisplay"]["schoolGradeAverage"], "2.50")
+        self.assertEqual(loaded["settingsDisplay"]["latestMockFourGradeAverage"], "2.75")
 
     def test_save_snapshot_overwrites_same_user_key(self) -> None:
         self.store.save_snapshot(self.payload, user_key="student-1")

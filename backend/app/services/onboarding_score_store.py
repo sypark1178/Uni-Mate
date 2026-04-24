@@ -18,6 +18,47 @@ def build_payload_summary(payload: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def compute_settings_display_from_tables(connection: sqlite3.Connection, student_id: int) -> dict[str, str]:
+    """설정 화면용: 내신(TB_ACADEMIC_SCORE) 등급(grade) 평균, 최신 수능예측(TB_CSAT_SCORE) 4과목 등급 평균."""
+    school_grade = "-"
+    row_avg = connection.execute(
+        """
+        SELECT AVG(grade) AS avg_grade
+        FROM TB_ACADEMIC_SCORE
+        WHERE student_id = ? AND grade IS NOT NULL
+        """,
+        (student_id,),
+    ).fetchone()
+    if row_avg is not None and row_avg["avg_grade"] is not None:
+        school_grade = f"{float(row_avg['avg_grade']):.2f}"
+
+    mock_avg = "-"
+    grade_rows = connection.execute(
+        """
+        SELECT korean_grade, math_grade, english_grade, science_grade
+        FROM TB_CSAT_SCORE
+        WHERE student_id = ?
+        ORDER BY COALESCE(exam_year, 0) DESC, csat_id DESC
+        """,
+        (student_id,),
+    ).fetchall()
+    for grow in grade_rows:
+        vals = [grow["korean_grade"], grow["math_grade"], grow["english_grade"], grow["science_grade"]]
+        nums: list[float] = []
+        for v in vals:
+            if v is None:
+                continue
+            try:
+                nums.append(float(int(v)))
+            except (TypeError, ValueError):
+                continue
+        if nums:
+            mock_avg = f"{sum(nums) / len(nums):.2f}"
+            break
+
+    return {"schoolGradeAverage": school_grade, "latestMockFourGradeAverage": mock_avg}
+
+
 class OnboardingScoreStore:
     def __init__(self, db_path: str | Path | None = None) -> None:
         self.db_path = Path(db_path) if db_path else DEFAULT_DB_PATH
@@ -221,6 +262,8 @@ class OnboardingScoreStore:
                     table_name_ko TEXT,
                     field_name_en TEXT NOT NULL,
                     field_name_ko TEXT,
+                    table_description TEXT,
+                    field_description TEXT,
                     source_file TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -228,6 +271,7 @@ class OnboardingScoreStore:
                 );
                 """
             )
+            self._ensure_metadata_field_map_columns(connection)
             connection.execute(
                 """
                 INSERT INTO TB_USER (email, password_hash, user_type, is_active)
@@ -265,6 +309,15 @@ class OnboardingScoreStore:
                     updated_at = CURRENT_TIMESTAMP
                 """
             )
+
+    def _ensure_metadata_field_map_columns(self, connection: sqlite3.Connection) -> None:
+        """기존 DB에 TB_METADATA_FIELD_MAP 설명 컬럼이 없으면 추가합니다."""
+        rows = connection.execute("PRAGMA table_info(TB_METADATA_FIELD_MAP)").fetchall()
+        col_names = {str(r[1]) for r in rows}
+        if "table_description" not in col_names:
+            connection.execute("ALTER TABLE TB_METADATA_FIELD_MAP ADD COLUMN table_description TEXT")
+        if "field_description" not in col_names:
+            connection.execute("ALTER TABLE TB_METADATA_FIELD_MAP ADD COLUMN field_description TEXT")
 
     def _resolve_user_id(self, connection: sqlite3.Connection, user_key: str) -> int | None:
         normalized = str(user_key or "").strip()
@@ -523,6 +576,7 @@ class OnboardingScoreStore:
             if student_row is None:
                 return {"ok": True, "source": "sqlite", "data": None}
             student_id = int(student_row["student_id"])
+            settings_display = compute_settings_display_from_tables(connection, student_id)
             row = connection.execute(
                 """
                 SELECT
@@ -537,7 +591,12 @@ class OnboardingScoreStore:
             ).fetchone()
 
         if row is None:
-            return {"ok": True, "source": "sqlite", "data": None}
+            return {
+                "ok": True,
+                "source": "sqlite",
+                "data": None,
+                "settingsDisplay": settings_display,
+            }
 
         payload = json.loads(row["content_body"])
         summary = build_payload_summary(payload)
@@ -547,6 +606,7 @@ class OnboardingScoreStore:
             "savedAt": datetime.now(timezone.utc).isoformat(),
             "summary": summary,
             "data": payload,
+            "settingsDisplay": settings_display,
         }
 
     def save_profile(self, payload: dict[str, Any], user_key: str = "local-user") -> dict[str, Any]:
@@ -663,6 +723,68 @@ class OnboardingScoreStore:
             ).fetchall()
         data = [{"university": row["univ_name"], "major": row["dept_name"]} for row in rows]
         return {"ok": True, "source": "sqlite", "data": data}
+
+    def try_login(self, login_id: str, password: str) -> dict[str, Any]:
+        """SQLite TB_USER + TB_USER_AUTH 기반 로그인. 로컬스토리지 전용 가입과 별도."""
+        lid = str(login_id or "").strip()
+        pwd = str(password or "").strip()
+        if not lid:
+            return {"ok": False, "error": "아이디를 입력해 주세요."}
+
+        lowered = lid.lower()
+        skip_user_password_markers = {"", "excel-import", "local-only"}
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT u.user_id, u.email, u.password_hash AS user_password,
+                       a.login_id, a.password_hash AS auth_password,
+                       trim(coalesce(sp.student_name, '')) AS student_name
+                FROM TB_USER u
+                INNER JOIN TB_USER_AUTH a ON a.user_id = u.user_id
+                LEFT JOIN TB_STUDENT_PROFILE sp ON sp.user_id = u.user_id
+                WHERE lower(trim(a.login_id)) = ?
+                   OR lower(trim(u.email)) = ?
+                LIMIT 1
+                """,
+                (lowered, lowered),
+            ).fetchone()
+
+        if row is None:
+            return {"ok": False, "error": "등록된 회원을 찾지 못했습니다."}
+
+        auth_pwd = str(row["auth_password"] or "").strip()
+        user_pwd = str(row["user_password"] or "").strip()
+        login_key_norm = str(row["login_id"] or "").strip().lower()
+
+        if auth_pwd:
+            if pwd != auth_pwd:
+                return {"ok": False, "error": "비밀번호가 일치하지 않습니다."}
+        elif user_pwd.lower() in skip_user_password_markers:
+            if pwd != "":
+                return {"ok": False, "error": "비밀번호가 일치하지 않습니다."}
+        elif user_pwd and (
+            user_pwd.lower() == lowered
+            or (login_key_norm and user_pwd.lower() == login_key_norm)
+        ):
+            # 레거시/테스트: TB_USER.password_hash가 로그인 아이디와 동일하면 비밀번호 미설정으로 간주(아이디·이메일 로그인 공통)
+            if pwd not in ("", user_pwd):
+                return {"ok": False, "error": "비밀번호가 일치하지 않습니다."}
+        else:
+            if pwd != user_pwd:
+                return {"ok": False, "error": "비밀번호가 일치하지 않습니다."}
+
+        login_key = str(row["login_id"] or "").strip() or lid
+        name = str(row["student_name"] or "").strip() or login_key
+        email = str(row["email"] or "").strip().lower()
+        if not email:
+            email = f"{login_key.lower()}@local.uni-mate"
+
+        return {
+            "ok": True,
+            "source": "sqlite",
+            "data": {"userId": login_key, "name": name, "email": email},
+        }
 
     def save_analysis_result(self, payload: dict[str, Any], user_key: str = "local-user") -> dict[str, Any]:
         saved_at = datetime.now(timezone.utc).isoformat()

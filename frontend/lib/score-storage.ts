@@ -15,6 +15,12 @@ import { getDraftScores, setDraftScores } from "@/lib/draft-store";
 import { getCurrentMember } from "@/lib/member-store";
 
 export const scoreStorageKey = "uni-mate-score-memory";
+
+/** 서버(DB) 기준 설정 화면 성적 요약 — TB_ACADEMIC_SCORE 등급(grade) 평균, TB_CSAT_SCORE 최신 4과목 등급 평균 */
+export type ScoreSettingsDisplay = {
+  schoolGradeAverage: string;
+  latestMockFourGradeAverage: string;
+};
 function getCurrentUserKey() {
   return getCurrentMember()?.userId?.trim() || "local-user";
 }
@@ -296,9 +302,12 @@ function persistStore(nextStore: ScoreMemoryStore) {
   }
 }
 
-async function loadServerStore() {
+async function loadServerStore(): Promise<{
+  store: ScoreMemoryStore | null;
+  settingsDisplay: ScoreSettingsDisplay | null;
+}> {
   if (typeof window === "undefined") {
-    return null;
+    return { store: null, settingsDisplay: null };
   }
 
   try {
@@ -308,13 +317,20 @@ async function loadServerStore() {
       headers: { "x-user-key": getCurrentUserKey() }
     });
     if (!response.ok) {
-      return null;
+      return { store: null, settingsDisplay: null };
     }
 
-    const payload = (await response.json()) as { data?: unknown };
-    return payload.data ? normalizeScoreStore(payload.data) : null;
+    const payload = (await response.json()) as { data?: unknown; settingsDisplay?: ScoreSettingsDisplay | null };
+    const store = payload.data ? normalizeScoreStore(payload.data) : null;
+    const settingsDisplay =
+      payload.settingsDisplay &&
+      typeof payload.settingsDisplay.schoolGradeAverage === "string" &&
+      typeof payload.settingsDisplay.latestMockFourGradeAverage === "string"
+        ? payload.settingsDisplay
+        : null;
+    return { store, settingsDisplay };
   } catch {
-    return null;
+    return { store: null, settingsDisplay: null };
   }
 }
 
@@ -371,10 +387,14 @@ function computeAverage(records: GradePeriodRecord[]) {
   return formatSummaryAverage(average);
 }
 
-export function buildScoreSummary(store: ScoreMemoryStore) {
+export function buildScoreSummary(store: ScoreMemoryStore, settingsDisplay: ScoreSettingsDisplay | null = null) {
   return {
     schoolAverage: computeAverage(store.schoolRecords),
     mockAverage: computeAverage(store.mockExams),
+    /** 설정 화면 전용: TB_ACADEMIC_SCORE 등급(grade) 평균(소수 2자리), 없으면 null → 화면에서 schoolAverage로 대체 */
+    settingsSchoolFromDb: settingsDisplay?.schoolGradeAverage ?? null,
+    /** 설정 화면 전용: TB_CSAT_SCORE 최신 4과목 등급 평균(소수 2자리), 없으면 null */
+    settingsMockFromDb: settingsDisplay?.latestMockFourGradeAverage ?? null,
     studentRecordCount: store.studentRecords.filter((record) => record.title || record.description || record.files.length > 0).length,
     uploadCount: store.uploads.length
   };
@@ -391,6 +411,7 @@ function getStoreTimestamp(store: ScoreMemoryStore | null) {
 
 export function useScoreRecords() {
   const [store, setStore] = useState<ScoreMemoryStore>(defaultScoreMemoryStore);
+  const [settingsDisplay, setSettingsDisplay] = useState<ScoreSettingsDisplay | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -408,13 +429,28 @@ export function useScoreRecords() {
         window.localStorage.removeItem(getScopedScoreStorageKey());
       }
 
-      const serverStore = await loadServerStore();
+      const { store: serverStore, settingsDisplay: serverHints } = await loadServerStore();
       const draftStore = getDraftScores<ScoreMemoryStore>();
-      const candidate = getStoreTimestamp(serverStore) > getStoreTimestamp(localStore) ? serverStore : localStore;
-      const resolvedStore = getStoreTimestamp(draftStore) > getStoreTimestamp(candidate) ? draftStore : candidate;
+      const draftTs = getStoreTimestamp(draftStore);
+      const serverTs = getStoreTimestamp(serverStore);
+      const localTs = getStoreTimestamp(localStore);
+      const draftWins = draftTs >= serverTs && draftTs >= localTs && Boolean(draftStore);
+
+      let resolvedStore: ScoreMemoryStore | null = null;
+      if (draftWins) {
+        resolvedStore = draftStore;
+      } else if (serverTs >= localTs && serverStore) {
+        resolvedStore = serverStore;
+      } else {
+        resolvedStore = localStore;
+      }
+
+      const resolvedHints: ScoreSettingsDisplay | null = draftWins ? null : serverHints;
+      const finalStore = resolvedStore ?? defaultScoreMemoryStore;
 
       if (!cancelled) {
-        setStore(resolvedStore ?? defaultScoreMemoryStore);
+        setStore(finalStore);
+        setSettingsDisplay(resolvedHints);
         if (resolvedStore) {
           persistStore(resolvedStore);
         }
@@ -430,6 +466,7 @@ export function useScoreRecords() {
   }, []);
 
   const commit = (updater: (previous: ScoreMemoryStore) => ScoreMemoryStore) => {
+    setSettingsDisplay(null);
     setStore((previous) => {
       const nextStore = normalizeScoreStore(updater(previous));
       persistStore(nextStore);
@@ -588,10 +625,11 @@ export function useScoreRecords() {
   }, [store]);
 
   const currentStudentRecord = useMemo(() => getStudentRecord(store, store.selectedYear, store.selectedTerm), [store]);
-  const summary = useMemo(() => buildScoreSummary(store), [store]);
+  const summary = useMemo(() => buildScoreSummary(store, settingsDisplay), [store, settingsDisplay]);
 
   return {
     store,
+    settingsDisplay,
     hydrated,
     currentScoreRecord,
     currentStudentRecord,

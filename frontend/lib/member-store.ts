@@ -212,6 +212,69 @@ export function loginMember(loginValue: string, passwordValue: string) {
   return { ok: true as const, member };
 }
 
+function upsertMemberInStore(next: MemberRecord) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const members = ensureMemberSeeds();
+  const idx = members.findIndex((m) => m.userId.toLowerCase() === next.userId.toLowerCase());
+  const merged =
+    idx === -1
+      ? [...members, next]
+      : members.map((m, i) => (i === idx ? { ...next, id: m.id, createdAt: m.createdAt } : m));
+  writeStoredMembers(merged);
+}
+
+/**
+ * 로컬 가입 회원 우선, 없으면 SQLite(TB_USER / TB_USER_AUTH) 기반 로그인.
+ */
+export async function loginMemberWithServerFallback(loginValue: string, passwordValue: string) {
+  const local = loginMember(loginValue, passwordValue);
+  if (local.ok) {
+    return local;
+  }
+  if (local.error !== "등록된 회원을 찾지 못했습니다.") {
+    return local;
+  }
+
+  if (typeof window === "undefined") {
+    return local;
+  }
+
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ loginId: loginValue.trim(), password: passwordValue })
+    });
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      error?: string;
+      data?: { userId: string; name: string; email: string };
+    };
+
+    if (!response.ok || !payload.ok || !payload.data) {
+      return { ok: false as const, error: payload.error || "등록된 회원을 찾지 못했습니다." };
+    }
+
+    const d = payload.data;
+    const member: MemberRecord = {
+      id: `db-${d.userId}`,
+      userId: d.userId,
+      name: d.name,
+      email: d.email.trim().toLowerCase(),
+      password: "",
+      seeded: false,
+      createdAt: new Date().toISOString()
+    };
+    upsertMemberInStore(member);
+    window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
+    return { ok: true as const, member };
+  } catch {
+    return { ok: false as const, error: "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요." };
+  }
+}
+
 export function getCurrentMember() {
   if (typeof window === "undefined") {
     return null;

@@ -1,21 +1,28 @@
 """
-Load unimate_test_dataset.xlsx into SQLite schema used by OnboardingScoreStore.
-Run from repo root: python backend/scripts/import_unimate_excel.py
+엑셀 시트를 TB_* 테이블에 적재합니다.
+
+- 기본: TB_METADATA_FIELD_MAP, TB_USER, TB_USER_AUTH 는 삭제하지 않습니다.
+- `--replace-users`: 위 사용자·권한 테이블까지 비우고 USER 시트로 다시 채웁니다.
+
+실행 예 (워크스페이스 루트, PYTHONPATH=프로젝트 루트):
+
+  python backend/scripts/import_unimate_excel.py "경로/Data.xlsx"
+  python backend/scripts/import_unimate_excel.py "경로/Data.xlsx" "경로/uni_mate.db" --replace-users
 """
 from __future__ import annotations
 
+import argparse
 import sqlite3
 import sys
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 
-# backend/app/services -> parents[2] == backend
+WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = BACKEND_ROOT / "data" / "uni_mate.db"
 EXCEL_DEFAULT = Path(
-    r"e:\sangyun\200 AI기획(20251223~20260514)\프로젝트진행\70 프로세스 설계\가상데이터 생성\unimate_test_dataset.xlsx"
+    r"e:\sangyun\200 AI기획(20251223~20260514)\프로젝트진행\70 프로세스 설계\가상데이터 생성\Uni-Mate Data 20260424.xlsx"
 )
 
 
@@ -47,6 +54,20 @@ def _text(v) -> str | None:
     return s or None
 
 
+def _admission_year_from_row(r: pd.Series) -> int | None:
+    for key in ("univ_admission_year", "admission_year"):
+        if key not in r.index:
+            continue
+        y = _num(r.get(key), as_int=True)
+        if y is not None:
+            return y
+    return None
+
+
+def _admission_type_label(r: pd.Series) -> str:
+    return _text(r.get("admission_type")) or _text(r.get("admission_name")) or "수시"
+
+
 def _fix_sequence(conn: sqlite3.Connection, table: str, pk: str) -> None:
     row = conn.execute(f"SELECT MAX({pk}) AS m FROM {table}").fetchone()
     if row is None or row["m"] is None:
@@ -56,18 +77,68 @@ def _fix_sequence(conn: sqlite3.Connection, table: str, pk: str) -> None:
     conn.execute("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)", (table, seq))
 
 
-def main() -> int:
-    excel_path = Path(sys.argv[1]) if len(sys.argv) > 1 else EXCEL_DEFAULT
-    db_path = Path(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_DB
+def _build_ext_to_uid_from_db(conn: sqlite3.Connection, users: pd.DataFrame) -> dict[str, int]:
+    """USER 시트의 user_id(외부키)를 기존 TB_USER_AUTH.login_id 또는 TB_USER.email 로 매핑합니다."""
+    ext_to_uid: dict[str, int] = {}
+    for _, r in users.iterrows():
+        ext = str(r["user_id"]).strip()
+        row = conn.execute("SELECT user_id FROM TB_USER_AUTH WHERE login_id = ?", (ext,)).fetchone()
+        if row is not None:
+            ext_to_uid[ext] = int(row["user_id"])
+            continue
+        email = _text(r.get("email"))
+        if email:
+            row = conn.execute(
+                """
+                SELECT a.user_id
+                FROM TB_USER_AUTH a
+                JOIN TB_USER u ON u.user_id = a.user_id
+                WHERE lower(u.email) = lower(?)
+                LIMIT 1
+                """,
+                (email,),
+            ).fetchone()
+            if row is not None:
+                ext_to_uid[ext] = int(row["user_id"])
+                continue
+            row = conn.execute(
+                "SELECT user_id FROM TB_USER WHERE lower(email) = lower(?) LIMIT 1",
+                (email,),
+            ).fetchone()
+            if row is not None:
+                ext_to_uid[ext] = int(row["user_id"])
+                continue
+        raise RuntimeError(
+            f"USER 시트의 user_id={ext!r} 에 해당하는 TB_USER_AUTH.login_id 또는 이메일이 DB에 없습니다. "
+            "로그인 계정을 먼저 만들거나 --replace-users 로 전체 재적재하세요."
+        )
+    return ext_to_uid
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Uni-Mate 엑셀 → SQLite 적재")
+    parser.add_argument("excel", nargs="?", default=str(EXCEL_DEFAULT), help="엑셀 파일 경로")
+    parser.add_argument("db", nargs="?", default=str(DEFAULT_DB), help="SQLite DB 경로")
+    parser.add_argument(
+        "--replace-users",
+        action="store_true",
+        help="TB_USER / TB_USER_AUTH 까지 삭제 후 USER 시트로 재생성 (기본은 유지)",
+    )
+    args = parser.parse_args(argv)
+
+    excel_path = Path(args.excel)
+    db_path = Path(args.db)
+    preserve_users = not args.replace_users
+
     if not excel_path.is_file():
         print(f"Excel not found: {excel_path}", file=sys.stderr)
         return 1
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Ensure schema exists
-    sys.path.insert(0, str(BACKEND_ROOT))
-    from app.services.onboarding_score_store import OnboardingScoreStore  # noqa: E402
+    if str(WORKSPACE_ROOT) not in sys.path:
+        sys.path.insert(0, str(WORKSPACE_ROOT))
+    from backend.app.services.onboarding_score_store import OnboardingScoreStore  # noqa: E402
 
     OnboardingScoreStore(db_path=str(db_path))
 
@@ -76,26 +147,28 @@ def main() -> int:
     def sheet(name: str) -> pd.DataFrame:
         return pd.read_excel(xl, sheet_name=name)
 
+    delete_tables = [
+        "TB_NOTIFICATION",
+        "TB_CONSULTING_SESSION",
+        "TB_RECOMMENDATION",
+        "TB_AI_ANALYSIS",
+        "TB_APPLICATION_LIST",
+        "TB_STUDENT_RECORD",
+        "TB_CSAT_SCORE",
+        "TB_ACADEMIC_SCORE",
+        "TB_STUDENT_PROFILE",
+        "TB_ADMISSION_CUTOFF",
+        "TB_ADMISSION_TYPE",
+        "TB_DEPARTMENT",
+        "TB_UNIVERSITY",
+    ]
+    if not preserve_users:
+        delete_tables.extend(["TB_USER_AUTH", "TB_USER"])
+
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = OFF")
-        for tbl in (
-            "TB_NOTIFICATION",
-            "TB_CONSULTING_SESSION",
-            "TB_RECOMMENDATION",
-            "TB_AI_ANALYSIS",
-            "TB_APPLICATION_LIST",
-            "TB_STUDENT_RECORD",
-            "TB_CSAT_SCORE",
-            "TB_ACADEMIC_SCORE",
-            "TB_STUDENT_PROFILE",
-            "TB_ADMISSION_CUTOFF",
-            "TB_ADMISSION_TYPE",
-            "TB_DEPARTMENT",
-            "TB_USER_AUTH",
-            "TB_USER",
-            "TB_UNIVERSITY",
-        ):
+        for tbl in delete_tables:
             conn.execute(f"DELETE FROM {tbl}")
         conn.execute("PRAGMA foreign_keys = ON")
 
@@ -143,6 +216,9 @@ def main() -> int:
 
         at = sheet("ADMISSION_TYPE")
         for _, r in at.iterrows():
+            yr = _admission_year_from_row(r)
+            if yr is None:
+                raise RuntimeError(f"ADMISSION_TYPE 행 admission_id={r.get('admission_id')}: 입학연도 컬럼이 없습니다.")
             conn.execute(
                 """
                 INSERT INTO TB_ADMISSION_TYPE
@@ -152,8 +228,8 @@ def main() -> int:
                 (
                     int(r["admission_id"]),
                     int(r["dept_id"]),
-                    int(r["admission_year"]),
-                    _text(r["admission_type"]) or "수시",
+                    yr,
+                    _admission_type_label(r),
                     _text(r.get("admission_method")),
                     _num(r.get("recruit_cnt"), as_int=True),
                     _num(r.get("doc_ratio")),
@@ -182,35 +258,39 @@ def main() -> int:
             )
 
         users = sheet("USER")
-        ext_to_uid: dict[str, int] = {}
-        for _, r in users.iterrows():
-            ext = str(r["user_id"]).strip()
-            conn.execute(
-                """
-                INSERT INTO TB_USER (email, password_hash, user_type, phone, created_at, last_login_at, is_active)
-                VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?)
-                """,
-                (
-                    _text(r["email"]),
-                    "excel-import",
-                    _text(r.get("user_type")) or "학생",
-                    _text(r.get("phone")),
-                    _ts(r.get("created_at")),
-                    _ts(r.get("last_login_at")),
-                    int(r.get("is_active", 1) or 0),
-                ),
-            )
-            uid_row = conn.execute("SELECT user_id FROM TB_USER WHERE email = ?", (_text(r["email"]),)).fetchone()
-            if uid_row is None:
-                raise RuntimeError(f"user insert failed for {ext}")
-            ext_to_uid[ext] = int(uid_row["user_id"])
-            conn.execute(
-                """
-                INSERT INTO TB_USER_AUTH (user_id, login_id, password_hash, role)
-                VALUES (?, ?, NULL, '사용자')
-                """,
-                (int(uid_row["user_id"]), ext),
-            )
+        ext_to_uid: dict[str, int]
+        if preserve_users:
+            ext_to_uid = _build_ext_to_uid_from_db(conn, users)
+        else:
+            ext_to_uid = {}
+            for _, r in users.iterrows():
+                ext = str(r["user_id"]).strip()
+                conn.execute(
+                    """
+                    INSERT INTO TB_USER (email, password_hash, user_type, phone, created_at, last_login_at, is_active)
+                    VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?)
+                    """,
+                    (
+                        _text(r["email"]),
+                        "excel-import",
+                        _text(r.get("user_type")) or "학생",
+                        _text(r.get("phone")),
+                        _ts(r.get("created_at")),
+                        _ts(r.get("last_login_at")),
+                        int(r.get("is_active", 1) or 0),
+                    ),
+                )
+                uid_row = conn.execute("SELECT user_id FROM TB_USER WHERE email = ?", (_text(r["email"]),)).fetchone()
+                if uid_row is None:
+                    raise RuntimeError(f"user insert failed for {ext}")
+                ext_to_uid[ext] = int(uid_row["user_id"])
+                conn.execute(
+                    """
+                    INSERT INTO TB_USER_AUTH (user_id, login_id, password_hash, role)
+                    VALUES (?, ?, NULL, '사용자')
+                    """,
+                    (int(uid_row["user_id"]), ext),
+                )
 
         sp = sheet("STUDENT_PROFILE")
         for _, r in sp.iterrows():
@@ -259,7 +339,6 @@ def main() -> int:
             if g is not None and not (isinstance(g, float) and pd.isna(g)):
                 try:
                     gf = float(g)
-                    # 스키마는 INTEGER 등급용 — 소수 평점(예: 4.1)은 오해 소지가 있어 NULL 처리
                     grade_int = int(gf) if abs(gf - round(gf)) < 1e-9 else None
                 except (TypeError, ValueError):
                     grade_int = None
@@ -328,6 +407,9 @@ def main() -> int:
 
         al = sheet("APPLICATION_LIST")
         for _, r in al.iterrows():
+            pr = _num(r.get("priority_rank"), as_int=True)
+            if pr is None:
+                pr = _num(r.get("priority_no"), as_int=True)
             conn.execute(
                 """
                 INSERT INTO TB_APPLICATION_LIST
@@ -340,7 +422,7 @@ def main() -> int:
                     int(r["admission_id"]),
                     _text(r.get("strategy_type")) or "적정",
                     _text(r.get("status")) or "active",
-                    _num(r.get("priority_rank"), as_int=True),
+                    pr,
                     _text(r.get("analysis_note")),
                 ),
             )
@@ -376,6 +458,10 @@ def main() -> int:
 
         rec = sheet("RECOMMENDATION")
         for _, r in rec.iterrows():
+            reason = _text(r.get("reason_summary")) or ""
+            pr = _num(r.get("priority_rank"), as_int=True)
+            if pr is not None:
+                reason = (f"[우선순위 {pr}] " + reason).strip()
             conn.execute(
                 """
                 INSERT INTO TB_RECOMMENDATION
@@ -388,7 +474,7 @@ def main() -> int:
                     int(r["admission_id"]),
                     _num(r.get("rec_score")),
                     _text(r.get("strategy_type")),
-                    _text(r.get("reason_summary")),
+                    reason or None,
                     _ts(r.get("created_at")),
                 ),
             )
@@ -441,12 +527,11 @@ def main() -> int:
                 ),
             )
 
-        for tbl, pk in (
+        sequence_tables: list[tuple[str, str]] = [
             ("TB_UNIVERSITY", "univ_id"),
             ("TB_DEPARTMENT", "dept_id"),
             ("TB_ADMISSION_TYPE", "admission_id"),
             ("TB_ADMISSION_CUTOFF", "cutoff_id"),
-            ("TB_USER", "user_id"),
             ("TB_STUDENT_PROFILE", "student_id"),
             ("TB_ACADEMIC_SCORE", "score_id"),
             ("TB_CSAT_SCORE", "csat_id"),
@@ -456,12 +541,17 @@ def main() -> int:
             ("TB_RECOMMENDATION", "rec_id"),
             ("TB_CONSULTING_SESSION", "session_id"),
             ("TB_NOTIFICATION", "noti_id"),
-        ):
+        ]
+        if not preserve_users:
+            sequence_tables.insert(4, ("TB_USER", "user_id"))
+
+        for tbl, pk in sequence_tables:
             _fix_sequence(conn, tbl, pk)
 
         conn.commit()
 
-    print(f"OK: imported {excel_path} -> {db_path}")
+    mode = "preserve-users+meta" if preserve_users else "full-reimport"
+    print(f"OK ({mode}): {excel_path} -> {db_path}")
     return 0
 
 
