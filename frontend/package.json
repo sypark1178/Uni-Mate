@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev --turbo -p 3001",
+    "dev:webpack": "next dev -p 3001",
+    "open:study-plan": "powershell -NoProfile -Command \"Start-Process ('http://localhost:3001/strategy/study-plan?t=' + [DateTime]::UtcNow.Ticks)\"",
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "next lint"

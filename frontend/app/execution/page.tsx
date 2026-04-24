@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams } from "@/lib/navigation";
+import { compactGoalLine } from "@/lib/goal-display";
 import { parseSeededGoals } from "@/lib/planning";
 import { useGoals } from "@/lib/use-goals";
 
@@ -125,7 +126,8 @@ export default function ExecutionPage() {
     <>
       <PhoneFrame title="실행 관리" subtitle="체크리스트와 실행률을 주간 또는 월간 기준으로 확인할 수 있어요.">
         <div className="mb-3 rounded-2xl bg-mist px-4 py-3 text-xs leading-5 text-muted">
-          목표 입력: {goals.map((goal, index) => `${index + 1}순위 ${goal.university} ${goal.major}`).join(" / ")}
+          목표 입력:{" "}
+          {goals.map((goal, index) => `${index + 1}순위 ${compactGoalLine(goal.university, goal.major)}`).join(" / ")}
         </div>
         <div className="flex gap-2 rounded-full border border-line bg-white p-1">
           {[
@@ -173,7 +175,7 @@ export default function ExecutionPage() {
               </h2>
               <p className="mt-3 text-sm leading-6 text-ink">{currentData.summary}</p>
               <div className="mt-3 text-sm font-semibold text-muted">
-                {currentData.deltaLabel} <strong className="text-[#59A056]">{currentData.delta}</strong>
+                {currentData.deltaLabel} <strong className="text-[#166534]">{currentData.delta}</strong>
               </div>
             </div>
           </div>

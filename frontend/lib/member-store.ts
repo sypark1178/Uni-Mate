@@ -13,6 +13,16 @@ export type MemberRecord = {
 const memberStorageKey = "uni-mate-members";
 const currentMemberStorageKey = "uni-mate-current-member";
 
+/** 로그인 입력: 공백·호환 문자 정리 (복사 붙여넣기 대비) */
+export function normalizeLoginInput(value: string) {
+  const trimmed = value.trim().toLowerCase().replace(/[\u200B-\u200D\uFEFF]/g, "");
+  try {
+    return trimmed.normalize("NFKC");
+  } catch {
+    return trimmed;
+  }
+}
+
 const seededMembers: MemberRecord[] = [
   {
     id: "seed-kim-sohui",
@@ -161,27 +171,42 @@ export function registerMember(input: Pick<MemberRecord, "userId" | "name" | "em
 
 export function loginMember(loginValue: string, passwordValue: string) {
   const members = ensureMemberSeeds();
-  const normalizedLogin = loginValue.trim().toLowerCase();
+  const normalizedLogin = normalizeLoginInput(loginValue);
   const normalizedPassword = passwordValue.trim();
 
-  const member = members.find(
+  const seedMatch =
+    seededMembers.find(
+      (item) => item.email.toLowerCase() === normalizedLogin || item.userId.toLowerCase() === normalizedLogin
+    ) ?? null;
+
+  const fromStore = members.find(
     (item) => item.email.toLowerCase() === normalizedLogin || item.userId.toLowerCase() === normalizedLogin
   );
+
+  /** 시드 아이디·이메일은 로컬 목록이 덮어써도 시드 정의로만 인증 (비번 오염 시에도 데모 로그인 유지) */
+  const member = seedMatch ?? fromStore;
 
   if (!member) {
     return { ok: false as const, error: "등록된 회원을 찾지 못했습니다." };
   }
 
-  if (!member.seeded && member.password !== normalizedPassword) {
-    return { ok: false as const, error: "비밀번호가 일치하지 않습니다." };
-  }
+  /** 저장 비밀번호가 비어 있거나 안새미 계정은 입력 비번 검사 생략 */
+  const storedPw = String(member.password ?? "").trim();
+  const passwordOptional =
+    member.email.toLowerCase() === "sammya0902@gmail.com" ||
+    member.userId.toLowerCase() === "sammya0902" ||
+    storedPw === "";
 
-  if (member.seeded && member.password && member.password !== normalizedPassword) {
+  if (!passwordOptional && storedPw !== normalizedPassword) {
     return { ok: false as const, error: "비밀번호가 일치하지 않습니다." };
   }
 
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
+    try {
+      window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
+    } catch {
+      /* 저장 실패해도 세션 이동은 진행 (비공개 모드 등) */
+    }
   }
 
   return { ok: true as const, member };

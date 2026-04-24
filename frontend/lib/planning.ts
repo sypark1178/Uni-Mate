@@ -3,9 +3,9 @@ import type { GoalChoice, Recommendation } from "@/lib/types";
 export const goalStorageKey = "uni-mate-goals";
 
 export const defaultGoals: GoalChoice[] = [
+  { university: "경희대", major: "경영학과" },
   { university: "서강대", major: "경영학부" },
-  { university: "성균관대", major: "경영학과" },
-  { university: "한양대", major: "경영학부" }
+  { university: "숭실대", major: "경영학부" }
 ];
 
 const universityBaseScore: Record<string, number> = {
@@ -17,6 +17,7 @@ const universityBaseScore: Record<string, number> = {
   한양대: 61,
   중앙대: 66,
   경희대학교: 64,
+  경희대: 64,
   이화여대: 68,
   한국외대: 63,
   시립대: 62,
@@ -24,6 +25,7 @@ const universityBaseScore: Record<string, number> = {
   동국대: 69,
   숙명여대: 67,
   홍익대: 76,
+  숭실대: 72,
   국민대: 75,
   광운대: 78,
   인하대: 73,
@@ -135,14 +137,50 @@ export function buildStrategyRecommendations(goals: GoalChoice[]): Recommendatio
       id: `strategy-extra-${index + 1}`,
       university: item.university,
       major: item.major,
-      category: getCategory(fitScore),
+      // 보완 추천 풀의 난이도 구간(도전/적정/안정)을 그대로 유지해야 필터에서 학교가 안정적으로 노출됩니다.
+      category: item.category,
       fitScore,
       notes: `${item.university} ${item.major} 기준 보완 추천 카드입니다.`,
       evidence: buildEvidence(item.university, item.major, fitScore)
     };
   });
 
-  return [...goalAnalyses.map((item, index) => ({ ...item, id: `strategy-goal-${index + 1}` })), ...supplementalCards].slice(0, 6);
+  const merged = [...goalAnalyses.map((item, index) => ({ ...item, id: `strategy-goal-${index + 1}` })), ...supplementalCards];
+  const categories: Recommendation["category"][] = ["도전", "적정", "안정"];
+
+  // 필터 버튼을 눌렀을 때 빈 목록이 되지 않도록 각 구간 카드를 최소 1개씩 보장합니다.
+  categories.forEach((category) => {
+    if (merged.some((item) => item.category === category)) {
+      return;
+    }
+
+    const candidate = matchedPool.find((item) => item.category === category);
+    if (!candidate) {
+      return;
+    }
+
+    const fitScore = Math.max(25, Math.min(88, getBaseScore(candidate.university)));
+    merged.push({
+      id: `strategy-ensure-${category}`,
+      university: candidate.university,
+      major: candidate.major,
+      category,
+      fitScore,
+      notes: `${candidate.university} ${candidate.major} 기준 구간 보완 카드입니다.`,
+      evidence: buildEvidence(candidate.university, candidate.major, fitScore)
+    });
+  });
+
+  const deduped: Recommendation[] = [];
+  const seen = new Set<string>();
+  for (const item of merged) {
+    const key = `${item.university}|${item.major}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+
+  return deduped.slice(0, 6);
 }
 
 export function parseSeededGoals(searchParams: URLSearchParams): GoalChoice[] {

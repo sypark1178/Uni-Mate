@@ -1,5 +1,6 @@
 "use client";
 
+import { compactGoalLine } from "@/lib/goal-display";
 import type { Recommendation } from "@/lib/types";
 
 type RecommendationCardProps = {
@@ -30,13 +31,13 @@ export function RecommendationCard({ recommendation, onEvidence }: Recommendatio
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="truncate text-lg font-semibold leading-tight">
-            {recommendation.university} {recommendation.major}
+            {compactGoalLine(recommendation.university, recommendation.major)}
           </div>
           <div className="mt-2 space-y-1.5">
             {noteLines.map((line, idx) => (
               <p
                 key={`${recommendation.id}-line-${idx}`}
-                className={`text-xs leading-5 text-muted ${line.startsWith("인재상 키워드 |") ? "whitespace-nowrap" : ""}`}
+                className={`text-xs leading-5 text-muted ${line.startsWith("이 학교가 보는 키워드 |") ? "whitespace-nowrap" : ""}`}
               >
                 {line}
               </p>

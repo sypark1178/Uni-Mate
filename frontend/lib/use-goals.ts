@@ -5,7 +5,6 @@ import type { GoalChoice } from "@/lib/types";
 import { defaultGoals, goalStorageKey } from "@/lib/planning";
 import { normalizeUniversityName } from "@/lib/admission-data";
 import { getDraftGoals, setDraftGoals } from "@/lib/draft-store";
-import { getCurrentMember } from "@/lib/member-store";
 
 function normalizeStoredGoals(goals: GoalChoice[]): GoalChoice[] {
   return goals.map((goal) => ({
@@ -14,22 +13,10 @@ function normalizeStoredGoals(goals: GoalChoice[]): GoalChoice[] {
   }));
 }
 
-function getCurrentUserKey() {
-  return getCurrentMember()?.userId?.trim() || "local-user";
-}
-
-function getScopedGoalStorageKey() {
-  return `${goalStorageKey}:${getCurrentUserKey()}`;
-}
-
 async function loadGoalsFromServer() {
   if (typeof window === "undefined") return null;
   try {
-    const response = await fetch("/api/onboarding/goals", {
-      method: "GET",
-      cache: "no-store",
-      headers: { "x-user-key": getCurrentUserKey() }
-    });
+    const response = await fetch("/api/onboarding/goals", { method: "GET", cache: "no-store" });
     if (!response.ok) return null;
     const payload = (await response.json()) as { data?: GoalChoice[] };
     if (!Array.isArray(payload.data) || payload.data.length === 0) return null;
@@ -44,7 +31,7 @@ async function persistGoalsToServer(goals: GoalChoice[]) {
   try {
     await fetch("/api/onboarding/goals", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-user-key": getCurrentUserKey() },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(goals),
       keepalive: true
     });
@@ -61,20 +48,32 @@ export function useGoals(seedGoals?: GoalChoice[] | null) {
   const [goals, setGoals] = useState<GoalChoice[]>(defaultGoals);
   const [hydrated, setHydrated] = useState(false);
 
+  /** 매 렌더 새 배열 참조([])로 effect가 무한 재실행되지 않도록 문자열로 고정 */
+  const seedKey =
+    seedGoals && seedGoals.length > 0 ? JSON.stringify(normalizeStoredGoals(seedGoals.slice(0, 3))) : "";
+
   useEffect(() => {
     let cancelled = false;
     const hydrate = async () => {
-      if (seedGoals && seedGoals.length > 0) {
-        const trimmed = normalizeStoredGoals(seedGoals.slice(0, 3));
-        setGoals(trimmed);
-        window.localStorage.setItem(getScopedGoalStorageKey(), JSON.stringify(trimmed));
-        void persistGoalsToServer(trimmed);
-        if (!cancelled) setHydrated(true);
-        return;
+      if (seedKey.length > 0) {
+        let parsed: GoalChoice[] = [];
+        try {
+          parsed = JSON.parse(seedKey) as GoalChoice[];
+        } catch {
+          parsed = [];
+        }
+        if (parsed.length > 0) {
+          const trimmed = normalizeStoredGoals(parsed.slice(0, 3));
+          setGoals(trimmed);
+          window.localStorage.setItem(goalStorageKey, JSON.stringify(trimmed));
+          void persistGoalsToServer(trimmed);
+          if (!cancelled) setHydrated(true);
+          return;
+        }
       }
       let localGoals: GoalChoice[] | null = null;
       try {
-        const raw = window.localStorage.getItem(getScopedGoalStorageKey());
+        const raw = window.localStorage.getItem(goalStorageKey);
         if (raw) {
           const parsed = JSON.parse(raw) as GoalChoice[];
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -82,14 +81,16 @@ export function useGoals(seedGoals?: GoalChoice[] | null) {
           }
         }
       } catch {
-        window.localStorage.removeItem(getScopedGoalStorageKey());
+        window.localStorage.removeItem(goalStorageKey);
       }
       const serverGoals = await loadGoalsFromServer();
-      const draftGoals = getDraftGoals<GoalChoice[]>();
-      const resolved = serverGoals ?? draftGoals ?? localGoals ?? defaultGoals;
+      const draftRaw = getDraftGoals<GoalChoice[]>();
+      const draftGoals =
+        Array.isArray(draftRaw) && draftRaw.length > 0 ? normalizeStoredGoals(draftRaw.slice(0, 3)) : null;
+      const resolved = draftGoals ?? serverGoals ?? localGoals ?? defaultGoals;
       if (!cancelled) {
         setGoals(resolved);
-        window.localStorage.setItem(getScopedGoalStorageKey(), JSON.stringify(resolved));
+        window.localStorage.setItem(goalStorageKey, JSON.stringify(resolved));
         setHydrated(true);
       }
     };
@@ -97,18 +98,18 @@ export function useGoals(seedGoals?: GoalChoice[] | null) {
     return () => {
       cancelled = true;
     };
-  }, [seedGoals]);
+  }, [seedKey]);
 
   const updateGoals = (nextGoals: GoalChoice[]) => {
     const trimmed = normalizePersistGoals(nextGoals);
     setGoals(trimmed);
-    window.localStorage.setItem(getScopedGoalStorageKey(), JSON.stringify(trimmed));
+    window.localStorage.setItem(goalStorageKey, JSON.stringify(trimmed));
     setDraftGoals(trimmed);
   };
 
   const flushGoalsToServer = async () => {
     const trimmed = normalizePersistGoals(goals);
-    window.localStorage.setItem(getScopedGoalStorageKey(), JSON.stringify(trimmed));
+    window.localStorage.setItem(goalStorageKey, JSON.stringify(trimmed));
     await persistGoalsToServer(trimmed);
     return trimmed;
   };

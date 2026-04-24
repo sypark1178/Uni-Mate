@@ -30,8 +30,8 @@ export function RadarCard({ academicFit, majorFit, minRequirement }: RadarCardPr
         <span className="text-xs text-muted">W1 / W2 / W3 기반</span>
       </div>
       <svg viewBox="0 0 140 140" className="mx-auto block h-[210px] w-full max-w-[260px]">
-        <polygon points="70,4 136,42 112,132 28,132 4,42" fill="#eef3f9" stroke="#cfd9e6" />
-        <polygon points="70,22 118,50 100,116 40,116 22,50" fill="none" stroke="#cfd9e6" strokeDasharray="4 4" />
+        <polygon points="70,4 136,42 112,132 28,132 4,42" fill="#E8F1FA" stroke="#B3C8DC" />
+        <polygon points="70,22 118,50 100,116 40,116 22,50" fill="none" stroke="#B3C8DC" strokeDasharray="4 4" />
         <polygon points={polygon} fill="rgba(21,53,106,0.22)" stroke="#15356A" strokeWidth="2" />
       </svg>
       <div className="mt-4 grid grid-cols-3 gap-2 text-center text-sm">

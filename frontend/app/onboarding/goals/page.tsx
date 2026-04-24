@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { OnboardingStep } from "@/components/onboarding-step";
 import { getMajorsByUniversity, onboardingTabs, universityOptions } from "@/lib/admission-data";
+import { compactGoalLine } from "@/lib/goal-display";
 import { parseSeededGoals } from "@/lib/planning";
 import { useGoals } from "@/lib/use-goals";
 
@@ -82,7 +83,7 @@ export default function OnboardingGoalsPage() {
     <OnboardingStep
       step="3/3"
       title="목표 대학과 학과를 설정해 주세요"
-      subtitle="학교와 학과 우선순위를 정리하면 AI 분석과 전략 추천으로 바로 이어집니다."
+      subtitle="학교와 학과 우선순위를 정리하면 AI 분석과 추천 전략으로 바로 이어집니다."
       prevHref="/onboarding/grades"
       nextHref="/analysis/loading?source=goals"
       nextLabel="AI 분석 시작"
@@ -114,7 +115,7 @@ export default function OnboardingGoalsPage() {
               focus === index + 1 ? "border-navy ring-2 ring-navy/20" : "border-line"
             }`}
           >
-            <div className="mb-3 text-sm font-semibold text-navy">{index + 1}순위 목표</div>
+            <div className="mb-3 text-sm font-semibold text-black">{index + 1}순위 목표</div>
             <div className="space-y-3">
               <select
                 className="w-full rounded-xl border border-line px-4 py-3"
@@ -145,7 +146,7 @@ export default function OnboardingGoalsPage() {
       })}
       <div className="rounded-[22px] bg-mist px-4 py-3 text-xs leading-5 text-muted">
         현재 목표 요약:{" "}
-        {goalRanks.map((item, index) => `${index + 1}순위 ${item.university} ${item.major}`).join(" / ")}
+        {goalRanks.map((item, index) => `${index + 1}순위 ${compactGoalLine(item.university, item.major)}`).join(" / ")}
       </div>
     </OnboardingStep>
   );

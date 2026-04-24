@@ -1,7 +1,9 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
+import Link from "next/link";
+import { Suspense } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { mergeHrefWithSearchParams } from "@/lib/navigation";
 
 const items = [
   { href: "/dashboard", label: "홈", icon: "home" },
@@ -63,32 +65,59 @@ function NavIcon({ icon, active }: { icon: string; active: boolean }) {
   );
 }
 
-export function BottomNav() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+const navClass =
+  "pointer-events-auto fixed bottom-0 left-1/2 z-[70] flex h-[58px] w-full max-w-[393px] -translate-x-1/2 items-stretch border-t border-[#F0F0F0] bg-white px-0";
 
+const itemClass = (active: boolean) =>
+  `flex h-full w-1/5 min-w-0 flex-col items-center justify-center gap-0.5 bg-white px-0 text-[11px] font-medium leading-none no-underline ${
+    active ? "text-navy" : "text-black"
+  }`;
+
+function BottomNavFallback() {
+  const pathname = usePathname();
   return (
-    <nav className="pointer-events-auto fixed bottom-0 left-1/2 z-[70] flex h-[58px] w-full max-w-[393px] -translate-x-1/2 items-stretch border-t border-[#F0F0F0] bg-white px-0">
+    <nav className={navClass} aria-label="하단 메뉴">
       {items.map((item) => {
-        const resolvedHref = mergeHrefWithSearchParams(item.href, searchParams);
         const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
-          <button
-            key={item.href}
-            type="button"
-            onClick={() => safeNavigate(router, resolvedHref)}
-            className={`flex h-full w-1/5 min-w-0 flex-col items-center justify-center gap-0.5 bg-white px-0 text-[11px] font-medium leading-none ${
-              isActive ? "text-navy" : "text-black"
-            }`}
-          >
+          <Link key={item.href} href={item.href} className={itemClass(isActive)} prefetch>
             <span className="flex h-6 w-6 items-center justify-center">
               <NavIcon icon={item.icon} active={isActive} />
             </span>
             <span>{item.label}</span>
-          </button>
+          </Link>
         );
       })}
     </nav>
+  );
+}
+
+function BottomNavInner() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  return (
+    <nav className={navClass} aria-label="하단 메뉴">
+      {items.map((item) => {
+        const resolvedHref = mergeHrefWithSearchParams(item.href, searchParams);
+        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        return (
+          <Link key={item.href} href={resolvedHref} className={itemClass(isActive)} prefetch>
+            <span className="flex h-6 w-6 items-center justify-center">
+              <NavIcon icon={item.icon} active={isActive} />
+            </span>
+            <span>{item.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function BottomNav() {
+  return (
+    <Suspense fallback={<BottomNavFallback />}>
+      <BottomNavInner />
+    </Suspense>
   );
 }

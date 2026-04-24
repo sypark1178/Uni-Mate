@@ -8,19 +8,19 @@ import { EmptyState } from "@/components/empty-state";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import { ddayItems, emptyProfile, initialSimulation } from "@/lib/mock-data";
-import { buildGoalAnalyses, buildStrategyRecommendations, estimateEnglishPaceDelta } from "@/lib/planning";
+import { normalizeUniversityName } from "@/lib/admission-data";
+import {
+  compactGoalLine,
+  compactMajorLabel,
+  compactUniversityLabel,
+  goalRankNumberToneClass
+} from "@/lib/goal-display";
+import { buildGoalAnalyses, buildStrategyRecommendations, estimateEnglishPaceDelta, parseSeededGoals } from "@/lib/planning";
 import type { ScoreMemoryStore } from "@/lib/types";
 import { isDraftDirty, markDraftDirty } from "@/lib/draft-store";
 import { useStudentProfile } from "@/lib/profile-storage";
 import { useScoreRecords } from "@/lib/score-storage";
 import { useGoals } from "@/lib/use-goals";
-import { getCurrentMember } from "@/lib/member-store";
-
-function getCategoryToneByScore(score: number) {
-  if (score >= 72) return "bg-safe";
-  if (score >= 55) return "bg-normal";
-  return "bg-danger";
-}
 
 function getCategoryTone(category: "도전" | "적정" | "안정") {
   if (category === "도전") return "bg-danger";
@@ -28,20 +28,27 @@ function getCategoryTone(category: "도전" | "적정" | "안정") {
   return "bg-safe";
 }
 
-function normalizeGradeLabel(label: string) {
-  const raw = String(label ?? "").trim();
-  if (!raw) return "고2";
-  if (/^고\s*\d$/.test(raw)) {
-    return raw.replace(/\s+/g, "");
-  }
-  if (/^\d$/.test(raw)) {
-    return `고${raw}`;
-  }
-  const match = raw.match(/^(\d)\s*학년$/);
-  if (match) {
-    return `고${match[1]}`;
-  }
-  return raw;
+/** 대시보드 링크·버튼용 얇은 오른쪽 화살표 (텍스트 색은 currentColor) */
+function ArrowRightLine({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width={14}
+      height={14}
+      viewBox="0 0 14 14"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path
+        d="M2.5 7h7M7.5 3.5L11 7l-3.5 3.5"
+        stroke="currentColor"
+        strokeWidth={1.35}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 function getLatestEnglishMockGrade(store: ScoreMemoryStore): number | null {
@@ -70,8 +77,8 @@ export default function DashboardPage() {
   const { studentProfile, hydrated: profileHydrated, flushProfileToServer } = useStudentProfile();
   const { store, summary: scoreSummary, flushStoreToServer } = useScoreRecords();
   const currentProfile = isEmpty ? emptyProfile : studentProfile;
-  const gradeBadgeLabel = useMemo(() => normalizeGradeLabel(studentProfile.gradeLabel), [studentProfile.gradeLabel]);
-  const { goals, flushGoalsToServer } = useGoals();
+  const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
+  const { goals, flushGoalsToServer } = useGoals(seededGoals);
   const goalAnalyses = useMemo(() => buildGoalAnalyses(goals), [goals]);
   const strategyRecommendations = useMemo(() => buildStrategyRecommendations(goals), [goals]);
   const primaryGoal = goals[0];
@@ -96,38 +103,30 @@ export default function DashboardPage() {
   );
 
   const paceMessage = useMemo(() => {
-    const uni = primaryGoal?.university ?? "목표 대학";
-    const major = primaryGoal?.major?.trim() ?? "";
+    const uniRaw = primaryGoal?.university ?? "";
+    const uniForScore = uniRaw ? normalizeUniversityName(uniRaw) : "";
+    const uniDisplay = uniRaw ? compactUniversityLabel(uniRaw) : "목표 대학";
+    const majorDisplay = compactMajorLabel(primaryGoal?.major ?? "");
     const english = getLatestEnglishMockGrade(store);
     const mockAvg = Number.parseFloat(scoreSummary.mockAverage);
     const currentPoint =
       english ?? (Number.isFinite(mockAvg) ? mockAvg : initialSimulation.mock);
-    const delta = estimateEnglishPaceDelta(uni, currentPoint);
-    const targetLine = major ? `${uni} ${major}` : uni;
+    const delta = estimateEnglishPaceDelta(uniForScore || "서강대", currentPoint);
+    const targetLine = majorDisplay ? `${uniDisplay} ${majorDisplay}` : uniDisplay;
     return `영어(수능·모의) 등급을 ${delta}만 더 끌어올리면 1지망 ${targetLine} 합격 가능성에 한 걸음 더 가까워집니다.`;
   }, [store, scoreSummary.mockAverage, primaryGoal?.university, primaryGoal?.major]);
 
   const profileSummaryLine = useMemo(() => {
-    if (!primaryGoal) {
-      return "목표대학/학과 미설정";
-    }
-    const university = primaryGoal.university?.trim() || "미설정";
-    const major = primaryGoal.major?.trim() || "미설정";
-    return `${university} ${major}`;
-  }, [primaryGoal]);
-
-  const currentUserKey = useMemo(() => getCurrentMember()?.userId?.trim() || "local-user", []);
-  const analysisStorageKey = useMemo(() => `uni-mate-analysis-result:${currentUserKey}`, [currentUserKey]);
+    const schoolAverage = scoreSummary.schoolAverage === "-" ? "미입력" : scoreSummary.schoolAverage;
+    const goalText = primaryGoal ? `${compactGoalLine(primaryGoal.university, primaryGoal.major)} 목표` : "목표 미설정";
+    return `내신 ${schoolAverage} / ${goalText}`;
+  }, [scoreSummary.schoolAverage, primaryGoal]);
 
   useEffect(() => {
     let cancelled = false;
     const hydrateNotice = async () => {
       try {
-        const response = await fetch("/api/analysis/result", {
-          method: "GET",
-          cache: "no-store",
-          headers: { "x-user-key": currentUserKey }
-        });
+        const response = await fetch("/api/analysis/result", { method: "GET", cache: "no-store" });
         if (response.ok) {
           const payload = (await response.json()) as { data?: { completedAt?: string; source?: string } | null };
           if (!cancelled && payload.data?.completedAt) {
@@ -140,7 +139,7 @@ export default function DashboardPage() {
       }
 
       try {
-        const raw = window.localStorage.getItem(analysisStorageKey);
+        const raw = window.localStorage.getItem("uni-mate-analysis-result");
         if (!raw) {
           if (!cancelled) setAnalysisNotice("");
           return;
@@ -163,7 +162,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [analysisDone, analysisStorageKey, currentUserKey]);
+  }, [analysisDone]);
 
   const handleSaveAll = async () => {
     await flushProfileToServer();
@@ -183,7 +182,9 @@ export default function DashboardPage() {
                 <div className="mb-0.5 text-base leading-tight text-muted">안녕하세요</div>
                 <div className="flex items-center gap-2">
                   <div className="max-w-[170px] truncate text-[27px] font-bold leading-tight">{currentProfile.name}님</div>
-                  <div className="rounded-full bg-[#128F171F] px-3 py-1 text-xs leading-none">{gradeBadgeLabel}</div>
+                  {!isEmpty ? (
+                    <div className="rounded-full bg-safe px-3 py-1 text-xs leading-none text-black">{currentProfile.gradeLabel}</div>
+                  ) : null}
                 </div>
                 {!isEmpty ? <div className="mt-1 max-w-[240px] truncate whitespace-nowrap text-xs leading-tight text-muted">{profileSummaryLine}</div> : null}
               </div>
@@ -235,21 +236,19 @@ export default function DashboardPage() {
             {!isEmpty ? (
               <div className="space-y-3">
                 {!profileHydrated ? (
-                  <section className="rounded-[18px] border border-line bg-white px-4 py-3 text-sm text-muted">
-                    최근 작업 정보를 불러오는 중입니다...
-                  </section>
+                  <p className="px-1 text-sm leading-snug text-muted">최근 작업 정보를 불러오는 중입니다...</p>
                 ) : null}
-                {analysisNotice ? (
+                {profileHydrated && analysisNotice ? (
                   <section className="rounded-[18px] border border-[#b8d4ff] bg-[#f1f6ff] px-4 py-3 text-sm text-navy">
                     {analysisNotice}
                   </section>
                 ) : null}
-                {saveNotice ? (
-                  <section className="rounded-[18px] border border-[#cbe7d0] bg-[#f1fcf4] px-4 py-3 text-sm text-[#166534]">
+                {profileHydrated && saveNotice ? (
+                  <section className="rounded-[18px] border border-[#C4DFA8] bg-safe px-4 py-3 text-sm text-[#166534]">
                     {saveNotice}
                   </section>
                 ) : null}
-                {!isEmpty && isDraftDirty() ? (
+                {profileHydrated && !isEmpty && isDraftDirty() ? (
                   <section className="rounded-[18px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-xs text-[#92400e]">
                     저장되지 않은 변경사항이 있습니다. 종료 전 `저장` 버튼으로 DB에 반영해 주세요.
                   </section>
@@ -261,8 +260,8 @@ export default function DashboardPage() {
                     <div className="mt-1.5">
                       <p className="text-xs font-bold leading-snug text-white/95">
                         <span className="inline-block max-w-[260px] truncate align-bottom">
-                          1지망 목표 대학 - {primaryGoal?.university ?? "미설정"}
-                          {primaryGoal?.major?.trim() ? ` ${primaryGoal.major.trim()}` : ""}
+                          1지망 목표 대학 -{" "}
+                          {primaryGoal ? compactGoalLine(primaryGoal.university, primaryGoal.major) : "미설정"}
                         </span>
                       </p>
                     </div>
@@ -296,24 +295,36 @@ export default function DashboardPage() {
                 <section className="rounded-[20px] bg-[#F2B5B57A] px-3 py-3">
                   <div className="text-sm font-bold leading-tight">📌 입시 정보 업데이트</div>
                   <p className="mt-1 text-xs leading-snug">
-                    목표 대학의 주요 입시 정보에 변경 가능성이 있습니다. {primaryGoal?.university ?? "목표대학"}{" "}
-                    {primaryGoal?.major ?? ""} 모집요강 근거를 다시 확인해 주세요.
+                    목표 대학의 주요 입시 정보에 변경 가능성이 있습니다.{" "}
+                    {primaryGoal
+                      ? `${compactGoalLine(primaryGoal.university, primaryGoal.major)} `
+                      : "목표대학 "}
+                    모집요강 근거를 다시 확인해 주세요.
                   </p>
-                  <Link href="/evidence" className="mt-1.5 inline-block text-xs font-bold leading-tight text-[#8C0000]">
-                    확인하기
-                  </Link>
+                  <div className="mt-1.5 flex justify-end">
+                    <Link
+                      href="/evidence"
+                      className="inline-flex items-center gap-0.5 text-xs font-bold leading-tight text-[#8C0000]"
+                    >
+                      확인하기
+                      <ArrowRightLine className="h-3 w-3 shrink-0 opacity-90" />
+                    </Link>
+                  </div>
                 </section>
 
                 <section className="rounded-[20px] bg-[#EBEBEB] px-3 py-3">
                   <div className="text-sm font-bold leading-tight">⏱️ AI 페이스메이커</div>
                   <p className="mt-1 text-xs leading-snug">{paceMessage}</p>
-                  <button
-                    type="button"
-                    onClick={() => safeNavigate(router, simulationHref)}
-                    className="mt-1.5 inline-block text-xs font-bold leading-tight text-navy"
-                  >
-                    AI 분석 이어서 보기
-                  </button>
+                  <div className="mt-1.5 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => safeNavigate(router, simulationHref)}
+                      className="inline-flex items-center gap-0.5 text-xs font-bold leading-tight text-navy"
+                    >
+                      AI 분석 이어서 보기
+                      <ArrowRightLine className="h-3 w-3 shrink-0 opacity-90" />
+                    </button>
+                  </div>
                 </section>
 
                 <section>
@@ -332,15 +343,15 @@ export default function DashboardPage() {
                       <article key={item.id} className="rounded-[18px] border border-line bg-white px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${getCategoryToneByScore(
-                              item.fitScore
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${goalRankNumberToneClass(
+                              index
                             )}`}
                           >
                             {index + 1}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-bold leading-tight">
-                              {item.university} {item.major}
+                              {compactGoalLine(item.university, item.major)}
                             </div>
                           </div>
                           <div className={`inline-flex min-w-[72px] items-center justify-center rounded-full px-3 py-2 text-xs font-bold ${getCategoryTone(item.category)}`}>

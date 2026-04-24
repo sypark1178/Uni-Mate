@@ -20,15 +20,17 @@ export default function StrategyPage() {
   const { goals } = useGoals(seededGoals);
   const { summary } = useScoreRecords();
   const recommendations = useMemo(() => buildStrategyRecommendations(goals), [goals]);
-  const firstGoal = goals[0];
-  const strategySubtitle = useMemo(() => {
-    const schoolAverage = summary.schoolAverage === "-" ? "미입력" : summary.schoolAverage;
-    const goalText = firstGoal
-      ? `${firstGoal.university}${firstGoal.major ? ` ${firstGoal.major}` : ""} 목표`
-      : "목표 미설정";
-    return `내신 ${schoolAverage} / ${goalText}`;
-  }, [summary.schoolAverage, firstGoal]);
-
+  const filterCounts = useMemo(() => {
+    const challenge = recommendations.filter((item) => item.category === "도전").length;
+    const normal = recommendations.filter((item) => item.category === "적정").length;
+    const safe = recommendations.filter((item) => item.category === "안정").length;
+    return {
+      전체: recommendations.length,
+      도전: challenge,
+      적정: normal,
+      안정: safe
+    };
+  }, [recommendations]);
   const filteredRecommendations = useMemo(() => {
     const categoryOrder: Record<Recommendation["category"], number> = {
       도전: 0,
@@ -65,7 +67,7 @@ export default function StrategyPage() {
       if (schoolAverage === null) {
         return {
           ...item,
-          notes: `최저충족 미입력 | 내신 미입력\n위험요소 내신 입력 전 단계입니다. 성적 입력 후 격차/위험도를 자동 계산합니다.\n인재상 키워드 | 전공적합 · 학업역량 · 발전가능성`
+          notes: `수능 조건·내신 아직 없음\n성적을 넣으면 아래 문장이 더 맞게 바뀌어요.\n이 학교가 보는 키워드 | 과에 맞는지 · 공부 태도 · 앞으로의 가능성`
         };
       }
 
@@ -77,79 +79,94 @@ export default function StrategyPage() {
       const riskByCategory: Record<Recommendation["category"], string> = {
         도전:
           gapValue > 0.5
-            ? `합격권 내신(${target.toFixed(1)}) 대비 ${gap} 단계 격차로 수능·학생부 보완 필요`
-            : `격차 ${gap} 단계로 관리 가능, 수능 최저 관리 실패 시 위험`
+            ? `붙으려면 대략 내신 ${target.toFixed(1)} 전후를 많이 보는 편인데, 지금이랑 ${gap} 정도 차이가 나요. 수능이랑 학생부를 같이 챙기는 게 좋아요.`
+            : `내신 차이는 ${gap} 정도로 버틸 만해요. 수능 조건을 못 맞추면 위험할 수 있어요.`
             ,
         적정:
           gapValue > 0.5
-            ? `적정권(${target.toFixed(1)}) 대비 ${gap} 단계 차이, 비교과 보강 필요`
-            : `적정권과 격차 ${gap} 단계, 현재 페이스 유지가 핵심`
+            ? `적당히 도전하는 구간인데, 내신이 대략 ${gap} 정도 부족해 보여요. 교과 말고 동아리·봉사 같은 활동도 조금 보태 보세요.`
+            : `적당한 구간이에요. 지금처럼 공부하는 속도를 유지하는 게 가장 중요해요.`
             ,
         안정:
           gapValue > 0.7
-            ? `안정권이지만 내신 변동 폭이 크면 하락 위험 존재`
-            : `안정권(${target.toFixed(1)}) 대비 여유 구간, 실수 관리 중심`
+            ? `비교적 여유 있어 보이지만, 내신이 크게 떨어지면 위험해질 수 있어요.`
+            : `여유 있는 구간이에요. 시험에서 실수만 줄이면 돼요.`
       };
 
       const keywordByMajor = item.major.includes("경영")
-        ? "인재상 키워드 | 리더십 · 문제해결 · 수리해석"
+        ? "이 학교가 보는 키워드 | 앞장서기 · 문제 풀기 · 숫자·그래프 읽기"
         : item.major.includes("경제")
-          ? "인재상 키워드 | 데이터해석 · 논리추론 · 시사이해"
-          : "인재상 키워드 | 전공적합 · 학업역량 · 자기주도";
+          ? "이 학교가 보는 키워드 | 자료 읽기 · 말이 맞는지 따지기 · 뉴스 이해"
+          : "이 학교가 보는 키워드 | 과에 맞는지 · 공부 태도 · 스스로 계획하기";
       const scoreLineSuffix = mockAverage !== null ? ` / 모의 ${mockAverage.toFixed(1)}` : "";
 
       return {
         ...item,
-        notes: `최저충족 ${minMet} | 내신 ${schoolText}${scoreLineSuffix}\n위험요소 ${riskByCategory[item.category]}\n${keywordByMajor}`
+        notes: `수능 조건 ${minMet} · 내신 평균 ${schoolText}${scoreLineSuffix}\n조심할 점: ${riskByCategory[item.category]}\n${keywordByMajor}`
       };
     });
   }, [filteredRecommendations, summary.schoolAverage, summary.mockAverage]);
 
   return (
     <>
-      <PhoneFrame title="전략 추천" bottomPaddingClassName={activeFilter === "전체" ? "pb-[66px]" : "pb-0"}>
+      <PhoneFrame title="추천 전략" bottomPaddingClassName={activeFilter === "전체" ? "pb-[66px]" : "pb-0"}>
         <SectionTabs
           tabs={[
-            { href: "/strategy", label: "전략 추천" },
+            { href: "/strategy", label: "추천 전략" },
             { href: "/strategy/subjects", label: "추천 수강과목" },
-            { href: "/strategy/study-plan", label: "공부 계획" }
+            { href: "/strategy/study-plan", label: "추천 공부계획" }
           ]}
         />
+
+        <div className="mb-4">
+          <section className="rounded-xl bg-[#ebebeb] px-4 py-3">
+            <h2 className="text-base font-semibold leading-tight">추천 전략이 중요한 이유</h2>
+            <p className="mt-2 text-sm leading-snug text-muted">
+              지원 가능한 학교를 구간별로 나눠, 합격 가능성을 한눈에 확인할 수 있어요. 전략 없이 지원하면 실패 확률이 높기 때문에, 기준을 잡고 준비하는 것이 중요해요.
+            </p>
+          </section>
+        </div>
+
         <section className="mt-0">
           <div className="mb-1 flex flex-nowrap items-center gap-1">
-            <div className="shrink-0 text-lg font-bold leading-tight">수시 6장 전략</div>
             {(["전체", "도전", "적정", "안정"] as const).map((filter) => (
               <button
                 key={filter}
                 type="button"
                 onClick={() => setActiveFilter(filter)}
-                className={`inline-flex min-w-[56px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-semibold leading-none ${
+                className={`inline-flex min-w-[68px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold leading-none ${
                   filter === "전체"
                     ? activeFilter === filter
                       ? "border border-black bg-[#e5e7eb] text-black"
                       : "bg-[#f3f4f6] text-black"
                     : filter === "도전"
                       ? activeFilter === filter
-                        ? "border border-black bg-danger text-ink"
+                        ? "border border-black bg-danger text-black"
                         : "bg-danger text-black"
                       : filter === "적정"
                         ? activeFilter === filter
-                          ? "border border-black bg-normal text-ink"
+                          ? "border border-black bg-normal text-black"
                           : "bg-normal text-black"
                         : activeFilter === filter
-                          ? "border border-black bg-safe text-ink"
+                          ? "border border-black bg-safe text-black"
                           : "bg-safe text-black"
                 }`}
               >
-                {filter}
+                {`${filter}${filterCounts[filter]}`}
               </button>
             ))}
           </div>
         </section>
         <section className="mt-0 space-y-3">
-          {enrichedRecommendations.map((item) => (
-            <RecommendationCard key={item.id} recommendation={item} onEvidence={setSelected} />
-          ))}
+          {enrichedRecommendations.length === 0 ? (
+            <p className="rounded-[18px] border border-line bg-white p-4 text-sm text-muted">
+              이 필터에 해당하는 학교가 아직 없어요. 전체를 누르거나 목표 대학 설정을 확인해 주세요.
+            </p>
+          ) : (
+            enrichedRecommendations.map((item) => (
+              <RecommendationCard key={item.id} recommendation={item} onEvidence={setSelected} />
+            ))
+          )}
         </section>
       </PhoneFrame>
       <BottomNav />

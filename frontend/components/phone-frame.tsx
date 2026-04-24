@@ -7,6 +7,8 @@ type PhoneFrameProps = {
   fullBleed?: boolean;
   statusBarClassName?: string;
   bottomPaddingClassName?: string;
+  /** 휴대폰 프레임(세로 쉘) 배경. 기본 흰색 */
+  deviceClassName?: string;
 };
 
 export function PhoneFrame({
@@ -15,11 +17,12 @@ export function PhoneFrame({
   subtitle,
   fullBleed = false,
   statusBarClassName = "bg-white",
-  bottomPaddingClassName = "pb-[66px]"
+  bottomPaddingClassName = "pb-[66px]",
+  deviceClassName = "bg-white"
 }: PhoneFrameProps) {
   return (
     <main className="app-shell flex min-h-screen justify-center px-1 py-0">
-      <section className="relative h-[852px] w-[393px] overflow-hidden bg-white">
+      <section className={`relative flex h-[852px] w-[393px] flex-col overflow-hidden ${deviceClassName}`}>
         <header className={`absolute left-0 right-0 top-0 z-20 flex h-[44px] items-center justify-between px-[21px] ${statusBarClassName}`}>
           <div className="text-[15px] font-semibold text-black">9:41</div>
           <div className="flex items-center gap-[5px]">
@@ -47,7 +50,13 @@ export function PhoneFrame({
             </div>
           </div>
         </header>
-        <div className={fullBleed ? `h-full overflow-y-auto ${bottomPaddingClassName} pt-11` : `h-full overflow-y-auto px-4 ${bottomPaddingClassName} pt-14`}>
+        <div
+          className={
+            fullBleed
+              ? `min-h-0 flex-1 overflow-y-auto overscroll-y-contain ${bottomPaddingClassName} pt-11`
+              : `min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 ${bottomPaddingClassName} pt-14`
+          }
+        >
           {(title || subtitle) && (
             <header className="pb-3">
               {title && <h1 className="text-[28px] font-semibold tracking-[-0.03em]">{title}</h1>}

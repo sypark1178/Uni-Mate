@@ -4,7 +4,7 @@ import { PhoneFrame } from "@/components/phone-frame";
 
 export default function LandingPage() {
   return (
-    <PhoneFrame fullBleed statusBarClassName="bg-navy">
+    <PhoneFrame fullBleed statusBarClassName="bg-navy" deviceClassName="bg-navy" bottomPaddingClassName="pb-0">
       <section className="flex h-full flex-col items-center justify-center bg-navy px-8 pb-10 pt-[54px] text-center text-white">
         <div className="mb-8 h-24 w-24 overflow-hidden rounded-[22px] bg-white">
           <Image src="/unimate-logo-cropped.png" alt="Uni-Mate logo" width={96} height={96} className="h-full w-full object-contain" />

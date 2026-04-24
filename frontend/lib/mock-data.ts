@@ -26,48 +26,48 @@ export const emptyProfile: StudentProfile = {
 
 export const recommendations: Recommendation[] = [
   {
-    id: "sogang-business",
-    university: "서강대",
+    id: "kyunghee-business",
+    university: "경희대",
     major: "경영학과",
     category: "도전",
-    fitScore: 38,
-    notes: "내신 상위권 유지와 영어 최저 대응이 중요합니다.",
+    fitScore: 64,
+    notes: "전공 연계 활동과 면접 준비를 함께 챙기면 좋아요.",
+    evidence: {
+      title: "2026학년도 수시모집요강",
+      source: "경희대학교 입학처",
+      page: 22,
+      snippet: "학생부 중심 평가와 전공적합성 서류 검토 비중이 높습니다.",
+      status: "verified"
+    }
+  },
+  {
+    id: "sogang-business",
+    university: "서강대",
+    major: "경영학부",
+    category: "적정",
+    fitScore: 60,
+    notes: "교과 성적과 비교과 근거를 균형 있게 준비해 보세요.",
     evidence: {
       title: "2026학년도 수시모집요강",
       source: "서강대학교 입학처",
       page: 27,
-      snippet: "학생부교과 성적 100% 반영, 수능 최저 국수영탐 2개 합 5 이내",
+      snippet: "학생부·서류 평가에서 전공 연계 활동이 핵심입니다.",
       status: "verified"
     }
   },
   {
-    id: "skku-business",
-    university: "성균관대",
-    major: "경영학과",
-    category: "안정",
-    fitScore: 74,
-    notes: "현재 기준으로 가장 안정적인 카드입니다.",
-    evidence: {
-      title: "2026학년도 학생부종합 안내",
-      source: "성균관대학교 입학처",
-      page: 18,
-      snippet: "학생부종합 서류평가 중심, 비교과와 전공적합성 반영",
-      status: "verified"
-    }
-  },
-  {
-    id: "hanyang-business",
-    university: "한양대",
+    id: "soongsil-business",
+    university: "숭실대",
     major: "경영학부",
-    category: "적정",
-    fitScore: 61,
-    notes: "교과 성적과 활동 서류의 균형이 중요합니다.",
+    category: "안정",
+    fitScore: 72,
+    notes: "현재 페이스를 유지하면 안정권 합격 가능성이 높아요.",
     evidence: {
       title: "2026학년도 모집요강",
-      source: "한양대학교 입학처",
-      page: null,
-      snippet: "비교 가능한 수치 근거가 아직 추출되지 않았습니다.",
-      status: "unverified"
+      source: "숭실대학교 입학처",
+      page: 19,
+      snippet: "학생부 기반 평가에서 과목 선택과 세부능력특기사항 반영",
+      status: "verified"
     }
   }
 ];

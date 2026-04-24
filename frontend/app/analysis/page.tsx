@@ -9,6 +9,7 @@ import { RecommendationCard } from "@/components/recommendation-card";
 import { SectionTabs } from "@/components/section-tabs";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import { recommendations } from "@/lib/mock-data";
+import { compactGoalLine } from "@/lib/goal-display";
 import { parseSeededGoals } from "@/lib/planning";
 import { useGoals } from "@/lib/use-goals";
 import type { Recommendation } from "@/lib/types";
@@ -33,7 +34,8 @@ export default function AnalysisPage() {
         />
         <section className="rounded-[24px] bg-mist p-4">
           <div className="mb-2 text-xs text-muted">
-            목표 입력: {goals.map((goal, index) => `${index + 1}순위 ${goal.university} ${goal.major}`).join(" / ")}
+            목표 입력:{" "}
+            {goals.map((goal, index) => `${index + 1}순위 ${compactGoalLine(goal.university, goal.major)}`).join(" / ")}
           </div>
           <div className="flex items-start justify-between gap-3">
             <div>
