@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { LayoutGroup, motion } from "framer-motion";
 import { BottomNav } from "@/components/bottom-nav";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams } from "@/lib/navigation";
@@ -84,6 +85,16 @@ const statusLabelMap = {
   urgent: "긴급"
 } as const;
 
+function checklistBadge(item: ExecutionItem): { label: string; className: string } {
+  if (item.checked) {
+    return { label: statusLabelMap.done, className: statusClassMap.done };
+  }
+  if (item.status === "urgent") {
+    return { label: statusLabelMap.urgent, className: statusClassMap.urgent };
+  }
+  return { label: statusLabelMap.progress, className: statusClassMap.progress };
+}
+
 export default function ExecutionPage() {
   const searchParams = useSearchParams();
   const seededGoals = parseSeededGoals(searchParams);
@@ -97,6 +108,11 @@ export default function ExecutionPage() {
 
   const currentData = executionData[mode];
   const currentItems = itemsByMode[mode];
+  const sortedChecklistItems = useMemo(() => {
+    const pending = currentItems.filter((item) => !item.checked);
+    const done = currentItems.filter((item) => item.checked);
+    return [...pending, ...done];
+  }, [currentItems]);
   const checkedCount = currentItems.filter((item) => item.checked).length;
   const computedPercent = Math.round((checkedCount / currentItems.length) * 100);
 
@@ -113,11 +129,11 @@ export default function ExecutionPage() {
       .join(" ");
   }, [currentData.trendValues]);
 
-  const toggleItem = (index: number) => {
+  const toggleItem = (title: string) => {
     setItemsByMode((prev) => ({
       ...prev,
-      [mode]: prev[mode].map((item, itemIndex) =>
-        itemIndex === index ? { ...item, checked: !item.checked } : item
+      [mode]: prev[mode].map((item) =>
+        item.title === title ? { ...item, checked: !item.checked } : item
       )
     }));
   };
@@ -241,30 +257,42 @@ export default function ExecutionPage() {
               AI 분석 시작
             </Link>
           </div>
-          <div className="space-y-3">
-            {currentItems.map((item, index) => (
-              <label
-                key={`${item.title}-${index}`}
-                className="grid grid-cols-[28px_1fr_auto] items-center gap-3 rounded-2xl border border-line bg-white p-4"
-              >
-                <input
-                  type="checkbox"
-                  checked={item.checked}
-                  onChange={() => toggleItem(index)}
-                  className="h-6 w-6 rounded-md border border-slate-300 accent-navy"
-                />
-                <div>
-                  <div className={`font-semibold ${item.checked ? "text-muted line-through" : ""}`}>{item.title}</div>
-                  <div className={`mt-1 text-xs ${item.checked ? "text-muted line-through" : "text-muted"}`}>
-                    {item.desc}
+          <LayoutGroup id={`execution-checklist-${mode}`}>
+            <div className="space-y-3">
+              {sortedChecklistItems.map((item) => {
+                const badge = checklistBadge(item);
+                return (
+                <motion.label
+                  key={`${mode}-${item.title}`}
+                  layout
+                  transition={{
+                    type: "spring",
+                    stiffness: 420,
+                    damping: 34,
+                    mass: 0.85
+                  }}
+                  className="grid grid-cols-[28px_1fr_auto] items-center gap-3 rounded-2xl border border-line bg-white p-4"
+                >
+                  <input
+                    type="checkbox"
+                    checked={item.checked}
+                    onChange={() => toggleItem(item.title)}
+                    className="h-6 w-6 rounded-md border border-slate-300 accent-navy"
+                  />
+                  <div>
+                    <div className={`font-semibold ${item.checked ? "text-muted line-through" : ""}`}>{item.title}</div>
+                    <div className={`mt-1 text-xs ${item.checked ? "text-muted line-through" : "text-muted"}`}>
+                      {item.desc}
+                    </div>
                   </div>
-                </div>
-                <span className={`rounded-full px-3 py-2 text-xs font-extrabold ${statusClassMap[item.status]}`}>
-                  {statusLabelMap[item.status]}
-                </span>
-              </label>
-            ))}
-          </div>
+                  <span className={`rounded-full px-3 py-2 text-xs font-extrabold ${badge.className}`}>
+                    {badge.label}
+                  </span>
+                </motion.label>
+                );
+              })}
+            </div>
+          </LayoutGroup>
         </section>
       </PhoneFrame>
       <BottomNav />
