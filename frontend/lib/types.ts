@@ -39,10 +39,15 @@ export type GradeTerm =
   | "1-final"
   | "2-midterm"
   | "2-final"
-  | "march"
-  | "june"
-  | "september"
-  | "august-csat";
+  | "mock-nat-3"
+  | "mock-nat-4"
+  | "mock-nat-6"
+  | "mock-nat-7"
+  | "mock-nat-9"
+  | "mock-nat-10"
+  | "mock-nat-11"
+  | "mock-csat-6"
+  | "mock-csat-9";
 
 export type SubjectScoreEntry = {
   id: string;

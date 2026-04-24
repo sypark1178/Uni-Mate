@@ -16,7 +16,7 @@ import {
 import type { GradeTerm, GradeYear, ScoreTabKey, SubjectScoreEntry } from "@/lib/types";
 
 const fixedScoreLabels = ["국어", "수학", "영어", "사탐", "과탐"] as const;
-const autoAverageSubjects = ["국어", "수학", "영어", "사탐"] as const;
+const coreAverageSubjects = ["국어", "수학", "영어"] as const;
 
 function parseNumericScore(value: string) {
   const trimmed = value.trim();
@@ -43,11 +43,67 @@ function isGradeTerm(value: string | null): value is GradeTerm {
   return gradeTermOptions.some((item) => item.value === value);
 }
 
+function splitSchoolTerm(term: GradeTerm): { semester: "1" | "2"; exam: "midterm" | "final" } {
+  if (term === "2-midterm") return { semester: "2", exam: "midterm" };
+  if (term === "2-final") return { semester: "2", exam: "final" };
+  if (term === "1-final") return { semester: "1", exam: "final" };
+  return { semester: "1", exam: "midterm" };
+}
+
+function buildSchoolTerm(semester: "1" | "2", exam: "midterm" | "final"): GradeTerm {
+  return `${semester}-${exam}` as GradeTerm;
+}
+
+type MockExamType = "csat" | "national";
+
+function inferMockExamType(term: GradeTerm): MockExamType {
+  return String(term).startsWith("mock-csat-") ? "csat" : "national";
+}
+
+function inferMockMonth(term: GradeTerm): string {
+  const raw = String(term);
+  if (raw.startsWith("mock-csat-")) return raw.replace("mock-csat-", "");
+  if (raw.startsWith("mock-nat-")) return raw.replace("mock-nat-", "");
+  return "3";
+}
+
+function buildMockTerm(examType: MockExamType, month: string): GradeTerm {
+  return `${examType === "csat" ? "mock-csat" : "mock-nat"}-${month}` as GradeTerm;
+}
+
+function getMockMonthOptions(examType: MockExamType, year: GradeYear): Array<{ value: string; label: string }> {
+  if (examType === "csat") {
+    if (year !== "3") return [];
+    return [
+      { value: "6", label: "6월" },
+      { value: "9", label: "9월" }
+    ];
+  }
+  if (year === "3") {
+    return [
+      { value: "3", label: "3월" },
+      { value: "4", label: "4월" },
+      { value: "7", label: "7월" },
+      { value: "10", label: "10월" }
+    ];
+  }
+  return [
+    { value: "3", label: "3월" },
+    { value: "6", label: "6월" },
+    { value: "9", label: "9월" },
+    { value: "11", label: "11월" }
+  ];
+}
+
 function buildFixedSubjectSlots(subjects: SubjectScoreEntry[]) {
-  const fixedSubjects = subjects.filter((entry) => !entry.isCustom).slice(0, fixedScoreLabels.length);
-  return fixedScoreLabels.map((label, index) => ({
+  const subjectMap = new Map(
+    subjects
+      .filter((entry) => !entry.isCustom)
+      .map((entry) => [entry.subject.trim(), entry] as const)
+  );
+  return fixedScoreLabels.map((label) => ({
     label,
-    entry: fixedSubjects[index] ?? null
+    entry: subjectMap.get(label) ?? null
   }));
 }
 
@@ -75,6 +131,10 @@ export default function OnboardingGradesPage() {
   const selectedTab = store.activeTab;
   const selectedYear = store.selectedYear;
   const selectedTerm = store.selectedTerm;
+  const selectedSchoolTerm = useMemo(() => splitSchoolTerm(selectedTerm), [selectedTerm]);
+  const selectedMockExamType = useMemo(() => inferMockExamType(selectedTerm), [selectedTerm]);
+  const selectedMockMonth = useMemo(() => inferMockMonth(selectedTerm), [selectedTerm]);
+  const mockMonthOptions = useMemo(() => getMockMonthOptions(selectedMockExamType, selectedYear), [selectedMockExamType, selectedYear]);
   const availableTermOptions = useMemo(() => getGradeTermOptionsByTab(selectedTab, selectedYear), [selectedTab, selectedYear]);
 
   useEffect(() => {
@@ -92,11 +152,14 @@ export default function OnboardingGradesPage() {
   }, [searchParams, selectedTab, selectedTerm, selectedYear, setActiveTab, setSelectedPeriod]);
 
   useEffect(() => {
+    if (selectedTab === "mockExam") {
+      return;
+    }
     const isCurrentTermAvailable = availableTermOptions.some((item) => item.value === selectedTerm);
     if (!isCurrentTermAvailable) {
       setSelectedPeriod(selectedYear, availableTermOptions[0].value);
     }
-  }, [availableTermOptions, selectedTerm, selectedYear, setSelectedPeriod]);
+  }, [availableTermOptions, selectedTab, selectedTerm, selectedYear, setSelectedPeriod]);
 
   useEffect(() => {
     if (selectedTab === "studentRecord" || !currentScoreRecord) {
@@ -140,8 +203,11 @@ export default function OnboardingGradesPage() {
       return;
     }
 
-    const values = autoAverageSubjects
-      .map((subjectName) => activeScoreRecord.subjects.find((entry) => entry.subject.trim() === subjectName)?.score ?? "")
+    const inquiryScore =
+      activeScoreRecord.subjects.find((entry) => entry.subject.trim() === "사탐")?.score ??
+      activeScoreRecord.subjects.find((entry) => entry.subject.trim() === "과탐")?.score ??
+      "";
+    const values = [...coreAverageSubjects.map((subjectName) => activeScoreRecord.subjects.find((entry) => entry.subject.trim() === subjectName)?.score ?? ""), inquiryScore]
       .map(parseNumericScore)
       .filter((value): value is number => value !== null);
 
@@ -262,7 +328,7 @@ export default function OnboardingGradesPage() {
         ))}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className={`mt-4 grid gap-3 ${selectedTab === "schoolRecord" || selectedTab === "mockExam" ? "grid-cols-3" : "grid-cols-2"}`}>
         <label className="space-y-2">
           <span className="text-sm text-muted">학년 구분</span>
           <select
@@ -270,6 +336,14 @@ export default function OnboardingGradesPage() {
             value={selectedYear}
             onChange={(event) => {
               const nextYear = event.target.value as GradeYear;
+              if (selectedTab === "mockExam") {
+                const nextMonthOptions = getMockMonthOptions(selectedMockExamType, nextYear);
+                const nextMonth = nextMonthOptions.some((item) => item.value === selectedMockMonth)
+                  ? selectedMockMonth
+                  : nextMonthOptions[0]?.value ?? "6";
+                setSelectedPeriod(nextYear, buildMockTerm(selectedMockExamType, nextMonth));
+                return;
+              }
               const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
               const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
               setSelectedPeriod(nextYear, nextTerm);
@@ -282,20 +356,96 @@ export default function OnboardingGradesPage() {
             ))}
           </select>
         </label>
-        <label className="space-y-2">
-          <span className="text-sm text-muted">학기 구분</span>
-          <select
-            className="w-full rounded-full border border-line bg-white px-4 py-3"
-            value={selectedTerm}
-            onChange={(event) => setSelectedPeriod(selectedYear, event.target.value as GradeTerm)}
-          >
-            {availableTermOptions.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {selectedTab === "schoolRecord" ? (
+          <>
+            <label className="space-y-2">
+              <span className="text-sm text-muted">학기 구분</span>
+              <select
+                className="w-full rounded-full border border-line bg-white px-4 py-3"
+                value={selectedSchoolTerm.semester}
+                onChange={(event) => {
+                  const semester = event.target.value === "2" ? "2" : "1";
+                  setSelectedPeriod(selectedYear, buildSchoolTerm(semester, selectedSchoolTerm.exam));
+                }}
+              >
+                <option value="1">1학기</option>
+                <option value="2">2학기</option>
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm text-muted">중간/기말</span>
+              <select
+                className="w-full rounded-full border border-line bg-white px-4 py-3"
+                value={selectedSchoolTerm.exam}
+                onChange={(event) => {
+                  const exam = event.target.value === "final" ? "final" : "midterm";
+                  setSelectedPeriod(selectedYear, buildSchoolTerm(selectedSchoolTerm.semester, exam));
+                }}
+              >
+                <option value="midterm">중간</option>
+                <option value="final">기말</option>
+              </select>
+            </label>
+          </>
+        ) : null}
+        {selectedTab === "mockExam" ? (
+          <>
+            <label className="space-y-2">
+              <span className="text-sm text-muted">시험 구분</span>
+              <select
+                className="w-full rounded-full border border-line bg-white px-4 py-3"
+                value={selectedMockExamType}
+                onChange={(event) => {
+                  const nextExamType: MockExamType = event.target.value === "csat" ? "csat" : "national";
+                  const nextMonthOptions = getMockMonthOptions(nextExamType, selectedYear);
+                  if (nextMonthOptions.length === 0) {
+                    setSelectedPeriod(selectedYear, buildMockTerm(nextExamType, "6"));
+                    return;
+                  }
+                  const nextMonth = nextMonthOptions.some((item) => item.value === selectedMockMonth)
+                    ? selectedMockMonth
+                    : nextMonthOptions[0].value;
+                  setSelectedPeriod(selectedYear, buildMockTerm(nextExamType, nextMonth));
+                }}
+              >
+                <option value="csat">대학수학능력시험</option>
+                <option value="national">전국연합학력평가</option>
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm text-muted">월도 구분</span>
+              <select
+                className="w-full rounded-full border border-line bg-white px-4 py-3 disabled:bg-slate-100 disabled:text-muted"
+                value={mockMonthOptions.some((item) => item.value === selectedMockMonth) ? selectedMockMonth : ""}
+                disabled={mockMonthOptions.length === 0}
+                onChange={(event) => setSelectedPeriod(selectedYear, buildMockTerm(selectedMockExamType, event.target.value))}
+              >
+                {mockMonthOptions.length === 0 ? <option value="">선택 불가</option> : null}
+                {mockMonthOptions.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        ) : null}
+        {selectedTab !== "schoolRecord" && selectedTab !== "mockExam" ? (
+          <label className="space-y-2">
+            <span className="text-sm text-muted">학기 구분</span>
+            <select
+              className="w-full rounded-full border border-line bg-white px-4 py-3"
+              value={selectedTerm}
+              onChange={(event) => setSelectedPeriod(selectedYear, event.target.value as GradeTerm)}
+            >
+              {availableTermOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
 
       <section className="mt-4 rounded-[24px] bg-[#EBEBEB] p-4">

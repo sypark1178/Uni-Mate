@@ -17,7 +17,7 @@ export default function OnboardingBasicPage() {
   const selectedGrade = studentProfile.gradeLabel || "고2";
   const selectedRegion = studentProfile.region || "서울";
   const selectedDistrict = studentProfile.district || "강남구";
-  const selectedSchool = studentProfile.schoolName || "대치고등학교";
+  const selectedSchool = studentProfile.schoolName || "";
   const selectedYear = String(studentProfile.targetYear || 2027);
 
   const districts = useMemo(() => Object.keys(regionDistrictSchoolMap[selectedRegion] ?? {}), [selectedRegion]);
@@ -72,6 +72,9 @@ export default function OnboardingBasicPage() {
         ))}
       </div>
       <select className="w-full rounded-xl border border-line px-4 py-3" value={selectedRegion} onChange={(event) => handleRegionChange(event.target.value)}>
+        <option value={selectedRegion} hidden>
+          {selectedRegion}
+        </option>
         {regions.map((region) => (
           <option key={region} value={region}>
             {region}
@@ -79,6 +82,9 @@ export default function OnboardingBasicPage() {
         ))}
       </select>
       <select className="w-full rounded-xl border border-line px-4 py-3" value={selectedDistrict} onChange={(event) => handleDistrictChange(event.target.value)}>
+        <option value={selectedDistrict} hidden>
+          {selectedDistrict}
+        </option>
         {districts.map((district) => (
           <option key={district} value={district}>
             {district}
@@ -86,6 +92,14 @@ export default function OnboardingBasicPage() {
         ))}
       </select>
       <select className="w-full rounded-xl border border-line px-4 py-3" value={selectedSchool} onChange={(event) => updateField("schoolName", event.target.value)}>
+        <option value="" disabled>
+          학교 선택
+        </option>
+        {selectedSchool ? (
+          <option value={selectedSchool} hidden>
+            {selectedSchool}
+          </option>
+        ) : null}
         {schools.map((school) => (
           <option key={school} value={school}>
             {school}

@@ -169,6 +169,14 @@ export default function DashboardPage() {
     };
   }, [analysisDone]);
 
+  useEffect(() => {
+    // 기존회원 로그인 직후에는 서버에서 조회한 상태를 기준점으로 두고
+    // 이전 세션의 dirty 플래그를 초기화한다.
+    if (isLoggedInMember && profileHydrated) {
+      markDraftDirty(false);
+    }
+  }, [isLoggedInMember, profileHydrated]);
+
   const handleSaveAll = async () => {
     if (!isLoggedInMember) {
       setShowSaveModal(true);
@@ -257,23 +265,13 @@ export default function DashboardPage() {
                     />
                   </svg>
                 </button>
-                {!isLoggedInMember ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowSaveModal(true)}
-                    className="min-w-[82px] rounded-lg border border-line bg-white px-4 py-2 text-center text-base"
-                  >
-                    저장하기
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveAll()}
-                    className="min-w-[82px] rounded-lg border border-line bg-white px-4 py-2 text-base"
-                  >
-                    저장
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => (isLoggedInMember ? void handleSaveAll() : setShowSaveModal(true))}
+                  className="min-w-[82px] rounded-lg border border-line bg-white px-4 py-2 text-base"
+                >
+                  저장
+                </button>
               </div>
             </div>
 

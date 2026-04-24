@@ -45,10 +45,15 @@ export const gradeTermOptions: Array<{ value: GradeTerm; label: string }> = [
   { value: "1-final", label: "1학기 기말" },
   { value: "2-midterm", label: "2학기 중간" },
   { value: "2-final", label: "2학기 기말" },
-  { value: "march", label: "3월" },
-  { value: "june", label: "6월" },
-  { value: "september", label: "9월" },
-  { value: "august-csat", label: "8월 수능" }
+  { value: "mock-nat-3", label: "전국연합학력평가 3월" },
+  { value: "mock-nat-4", label: "전국연합학력평가 4월" },
+  { value: "mock-nat-6", label: "전국연합학력평가 6월" },
+  { value: "mock-nat-7", label: "전국연합학력평가 7월" },
+  { value: "mock-nat-9", label: "전국연합학력평가 9월" },
+  { value: "mock-nat-10", label: "전국연합학력평가 10월" },
+  { value: "mock-nat-11", label: "전국연합학력평가 11월" },
+  { value: "mock-csat-6", label: "대학수학능력시험 6월" },
+  { value: "mock-csat-9", label: "대학수학능력시험 9월" }
 ];
 
 const schoolTermOptions: Array<{ value: GradeTerm; label: string }> = [
@@ -60,20 +65,24 @@ const schoolTermOptions: Array<{ value: GradeTerm; label: string }> = [
 
 const mockTermOptionsByYear: Record<GradeYear, Array<{ value: GradeTerm; label: string }>> = {
   "1": [
-    { value: "march", label: "3월" },
-    { value: "june", label: "6월" },
-    { value: "september", label: "9월" }
+    { value: "mock-nat-3", label: "전국연합학력평가 3월" },
+    { value: "mock-nat-6", label: "전국연합학력평가 6월" },
+    { value: "mock-nat-9", label: "전국연합학력평가 9월" },
+    { value: "mock-nat-11", label: "전국연합학력평가 11월" }
   ],
   "2": [
-    { value: "march", label: "3월" },
-    { value: "june", label: "6월" },
-    { value: "september", label: "9월" }
+    { value: "mock-nat-3", label: "전국연합학력평가 3월" },
+    { value: "mock-nat-6", label: "전국연합학력평가 6월" },
+    { value: "mock-nat-9", label: "전국연합학력평가 9월" },
+    { value: "mock-nat-11", label: "전국연합학력평가 11월" }
   ],
   "3": [
-    { value: "march", label: "3월" },
-    { value: "june", label: "6월" },
-    { value: "september", label: "9월" },
-    { value: "august-csat", label: "수능" }
+    { value: "mock-nat-3", label: "전국연합학력평가 3월" },
+    { value: "mock-nat-4", label: "전국연합학력평가 4월" },
+    { value: "mock-nat-7", label: "전국연합학력평가 7월" },
+    { value: "mock-nat-10", label: "전국연합학력평가 10월" },
+    { value: "mock-csat-6", label: "대학수학능력시험 6월" },
+    { value: "mock-csat-9", label: "대학수학능력시험 9월" }
   ]
 };
 
