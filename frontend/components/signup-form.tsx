@@ -3,8 +3,12 @@
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
-import { registerMember } from "@/lib/member-store";
+import { registerMember, setCurrentMember } from "@/lib/member-store";
 import { safeNavigate } from "@/lib/navigation";
+import { profileStorageKey } from "@/lib/profile-storage";
+import { scoreStorageKey } from "@/lib/score-storage";
+import { goalStorageKey } from "@/lib/planning";
+import type { GoalChoice, ScoreMemoryStore, StudentProfile } from "@/lib/types";
 
 type SignupFormProps = {
   title?: string;
@@ -18,6 +22,8 @@ export function SignupForm({
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo") ?? "/dashboard";
+  const guestSaveType = searchParams.get("guestSaveType")?.trim() ?? "";
+  const guestSaveId = searchParams.get("guestSaveId")?.trim() ?? "";
   const [form, setForm] = useState({
     userId: "",
     password: "",
@@ -73,7 +79,61 @@ export function SignupForm({
     }
 
     setErrorMessage("");
-    safeNavigate(router, returnTo);
+    setCurrentMember(result.member);
+    void persistAllToMemberDb(result.member.userId).finally(() => {
+      safeNavigate(router, returnTo);
+    });
+  };
+
+  const persistAllToMemberDb = async (userKey: string) => {
+    if (typeof window === "undefined") return;
+
+    const normalizeProfile = (raw: unknown): StudentProfile | null =>
+      raw && typeof raw === "object" ? (raw as StudentProfile) : null;
+    const normalizeScores = (raw: unknown): ScoreMemoryStore | null =>
+      raw && typeof raw === "object" ? (raw as ScoreMemoryStore) : null;
+    const normalizeGoals = (raw: unknown): GoalChoice[] | null =>
+      Array.isArray(raw) ? (raw as GoalChoice[]) : null;
+
+    let profile: StudentProfile | null = null;
+    let scores: ScoreMemoryStore | null = null;
+    let goals: GoalChoice[] | null = null;
+
+    try {
+      profile = normalizeProfile(JSON.parse(window.localStorage.getItem(`${profileStorageKey}:local-user`) ?? "null"));
+      scores = normalizeScores(JSON.parse(window.localStorage.getItem(`${scoreStorageKey}:local-user`) ?? "null"));
+      goals = normalizeGoals(JSON.parse(window.localStorage.getItem(goalStorageKey) ?? "null"));
+    } catch {
+      // ignore local parse issues and fallback to guest-temp query
+    }
+
+    if ((!profile || !scores || !goals) && guestSaveType && guestSaveId) {
+      try {
+        const response = await fetch(
+          `/api/onboarding/guest-temp?contactType=${encodeURIComponent(guestSaveType)}&contactId=${encodeURIComponent(guestSaveId)}`,
+          { method: "GET", cache: "no-store" }
+        );
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          data?: { snapshot?: { profile?: StudentProfile; scores?: ScoreMemoryStore; goals?: GoalChoice[] } };
+        };
+        const snapshot = payload.data?.snapshot;
+        profile = profile ?? snapshot?.profile ?? null;
+        scores = scores ?? snapshot?.scores ?? null;
+        goals = goals ?? snapshot?.goals ?? null;
+      } catch {
+        // no-op
+      }
+    }
+
+    const headers = { "Content-Type": "application/json", "x-user-key": userKey };
+    const tasks: Promise<Response>[] = [];
+    if (profile) tasks.push(fetch("/api/onboarding/profile", { method: "POST", headers, body: JSON.stringify(profile) }));
+    if (scores) tasks.push(fetch("/api/onboarding/scores", { method: "POST", headers, body: JSON.stringify(scores) }));
+    if (goals && goals.length > 0) tasks.push(fetch("/api/onboarding/goals", { method: "POST", headers, body: JSON.stringify(goals.slice(0, 3)) }));
+    if (tasks.length > 0) {
+      await Promise.all(tasks);
+    }
   };
 
   return (

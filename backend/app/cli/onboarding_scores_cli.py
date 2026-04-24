@@ -11,6 +11,8 @@ if str(WORKSPACE_ROOT) not in sys.path:
 
 from backend.app.services.onboarding_score_store import OnboardingScoreStore
 
+DEFAULT_GUEST_TEMP_DB_PATH = WORKSPACE_ROOT / "backend" / "data" / "uni_mate_guest_temp.db"
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Persist onboarding score snapshots.")
@@ -18,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--entity",
         dest="entity",
-        choices=("scores", "profile", "goals", "analysis"),
+        choices=("scores", "profile", "goals", "analysis", "guest_temp"),
         default="scores",
     )
     parser.add_argument("--db-path", dest="db_path", default=None)
@@ -30,7 +32,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    db_path = Path(args.db_path) if args.db_path else None
+    if args.db_path:
+        db_path = Path(args.db_path)
+    elif args.entity == "guest_temp":
+        db_path = DEFAULT_GUEST_TEMP_DB_PATH
+    else:
+        db_path = None
     store = OnboardingScoreStore(db_path=db_path)
 
     if args.command == "login":
@@ -48,6 +55,8 @@ def main(argv: list[str] | None = None) -> int:
             result = store.save_goals(payload, user_key=args.user_key)
         elif args.entity == "analysis":
             result = store.save_analysis_result(payload, user_key=args.user_key)
+        elif args.entity == "guest_temp":
+            result = store.save_guest_temp(payload, user_key=args.user_key)
         else:
             result = store.save_snapshot(payload, user_key=args.user_key)
     else:
@@ -57,6 +66,12 @@ def main(argv: list[str] | None = None) -> int:
             result = store.get_goals(user_key=args.user_key)
         elif args.entity == "analysis":
             result = store.get_analysis_result(user_key=args.user_key)
+        elif args.entity == "guest_temp":
+            try:
+                query = json.load(sys.stdin)
+            except Exception:
+                query = {}
+            result = store.get_guest_temp(query, user_key=args.user_key)
         else:
             result = store.get_snapshot(user_key=args.user_key)
 

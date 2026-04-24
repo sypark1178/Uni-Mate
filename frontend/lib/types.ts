@@ -100,6 +100,7 @@ export type StudentProfile = {
   schoolName?: string;
   track: string;
   targetYear: number;
+  profileImageUrl?: string;
   hasRequiredInfo: boolean;
   hasScores: boolean;
 };

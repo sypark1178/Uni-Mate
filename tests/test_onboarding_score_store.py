@@ -119,6 +119,7 @@ class OnboardingScoreStoreTests(unittest.TestCase):
             "schoolName": "대치고등학교",
             "track": "인문",
             "targetYear": 2027,
+            "profileImageUrl": "data:image/png;base64,abc123",
             "hasRequiredInfo": True,
             "hasScores": True,
         }
@@ -138,8 +139,48 @@ class OnboardingScoreStoreTests(unittest.TestCase):
         loaded_analysis = self.store.get_analysis_result(user_key="student-2")
 
         self.assertEqual(loaded_profile["data"]["name"], "홍길동")
+        self.assertEqual(loaded_profile["data"]["profileImageUrl"], "data:image/png;base64,abc123")
         self.assertEqual(len(loaded_goals["data"]), 3)
         self.assertEqual(loaded_analysis["data"]["source"], "goals")
+
+    def test_member_save_updates_last_login_and_guest_temp_keeps_24h(self) -> None:
+        profile_payload = {
+            "name": "테스터",
+            "gradeLabel": "고2",
+            "region": "서울",
+            "district": "강남구",
+            "schoolName": "테스트고",
+            "track": "인문",
+            "targetYear": 2027,
+            "profileImageUrl": "",
+            "hasRequiredInfo": True,
+            "hasScores": True,
+        }
+        self.store.save_profile(profile_payload, user_key="member-a")
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                """
+                SELECT u.last_login_at
+                FROM TB_USER u
+                JOIN TB_USER_AUTH a ON a.user_id = u.user_id
+                WHERE lower(a.login_id) = 'member-a'
+                LIMIT 1
+                """
+            ).fetchone()
+        self.assertIsNotNone(row)
+        self.assertTrue(bool(row["last_login_at"]))
+
+        temp_payload = {
+            "contactType": "email",
+            "contactId": "guest@example.com",
+            "snapshot": {"profile": {"name": "게스트"}},
+        }
+        saved = self.store.save_guest_temp(temp_payload)
+        fetched = self.store.get_guest_temp({"contactType": "email", "contactId": "guest@example.com"})
+        self.assertTrue(saved["ok"])
+        self.assertTrue(fetched["ok"])
+        self.assertIsNotNone(fetched["data"])
+        self.assertIn("expiresAt", fetched["data"])
 
 
 if __name__ == "__main__":

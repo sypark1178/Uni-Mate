@@ -294,3 +294,10 @@ export function logoutMember() {
   }
   window.localStorage.removeItem(currentMemberStorageKey);
 }
+
+export function setCurrentMember(member: MemberRecord) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
+}

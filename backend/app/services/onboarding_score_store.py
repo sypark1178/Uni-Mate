@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -127,6 +127,7 @@ class OnboardingScoreStore:
                     password_hash TEXT NOT NULL,
                     user_type TEXT NOT NULL DEFAULT '학생',
                     phone TEXT,
+                    profile_image_url TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     last_login_at TEXT,
                     is_active INTEGER NOT NULL DEFAULT 1
@@ -271,6 +272,7 @@ class OnboardingScoreStore:
                 );
                 """
             )
+            self._ensure_user_columns(connection)
             self._ensure_metadata_field_map_columns(connection)
             connection.execute(
                 """
@@ -319,6 +321,13 @@ class OnboardingScoreStore:
         if "field_description" not in col_names:
             connection.execute("ALTER TABLE TB_METADATA_FIELD_MAP ADD COLUMN field_description TEXT")
 
+    def _ensure_user_columns(self, connection: sqlite3.Connection) -> None:
+        """기존 DB에 TB_USER 프로필 이미지 컬럼이 없으면 추가합니다."""
+        rows = connection.execute("PRAGMA table_info(TB_USER)").fetchall()
+        col_names = {str(r[1]) for r in rows}
+        if "profile_image_url" not in col_names:
+            connection.execute("ALTER TABLE TB_USER ADD COLUMN profile_image_url TEXT")
+
     def _resolve_user_id(self, connection: sqlite3.Connection, user_key: str) -> int | None:
         normalized = str(user_key or "").strip()
         if not normalized:
@@ -339,6 +348,17 @@ class OnboardingScoreStore:
         if row is None:
             return None
         return int(row["user_id"])
+
+    def _touch_user_log_at(self, connection: sqlite3.Connection, user_id: int) -> None:
+        """저장 활동 시점(last_login_at) 갱신."""
+        connection.execute(
+            """
+            UPDATE TB_USER
+            SET last_login_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        )
 
     def _ensure_user_and_student(self, connection: sqlite3.Connection, user_key: str) -> tuple[int, int]:
         user_id = self._resolve_user_id(connection, user_key)
@@ -522,6 +542,7 @@ class OnboardingScoreStore:
 
         with self._connect() as connection:
             user_id, student_id = self._ensure_user_and_student(connection, user_key)
+            self._touch_user_log_at(connection, user_id)
             self._upsert_score_payload(connection, student_id, payload)
             connection.execute(
                 """
@@ -612,7 +633,8 @@ class OnboardingScoreStore:
     def save_profile(self, payload: dict[str, Any], user_key: str = "local-user") -> dict[str, Any]:
         saved_at = datetime.now(timezone.utc).isoformat()
         with self._connect() as connection:
-            _, student_id = self._ensure_user_and_student(connection, user_key)
+            user_id, student_id = self._ensure_user_and_student(connection, user_key)
+            self._touch_user_log_at(connection, user_id)
             grade_label = str(payload.get("gradeLabel") or "")
             grade_num = int(grade_label[1]) if grade_label.startswith("고") and len(grade_label) > 1 and grade_label[1].isdigit() else None
             connection.execute(
@@ -640,6 +662,14 @@ class OnboardingScoreStore:
                     student_id,
                 ),
             )
+            connection.execute(
+                """
+                UPDATE TB_USER
+                SET profile_image_url = ?
+                WHERE user_id = ?
+                """,
+                (str(payload.get("profileImageUrl") or ""), user_id),
+            )
         return {"ok": True, "source": "sqlite", "savedAt": saved_at, "data": payload}
 
     def get_profile(self, user_key: str = "local-user") -> dict[str, Any]:
@@ -649,8 +679,17 @@ class OnboardingScoreStore:
                 return {"ok": True, "source": "sqlite", "data": None}
             row = connection.execute(
                 """
-                SELECT sp.student_name, sp.school_name, sp.grade_label, sp.region, sp.district, sp.track, sp.admission_year
+                SELECT
+                    sp.student_name,
+                    sp.school_name,
+                    sp.grade_label,
+                    sp.region,
+                    sp.district,
+                    sp.track,
+                    sp.admission_year,
+                    u.profile_image_url
                 FROM TB_STUDENT_PROFILE sp
+                JOIN TB_USER u ON u.user_id = sp.user_id
                 WHERE sp.user_id = ?
                 """,
                 (user_id,),
@@ -668,6 +707,7 @@ class OnboardingScoreStore:
                 "district": row["district"] or "강남구",
                 "track": row["track"] or "인문",
                 "targetYear": row["admission_year"] or 2027,
+                "profileImageUrl": row["profile_image_url"] or "",
                 "hasRequiredInfo": True,
                 "hasScores": True,
             },
@@ -676,7 +716,8 @@ class OnboardingScoreStore:
     def save_goals(self, payload: list[dict[str, Any]], user_key: str = "local-user") -> dict[str, Any]:
         saved_at = datetime.now(timezone.utc).isoformat()
         with self._connect() as connection:
-            _, student_id = self._ensure_user_and_student(connection, user_key)
+            user_id, student_id = self._ensure_user_and_student(connection, user_key)
+            self._touch_user_log_at(connection, user_id)
             connection.execute("DELETE FROM TB_APPLICATION_LIST WHERE student_id = ?", (student_id,))
             connection.execute("DELETE FROM TB_RECOMMENDATION WHERE student_id = ?", (student_id,))
             for index, goal in enumerate(payload[:3]):
@@ -790,6 +831,7 @@ class OnboardingScoreStore:
         saved_at = datetime.now(timezone.utc).isoformat()
         with self._connect() as connection:
             user_id, student_id = self._ensure_user_and_student(connection, user_key)
+            self._touch_user_log_at(connection, user_id)
             connection.execute(
                 """
                 INSERT INTO TB_AI_ANALYSIS (student_id, analysis_type, pass_prob, score_gap, model_version, summary_text, analyzed_at)
@@ -813,6 +855,96 @@ class OnboardingScoreStore:
                 (user_id, str(payload.get("source") or "analysis")),
             )
         return {"ok": True, "source": "sqlite", "savedAt": saved_at, "data": payload}
+
+    def save_guest_temp(self, payload: dict[str, Any], user_key: str = "guest-temp") -> dict[str, Any]:
+        """비회원 저장: 연락 식별자 기준 24시간 임시 보관."""
+        saved_at_dt = datetime.now(timezone.utc)
+        expires_at_dt = saved_at_dt + timedelta(hours=24)
+        saved_at = saved_at_dt.isoformat()
+        expires_at = expires_at_dt.isoformat()
+
+        contact_type = str(payload.get("contactType") or "").strip()
+        contact_id = str(payload.get("contactId") or "").strip().lower()
+        if contact_type not in {"email", "kakao"} or not contact_id:
+            return {"ok": False, "source": "sqlite", "error": "연락 식별자(email/kakao)를 입력해 주세요."}
+
+        temp_user_key = f"guest:{contact_type}:{contact_id}"
+        with self._connect() as connection:
+            user_id, student_id = self._ensure_user_and_student(connection, temp_user_key)
+            self._touch_user_log_at(connection, user_id)
+            body = {
+                "savedAt": saved_at,
+                "expiresAt": expires_at,
+                "contactType": contact_type,
+                "contactId": contact_id,
+                "snapshot": payload.get("snapshot") or {},
+            }
+            connection.execute(
+                """
+                DELETE FROM TB_STUDENT_RECORD
+                WHERE student_id = ? AND record_type = 'guest-temp' AND subject_name = ?
+                """,
+                (student_id, f"{contact_type}:{contact_id}"),
+            )
+            connection.execute(
+                """
+                INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, academic_year, semester)
+                VALUES (?, 'guest-temp', ?, ?, NULL, NULL)
+                """,
+                (student_id, f"{contact_type}:{contact_id}", json.dumps(body, ensure_ascii=False)),
+            )
+
+        return {
+            "ok": True,
+            "source": "sqlite",
+            "savedAt": saved_at,
+            "expiresAt": expires_at,
+            "data": {"contactType": contact_type, "contactId": contact_id},
+        }
+
+    def get_guest_temp(self, payload: dict[str, Any], user_key: str = "guest-temp") -> dict[str, Any]:
+        contact_type = str(payload.get("contactType") or "").strip()
+        contact_id = str(payload.get("contactId") or "").strip().lower()
+        if contact_type not in {"email", "kakao"} or not contact_id:
+            return {"ok": False, "source": "sqlite", "error": "연락 식별자(email/kakao)를 입력해 주세요."}
+
+        temp_user_key = f"guest:{contact_type}:{contact_id}"
+        with self._connect() as connection:
+            user_id = self._resolve_user_id(connection, temp_user_key)
+            if user_id is None:
+                return {"ok": True, "source": "sqlite", "data": None}
+            student_row = connection.execute(
+                "SELECT student_id FROM TB_STUDENT_PROFILE WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            if student_row is None:
+                return {"ok": True, "source": "sqlite", "data": None}
+            student_id = int(student_row["student_id"])
+            row = connection.execute(
+                """
+                SELECT record_id, content_body
+                FROM TB_STUDENT_RECORD
+                WHERE student_id = ? AND record_type = 'guest-temp' AND subject_name = ?
+                ORDER BY record_id DESC
+                LIMIT 1
+                """,
+                (student_id, f"{contact_type}:{contact_id}"),
+            ).fetchone()
+            if row is None:
+                return {"ok": True, "source": "sqlite", "data": None}
+            data = json.loads(str(row["content_body"] or "{}"))
+            expires_at = str(data.get("expiresAt") or "")
+            try:
+                expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            except ValueError:
+                expires_dt = datetime.now(timezone.utc) - timedelta(seconds=1)
+            if expires_dt <= datetime.now(timezone.utc):
+                connection.execute(
+                    "DELETE FROM TB_STUDENT_RECORD WHERE record_id = ?",
+                    (int(row["record_id"]),),
+                )
+                return {"ok": True, "source": "sqlite", "data": None, "expired": True}
+            return {"ok": True, "source": "sqlite", "data": data}
 
     def get_analysis_result(self, user_key: str = "local-user") -> dict[str, Any]:
         with self._connect() as connection:

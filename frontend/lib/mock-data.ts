@@ -8,6 +8,7 @@ export const profile: StudentProfile = {
   schoolName: "대치고등학교",
   track: "인문",
   targetYear: 2027,
+  profileImageUrl: "",
   hasRequiredInfo: true,
   hasScores: true
 };
@@ -20,6 +21,7 @@ export const emptyProfile: StudentProfile = {
   schoolName: "",
   track: "미정",
   targetYear: 2027,
+  profileImageUrl: "",
   hasRequiredInfo: false,
   hasScores: false
 };

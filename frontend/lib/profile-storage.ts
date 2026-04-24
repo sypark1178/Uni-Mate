@@ -49,6 +49,7 @@ function normalizeProfile(raw: unknown): StudentProfile {
     schoolName,
     track,
     targetYear,
+    profileImageUrl: typeof candidate.profileImageUrl === "string" ? candidate.profileImageUrl : "",
     hasRequiredInfo: [name, gradeLabel, region, district, schoolName].every((item) => Boolean(item && String(item).trim())),
     hasScores: typeof candidate.hasScores === "boolean" ? candidate.hasScores : defaultProfile.hasScores
   };
@@ -135,6 +136,15 @@ export function useStudentProfile() {
     commit((previous) => ({ ...previous, [field]: value }));
   };
 
+  const updateFieldAndSync = async <K extends keyof StudentProfile>(field: K, value: StudentProfile[K]) => {
+    const nextProfile = normalizeProfile({ ...studentProfile, [field]: value });
+    persistProfile(nextProfile);
+    setDraftProfile(nextProfile);
+    setStudentProfile(nextProfile);
+    await persistProfileToServer(nextProfile);
+    return nextProfile;
+  };
+
   const flushProfileToServer = async () => {
     const normalized = normalizeProfile(studentProfile);
     persistProfile(normalized);
@@ -146,6 +156,7 @@ export function useStudentProfile() {
     studentProfile,
     hydrated,
     updateField,
+    updateFieldAndSync,
     flushProfileToServer,
     setStudentProfile: (nextProfile: StudentProfile) => {
       const normalized = normalizeProfile(nextProfile);

@@ -6,7 +6,7 @@ const pythonCliPath = path.join(workspaceRoot, "backend", "app", "cli", "onboard
 const pythonCommand = process.env.PYTHON_BIN || "python";
 const pythonPath = process.env.PYTHONPATH ? `${workspaceRoot}${path.delimiter}${process.env.PYTHONPATH}` : workspaceRoot;
 
-type BridgeEntity = "scores" | "profile" | "goals" | "analysis";
+type BridgeEntity = "scores" | "profile" | "goals" | "analysis" | "guest_temp";
 
 export function runPythonBridge(
   command: "get" | "save",
@@ -50,7 +50,7 @@ export function runPythonBridge(
       }
     });
 
-    if (command === "save") {
+    if (command === "save" || (command === "get" && payload !== undefined)) {
       child.stdin.write(JSON.stringify(payload ?? {}));
     }
     child.stdin.end();

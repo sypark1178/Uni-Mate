@@ -28,7 +28,7 @@ export function SettingsView() {
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams]);
   const { goals, hydrated: goalsHydrated } = useGoals(seededGoals);
   const { summary, hydrated: scoresHydrated } = useScoreRecords();
-  const { studentProfile, hydrated: profileHydrated } = useStudentProfile();
+  const { studentProfile, hydrated: profileHydrated, updateFieldAndSync } = useStudentProfile();
   const goalAnalyses = buildGoalAnalyses(goals);
   const [toggles, setToggles] = useState({
     guideline: true,
@@ -38,7 +38,6 @@ export function SettingsView() {
   });
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [profileImageUrl, setProfileImageUrl] = useState("");
 
   const cleanedSearchParams = useMemo(() => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -70,7 +69,7 @@ export function SettingsView() {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        setProfileImageUrl(reader.result);
+        void updateFieldAndSync("profileImageUrl", reader.result);
       }
     };
     reader.readAsDataURL(file);
@@ -107,9 +106,9 @@ export function SettingsView() {
                       className="relative flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-[#0169C333] text-2xl font-semibold text-navy"
                     >
                       <span className="absolute inset-0 overflow-hidden rounded-full">
-                        {profileImageUrl ? (
+                        {studentProfile.profileImageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={profileImageUrl} alt="" className="h-full w-full object-cover" />
+                          <img src={studentProfile.profileImageUrl} alt="" className="h-full w-full object-cover" />
                         ) : (
                           <span className="flex h-full w-full items-center justify-center">
                             {studentProfile.name.slice(0, 1) || "?"}

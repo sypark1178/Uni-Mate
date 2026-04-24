@@ -21,6 +21,7 @@ import { isDraftDirty, markDraftDirty } from "@/lib/draft-store";
 import { useStudentProfile } from "@/lib/profile-storage";
 import { useScoreRecords } from "@/lib/score-storage";
 import { useGoals } from "@/lib/use-goals";
+import { getCurrentMember } from "@/lib/member-store";
 
 function getCategoryTone(category: "도전" | "적정" | "안정") {
   if (category === "도전") return "bg-danger";
@@ -71,12 +72,16 @@ export default function DashboardPage() {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [analysisNotice, setAnalysisNotice] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
+  const [guestSaveType, setGuestSaveType] = useState<"email" | "kakao">("email");
+  const [guestSaveId, setGuestSaveId] = useState("");
 
   const isEmpty = searchParams.get("empty") === "1";
   const analysisDone = searchParams.get("analysis") === "done";
   const { studentProfile, hydrated: profileHydrated, flushProfileToServer } = useStudentProfile();
   const { store, summary: scoreSummary, flushStoreToServer } = useScoreRecords();
   const currentProfile = isEmpty ? emptyProfile : studentProfile;
+  const currentMember = getCurrentMember();
+  const isLoggedInMember = Boolean(currentMember?.userId);
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
   const { goals, flushGoalsToServer } = useGoals(seededGoals);
   const goalAnalyses = useMemo(() => buildGoalAnalyses(goals), [goals]);
@@ -91,7 +96,7 @@ export default function DashboardPage() {
   const simulationHref = mergeHrefWithSearchParams("/analysis/simulation", searchParams);
   const goalsBaseHref = mergeHrefWithSearchParams("/onboarding/goals", searchParams);
   const goalsHref = `${goalsBaseHref}${goalsBaseHref.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(dashboardCurrentHref)}`;
-  const signupEntryHref = `/signup?returnTo=${encodeURIComponent(dashboardCurrentHref)}`;
+  const signupEntryHref = `/signup?returnTo=${encodeURIComponent(dashboardCurrentHref)}&from=dashboard-save`;
 
   const summary = useMemo(
     () => ({
@@ -165,13 +170,52 @@ export default function DashboardPage() {
   }, [analysisDone]);
 
   const handleSaveAll = async () => {
+    if (!isLoggedInMember) {
+      setShowSaveModal(true);
+      return;
+    }
     await flushProfileToServer();
     await flushStoreToServer();
     await flushGoalsToServer();
     // 저장 후에도 화면 표시 상태는 유지하고, "미저장 변경" 상태만 해제한다.
     markDraftDirty(false);
-    setSaveNotice("변경사항을 저장했습니다.");
+    setSaveNotice("회원 저장 완료: 변경사항이 DB에 반영되고 로그 시각이 갱신되었습니다.");
     window.setTimeout(() => setSaveNotice(""), 2500);
+  };
+
+  const handleGuestTempSave = async () => {
+    const normalizedId = guestSaveId.trim();
+    if (!normalizedId) {
+      setSaveNotice("이메일 또는 카카오톡 ID를 입력해 주세요.");
+      return;
+    }
+    const payload = {
+      contactType: guestSaveType,
+      contactId: normalizedId,
+      snapshot: {
+        profile: studentProfile,
+        scores: store,
+        goals
+      }
+    };
+    try {
+      const response = await fetch("/api/onboarding/guest-temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const result = (await response.json()) as { ok?: boolean; expiresAt?: string; error?: string };
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "임시 저장에 실패했습니다.");
+      }
+      setShowSaveModal(false);
+      setSaveNotice(`비회원 임시 저장 완료 (24시간 보관, 만료: ${new Date(result.expiresAt ?? "").toLocaleString("ko-KR")})`);
+      window.setTimeout(() => setSaveNotice(""), 4500);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "임시 저장 중 오류가 발생했습니다.";
+      setSaveNotice(message);
+      window.setTimeout(() => setSaveNotice(""), 3500);
+    }
   };
 
   return (
@@ -213,13 +257,13 @@ export default function DashboardPage() {
                     />
                   </svg>
                 </button>
-                {isEmpty ? (
+                {!isLoggedInMember ? (
                   <button
                     type="button"
-                    onClick={() => safeNavigate(router, signupEntryHref)}
+                    onClick={() => setShowSaveModal(true)}
                     className="min-w-[82px] rounded-lg border border-line bg-white px-4 py-2 text-center text-base"
                   >
-                    가입하기
+                    저장하기
                   </button>
                 ) : (
                   <button
@@ -402,15 +446,37 @@ export default function DashboardPage() {
               이메일이나 간편 계정으로 바로 연결해 주세요.
             </p>
             <div className="mt-5 grid gap-3">
-              <Link href={`${signupEntryHref}&provider=email`} className="rounded-xl border border-ink px-4 py-3 text-lg">
-                이메일로 가입
-              </Link>
-              <Link href={`${signupEntryHref}&provider=kakao`} className="rounded-xl border border-ink px-4 py-3 text-lg">
-                카카오로 가입
-              </Link>
-              <button className="rounded-xl border border-ink px-4 py-3 text-lg" onClick={() => setShowSaveModal(false)}>
-                나중에 하기
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setGuestSaveType("email")}
+                  className={`rounded-xl border px-3 py-2 text-sm ${guestSaveType === "email" ? "border-navy bg-[#EAF2FB] text-navy" : "border-line"}`}
+                >
+                  이메일
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGuestSaveType("kakao")}
+                  className={`rounded-xl border px-3 py-2 text-sm ${guestSaveType === "kakao" ? "border-navy bg-[#EAF2FB] text-navy" : "border-line"}`}
+                >
+                  카카오톡 ID
+                </button>
+              </div>
+              <input
+                value={guestSaveId}
+                onChange={(event) => setGuestSaveId(event.target.value)}
+                placeholder={guestSaveType === "email" ? "이메일 주소 입력" : "카카오톡 ID 입력"}
+                className="rounded-xl border border-line px-3 py-2 text-sm"
+              />
+              <button className="rounded-xl bg-navy px-4 py-3 text-lg font-semibold text-white" onClick={() => void handleGuestTempSave()}>
+                24시간 임시 저장
               </button>
+              <Link
+                href={`${signupEntryHref}&provider=${guestSaveType}&guestSaveType=${guestSaveType}&guestSaveId=${encodeURIComponent(guestSaveId.trim())}`}
+                className="rounded-xl border border-ink px-4 py-3 text-lg text-center"
+              >
+                가입 후 영구 저장
+              </Link>
             </div>
           </div>
         </div>
