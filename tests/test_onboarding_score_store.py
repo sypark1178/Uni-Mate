@@ -182,6 +182,73 @@ class OnboardingScoreStoreTests(unittest.TestCase):
         self.assertIsNotNone(fetched["data"])
         self.assertIn("expiresAt", fetched["data"])
 
+    def test_try_login_uses_user_table_auth_and_updates_last_login(self) -> None:
+        self.store.save_profile(
+            {
+                "name": "로그인회원",
+                "gradeLabel": "고2",
+                "region": "서울",
+                "district": "강남구",
+                "schoolName": "테스트고",
+                "track": "인문",
+                "targetYear": 2027,
+            },
+            user_key="member-login",
+        )
+        with self.store._connect() as connection:  # noqa: SLF001
+            connection.execute(
+                """
+                UPDATE TB_USER
+                SET last_login_at = NULL
+                WHERE user_id = (
+                    SELECT user_id FROM TB_USER_AUTH WHERE login_id = 'member-login'
+                )
+                """
+            )
+            connection.commit()
+
+        result = self.store.try_login("member-login", "")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["data"]["userId"], "member-login")
+        self.assertEqual(result["data"]["name"], "로그인회원")
+        self.assertEqual(result["data"]["role"], "사용자")
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                """
+                SELECT u.last_login_at
+                FROM TB_USER u
+                JOIN TB_USER_AUTH a ON a.user_id = u.user_id
+                WHERE a.login_id = 'member-login'
+                """
+            ).fetchone()
+        self.assertIsNotNone(row)
+        self.assertTrue(bool(row["last_login_at"]))
+
+    def test_profile_image_save_survives_profile_update_without_image(self) -> None:
+        saved_image = self.store.save_profile_image(
+            {"profileImageUrl": "data:image/png;base64,saved-avatar"},
+            user_key="avatar-user",
+        )
+        self.assertTrue(saved_image["ok"])
+
+        self.store.save_profile(
+            {
+                "name": "아바타회원",
+                "gradeLabel": "고2",
+                "region": "서울",
+                "district": "강남구",
+                "schoolName": "테스트고",
+                "track": "인문",
+                "targetYear": 2027,
+                "profileImageUrl": "",
+            },
+            user_key="avatar-user",
+        )
+
+        loaded = self.store.get_profile(user_key="avatar-user")
+        self.assertEqual(loaded["data"]["profileImageUrl"], "data:image/png;base64,saved-avatar")
+
 
 if __name__ == "__main__":
     unittest.main()

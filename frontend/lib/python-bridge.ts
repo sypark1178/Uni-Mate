@@ -12,7 +12,7 @@ const pythonEnv = {
   PYTHONPATH: pythonPath
 };
 
-type BridgeEntity = "scores" | "profile" | "goals" | "analysis" | "guest_temp";
+type BridgeEntity = "scores" | "profile" | "profile_image" | "goals" | "analysis" | "guest_temp";
 
 export function runPythonBridge(
   command: "get" | "save",

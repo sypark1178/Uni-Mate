@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PhoneFrame } from "@/components/phone-frame";
-import { ensureMemberSeeds, loginMemberWithServerFallback } from "@/lib/member-store";
+import { ensureMemberSeeds, loginGuestBySavedContact, loginMemberWithServerFallback } from "@/lib/member-store";
 import { clearAllDrafts } from "@/lib/draft-store";
-import { getCurrentMember, loginMember } from "@/lib/member-store";
+import { getCurrentMember } from "@/lib/member-store";
+import { profileStorageKey } from "@/lib/profile-storage";
+import { scoreStorageKey } from "@/lib/score-storage";
+import { goalStorageKey } from "@/lib/planning";
 
 export default function LoginPage() {
   const [loginValue, setLoginValue] = useState("");
@@ -14,14 +17,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     ensureMemberSeeds();
-    const current = getCurrentMember();
-    if (current?.userId?.toLowerCase() === "kmg11") {
-      goDashboard();
-      return;
-    }
-
-    const autoLogin = loginMember("kmg11", "");
-    if (autoLogin.ok) {
+    if (getCurrentMember()?.userId) {
       goDashboard();
     }
   }, []);
@@ -32,15 +28,39 @@ export default function LoginPage() {
   };
 
   const handleLogin = async () => {
-    const result = await loginMemberWithServerFallback(loginValue, password);
-    if (!result.ok) {
-      setErrorMessage(result.error);
+    const normalizedLogin = loginValue.trim().toLowerCase();
+    const result = await loginMemberWithServerFallback(normalizedLogin, password);
+    if (result.ok) {
+      setErrorMessage("");
+      clearAllDrafts();
+      goDashboard();
       return;
     }
 
-    setErrorMessage("");
-    clearAllDrafts();
-    goDashboard();
+    // 비회원 임시저장 이메일 로그인(24시간) 지원
+    const canTryGuest = normalizedLogin.includes("@");
+    if (canTryGuest) {
+      const guest = await loginGuestBySavedContact(normalizedLogin);
+      if (guest.ok) {
+        const scopedSuffix = `:${guest.member.userId}`;
+        const snapshot = guest.snapshot;
+        if (snapshot.profile) {
+          window.localStorage.setItem(`${profileStorageKey}${scopedSuffix}`, JSON.stringify(snapshot.profile));
+        }
+        if (snapshot.scores) {
+          window.localStorage.setItem(`${scoreStorageKey}${scopedSuffix}`, JSON.stringify(snapshot.scores));
+        }
+        if (snapshot.goals) {
+          window.localStorage.setItem(`${goalStorageKey}${scopedSuffix}`, JSON.stringify(snapshot.goals));
+        }
+        setErrorMessage("");
+        clearAllDrafts();
+        goDashboard();
+        return;
+      }
+    }
+
+    setErrorMessage(result.error);
   };
 
   return (

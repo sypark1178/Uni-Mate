@@ -20,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--entity",
         dest="entity",
-        choices=("scores", "profile", "goals", "analysis", "guest_temp"),
+        choices=("scores", "profile", "profile_image", "goals", "analysis", "guest_temp"),
         default="scores",
     )
     parser.add_argument("--db-path", dest="db_path", default=None)
@@ -51,6 +51,8 @@ def main(argv: list[str] | None = None) -> int:
         payload = json.load(sys.stdin)
         if args.entity == "profile":
             result = store.save_profile(payload, user_key=args.user_key)
+        elif args.entity == "profile_image":
+            result = store.save_profile_image(payload, user_key=args.user_key)
         elif args.entity == "goals":
             result = store.save_goals(payload, user_key=args.user_key)
         elif args.entity == "analysis":
@@ -61,6 +63,8 @@ def main(argv: list[str] | None = None) -> int:
             result = store.save_snapshot(payload, user_key=args.user_key)
     else:
         if args.entity == "profile":
+            result = store.get_profile(user_key=args.user_key)
+        elif args.entity == "profile_image":
             result = store.get_profile(user_key=args.user_key)
         elif args.entity == "goals":
             result = store.get_goals(user_key=args.user_key)

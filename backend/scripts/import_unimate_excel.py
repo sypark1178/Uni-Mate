@@ -363,6 +363,11 @@ def main(argv: list[str] | None = None) -> int:
 
         cs = sheet("CSAT_SCORE")
         for _, r in cs.iterrows():
+            csat_id = _num(r.get("csat_id"), as_int=True)
+            student_id = _num(r.get("student_id"), as_int=True)
+            if csat_id is None or student_id is None:
+                # 엑셀 하단의 공백/요약 행은 건너뜁니다.
+                continue
             exam_type = " ".join(
                 x for x in (_text(r.get("exam_type")), _text(r.get("inquiry_type"))) if x
             )
@@ -373,8 +378,8 @@ def main(argv: list[str] | None = None) -> int:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    int(r["csat_id"]),
-                    int(r["student_id"]),
+                    csat_id,
+                    student_id,
                     _num(r.get("exam_year"), as_int=True),
                     exam_type or None,
                     _num(r.get("korean_grade"), as_int=True),

@@ -329,33 +329,27 @@ export default function OnboardingGradesPage() {
       </div>
 
       <div className={`mt-4 grid gap-3 ${selectedTab === "schoolRecord" || selectedTab === "mockExam" ? "grid-cols-3" : "grid-cols-2"}`}>
-        <label className="space-y-2">
-          <span className="text-sm text-muted">학년 구분</span>
-          <select
-            className="w-full rounded-full border border-line bg-white px-4 py-3"
-            value={selectedYear}
-            onChange={(event) => {
-              const nextYear = event.target.value as GradeYear;
-              if (selectedTab === "mockExam") {
-                const nextMonthOptions = getMockMonthOptions(selectedMockExamType, nextYear);
-                const nextMonth = nextMonthOptions.some((item) => item.value === selectedMockMonth)
-                  ? selectedMockMonth
-                  : nextMonthOptions[0]?.value ?? "6";
-                setSelectedPeriod(nextYear, buildMockTerm(selectedMockExamType, nextMonth));
-                return;
-              }
-              const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
-              const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
-              setSelectedPeriod(nextYear, nextTerm);
-            }}
-          >
-            {gradeYearOptions.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {selectedTab !== "mockExam" ? (
+          <label className="space-y-2">
+            <span className="text-sm text-muted">학년 구분</span>
+            <select
+              className="w-full rounded-full border border-line bg-white px-4 py-3"
+              value={selectedYear}
+              onChange={(event) => {
+                const nextYear = event.target.value as GradeYear;
+                const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
+                const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
+                setSelectedPeriod(nextYear, nextTerm);
+              }}
+            >
+              {gradeYearOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {selectedTab === "schoolRecord" ? (
           <>
             <label className="space-y-2">
@@ -410,6 +404,27 @@ export default function OnboardingGradesPage() {
               >
                 <option value="csat">대학수학능력시험</option>
                 <option value="national">전국연합학력평가</option>
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm text-muted">학년 구분</span>
+              <select
+                className="w-full rounded-full border border-line bg-white px-4 py-3"
+                value={selectedYear}
+                onChange={(event) => {
+                  const nextYear = event.target.value as GradeYear;
+                  const nextMonthOptions = getMockMonthOptions(selectedMockExamType, nextYear);
+                  const nextMonth = nextMonthOptions.some((item) => item.value === selectedMockMonth)
+                    ? selectedMockMonth
+                    : nextMonthOptions[0]?.value ?? "6";
+                  setSelectedPeriod(nextYear, buildMockTerm(selectedMockExamType, nextMonth));
+                }}
+              >
+                {gradeYearOptions.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="space-y-2">

@@ -81,7 +81,8 @@ export default function DashboardPage() {
   const { store, summary: scoreSummary, flushStoreToServer } = useScoreRecords();
   const currentProfile = isEmpty ? emptyProfile : studentProfile;
   const currentMember = getCurrentMember();
-  const isLoggedInMember = Boolean(currentMember?.userId);
+  const isGuestSession = Boolean(currentMember?.userId?.startsWith("guest:"));
+  const isLoggedInMember = Boolean(currentMember?.userId) && !isGuestSession;
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
   const { goals, flushGoalsToServer } = useGoals(seededGoals);
   const goalAnalyses = useMemo(() => buildGoalAnalyses(goals), [goals]);
@@ -94,8 +95,21 @@ export default function DashboardPage() {
   const analysisLoadingHref = mergeHrefWithSearchParams("/analysis/loading?source=dashboard", searchParams);
   const gradesReanalysisHref = mergeHrefWithSearchParams("/onboarding/grades", searchParams);
   const simulationHref = mergeHrefWithSearchParams("/analysis/simulation", searchParams);
-  const goalsBaseHref = mergeHrefWithSearchParams("/onboarding/goals", searchParams);
-  const goalsHref = `${goalsBaseHref}${goalsBaseHref.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(dashboardCurrentHref)}`;
+  const goalsHref = useMemo(() => {
+    const params = new URLSearchParams(currentSearch);
+    params.set("returnTo", dashboardCurrentHref);
+    [1, 2, 3].forEach((rank) => params.delete(`g${rank}`));
+    goals.slice(0, 3).forEach((goal, index) => {
+      const university = goal.university.trim();
+      const major = goal.major.trim();
+      if (university && major) {
+        params.set(`g${index + 1}`, `${university}|${major}`);
+      }
+    });
+
+    const query = params.toString();
+    return query ? `/onboarding/goals?${query}` : "/onboarding/goals";
+  }, [currentSearch, dashboardCurrentHref, goals]);
   const signupEntryHref = `/signup?returnTo=${encodeURIComponent(dashboardCurrentHref)}&from=dashboard-save`;
 
   const summary = useMemo(
@@ -190,6 +204,7 @@ export default function DashboardPage() {
     setSaveNotice("회원 저장 완료: 변경사항이 DB에 반영되고 로그 시각이 갱신되었습니다.");
     window.setTimeout(() => setSaveNotice(""), 2500);
   };
+  const hasUnsavedChanges = profileHydrated && isDraftDirty();
 
   const handleGuestTempSave = async () => {
     const normalizedId = guestSaveId.trim();
@@ -268,7 +283,9 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => (isLoggedInMember ? void handleSaveAll() : setShowSaveModal(true))}
-                  className="min-w-[82px] rounded-lg border border-line bg-white px-4 py-2 text-base"
+                  className={`min-w-[82px] rounded-lg border px-4 py-2 text-base ${
+                    hasUnsavedChanges ? "border-navy bg-navy text-white" : "border-line bg-white text-black"
+                  }`}
                 >
                   저장
                 </button>
@@ -290,9 +307,9 @@ export default function DashboardPage() {
                     {saveNotice}
                   </section>
                 ) : null}
-                {profileHydrated && !isEmpty && isDraftDirty() ? (
+                {profileHydrated && !isEmpty && hasUnsavedChanges ? (
                   <section className="rounded-[18px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-xs text-[#92400e]">
-                    저장되지 않은 변경사항이 있습니다. 종료 전 `저장` 버튼으로 DB에 반영해 주세요.
+                    DB 원본 대비 변경사항이 있습니다. `저장` 버튼이 활성화되었으며, 종료 전 저장 여부를 확인해 주세요.
                   </section>
                 ) : null}
 

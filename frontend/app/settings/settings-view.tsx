@@ -12,6 +12,7 @@ import { useStudentProfile } from "@/lib/profile-storage";
 import { useScoreRecords } from "@/lib/score-storage";
 import { useGoals } from "@/lib/use-goals";
 import { logoutMember } from "@/lib/member-store";
+import { isDraftDirty, markDraftDirty } from "@/lib/draft-store";
 
 function shortenSchoolName(name: string) {
   return name.replace(/등학교$/, "");
@@ -26,9 +27,9 @@ const AVATAR_INPUT_ID = "settings-avatar-file";
 export function SettingsView() {
   const searchParams = useSearchParams();
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams]);
-  const { goals, hydrated: goalsHydrated } = useGoals(seededGoals);
-  const { summary, hydrated: scoresHydrated } = useScoreRecords();
-  const { studentProfile, hydrated: profileHydrated, updateFieldAndSync } = useStudentProfile();
+  const { goals, hydrated: goalsHydrated, flushGoalsToServer } = useGoals(seededGoals);
+  const { summary, hydrated: scoresHydrated, flushStoreToServer } = useScoreRecords();
+  const { studentProfile, hydrated: profileHydrated, updateProfileImageAndSync, flushProfileToServer } = useStudentProfile();
   const goalAnalyses = buildGoalAnalyses(goals);
   const [toggles, setToggles] = useState({
     guideline: true,
@@ -69,7 +70,7 @@ export function SettingsView() {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        void updateFieldAndSync("profileImageUrl", reader.result);
+        void updateProfileImageAndSync(reader.result);
       }
     };
     reader.readAsDataURL(file);
@@ -344,7 +345,16 @@ export function SettingsView() {
                 href="/login"
                 prefetch={false}
                 className="flex h-11 flex-1 items-center justify-center rounded-xl bg-navy text-sm font-semibold text-white"
-                onClick={() => {
+                onClick={async () => {
+                  if (isDraftDirty()) {
+                    const wantsSave = window.confirm("저장되지 않은 변경사항이 있습니다. 로그아웃 전에 저장할까요?");
+                    if (wantsSave) {
+                      await flushProfileToServer();
+                      await flushStoreToServer();
+                      await flushGoalsToServer();
+                      markDraftDirty(false);
+                    }
+                  }
                   setShowLogoutModal(false);
                   logoutMember();
                 }}

@@ -311,7 +311,7 @@ function persistStore(nextStore: ScoreMemoryStore) {
   }
 }
 
-async function loadServerStore(): Promise<{
+async function loadServerStore(userKey?: string): Promise<{
   store: ScoreMemoryStore | null;
   settingsDisplay: ScoreSettingsDisplay | null;
 }> {
@@ -323,7 +323,7 @@ async function loadServerStore(): Promise<{
     const response = await fetch("/api/onboarding/scores", {
       method: "GET",
       cache: "no-store",
-      headers: { "x-user-key": getCurrentUserKey() }
+      headers: { "x-user-key": userKey || getCurrentUserKey() }
     });
     if (!response.ok) {
       return { store: null, settingsDisplay: null };
@@ -427,6 +427,7 @@ export function useScoreRecords() {
     let cancelled = false;
 
     const hydrateStore = async () => {
+      const userKey = getCurrentUserKey();
       let localStore: ScoreMemoryStore | null = null;
 
       try {
@@ -438,7 +439,12 @@ export function useScoreRecords() {
         window.localStorage.removeItem(getScopedScoreStorageKey());
       }
 
-      const { store: serverStore, settingsDisplay: serverHints } = await loadServerStore();
+      let { store: serverStore, settingsDisplay: serverHints } = await loadServerStore();
+      if (!serverStore && userKey === "local-user") {
+        const sample = await loadServerStore("LDY01");
+        serverStore = sample.store;
+        serverHints = sample.settingsDisplay;
+      }
       const draftStore = getDraftScores<ScoreMemoryStore>();
       const draftTs = getStoreTimestamp(draftStore);
       const serverTs = getStoreTimestamp(serverStore);

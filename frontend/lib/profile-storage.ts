@@ -61,13 +61,13 @@ function persistProfile(nextProfile: StudentProfile) {
   }
 }
 
-async function loadProfileFromServer() {
+async function loadProfileFromServer(userKey?: string) {
   if (typeof window === "undefined") return null;
   try {
     const response = await fetch("/api/onboarding/profile", {
       method: "GET",
       cache: "no-store",
-      headers: { "x-user-key": getCurrentUserKey() }
+      headers: { "x-user-key": userKey || getCurrentUserKey() }
     });
     if (!response.ok) return null;
     const payload = (await response.json()) as { data?: unknown };
@@ -80,14 +80,34 @@ async function loadProfileFromServer() {
 async function persistProfileToServer(nextProfile: StudentProfile) {
   if (typeof window === "undefined") return;
   try {
-    await fetch("/api/onboarding/profile", {
+    const response = await fetch("/api/onboarding/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-user-key": getCurrentUserKey() },
-      body: JSON.stringify(nextProfile),
-      keepalive: true
+      body: JSON.stringify(nextProfile)
     });
+    if (!response.ok) {
+      throw new Error("프로필 저장에 실패했습니다.");
+    }
   } catch {
     // Keep local profile when backend bridge is unavailable.
+  }
+}
+
+async function persistProfileImageToServer(profileImageUrl: string) {
+  if (typeof window === "undefined") return false;
+  try {
+    const response = await fetch("/api/onboarding/profile-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-user-key": getCurrentUserKey() },
+      body: JSON.stringify({ profileImageUrl })
+    });
+    if (!response.ok) {
+      return false;
+    }
+    const payload = (await response.json()) as { ok?: boolean };
+    return payload.ok !== false;
+  } catch {
+    return false;
   }
 }
 
@@ -98,6 +118,7 @@ export function useStudentProfile() {
   useEffect(() => {
     let cancelled = false;
     const hydrate = async () => {
+      const userKey = getCurrentUserKey();
       let localProfile: StudentProfile | null = null;
       try {
         const raw = window.localStorage.getItem(getScopedProfileStorageKey());
@@ -108,7 +129,11 @@ export function useStudentProfile() {
         window.localStorage.removeItem(getScopedProfileStorageKey());
         localProfile = defaultProfile;
       }
-      const serverProfile = await loadProfileFromServer();
+      let serverProfile = await loadProfileFromServer();
+      // 비회원 기본 진입은 LDY01 샘플 프로필을 초기 디스플레이로 사용
+      if (!serverProfile && userKey === "local-user") {
+        serverProfile = await loadProfileFromServer("LDY01");
+      }
       const draftProfile = getDraftProfile<StudentProfile>();
       const resolved = withLoggedInMemberName(draftProfile ?? serverProfile ?? localProfile ?? defaultProfile);
       if (!cancelled) {
@@ -145,6 +170,15 @@ export function useStudentProfile() {
     return nextProfile;
   };
 
+  const updateProfileImageAndSync = async (profileImageUrl: string) => {
+    const nextProfile = normalizeProfile({ ...studentProfile, profileImageUrl });
+    persistProfile(nextProfile);
+    setDraftProfile(nextProfile);
+    setStudentProfile(nextProfile);
+    await persistProfileImageToServer(profileImageUrl);
+    return nextProfile;
+  };
+
   const flushProfileToServer = async () => {
     const normalized = normalizeProfile(studentProfile);
     persistProfile(normalized);
@@ -157,6 +191,7 @@ export function useStudentProfile() {
     hydrated,
     updateField,
     updateFieldAndSync,
+    updateProfileImageAndSync,
     flushProfileToServer,
     setStudentProfile: (nextProfile: StudentProfile) => {
       const normalized = normalizeProfile(nextProfile);

@@ -30,13 +30,13 @@ function persistGoalsLocally(goals: GoalChoice[]) {
   }
 }
 
-async function loadGoalsFromServer() {
+async function loadGoalsFromServer(userKey?: string) {
   if (typeof window === "undefined") return null;
   try {
     const response = await fetch("/api/onboarding/goals", {
       method: "GET",
       cache: "no-store",
-      headers: { "x-user-key": getCurrentUserKey() }
+      headers: { "x-user-key": userKey || getCurrentUserKey() }
     });
     if (!response.ok) return null;
     const payload = (await response.json()) as { data?: GoalChoice[] };
@@ -77,7 +77,7 @@ export function useGoals(seedGoals?: GoalChoice[] | null) {
     let cancelled = false;
     const hydrate = async () => {
       const memberKey = getCurrentMember()?.userId?.trim();
-      if (!memberKey && seedKey.length > 0) {
+      if (seedKey.length > 0) {
         let parsed: GoalChoice[] = [];
         try {
           parsed = JSON.parse(seedKey) as GoalChoice[];
@@ -88,7 +88,9 @@ export function useGoals(seedGoals?: GoalChoice[] | null) {
           const trimmed = normalizeStoredGoals(parsed.slice(0, 3));
           setGoals(trimmed);
           persistGoalsLocally(trimmed);
-          void persistGoalsToServer(trimmed);
+          if (!memberKey) {
+            void persistGoalsToServer(trimmed);
+          }
           if (!cancelled) setHydrated(true);
           return;
         }
@@ -110,7 +112,10 @@ export function useGoals(seedGoals?: GoalChoice[] | null) {
           window.localStorage.removeItem(goalStorageKey);
         }
       }
-      const serverGoals = await loadGoalsFromServer();
+      let serverGoals = await loadGoalsFromServer();
+      if (!serverGoals && !memberKey) {
+        serverGoals = await loadGoalsFromServer("LDY01");
+      }
       const draftRaw = getDraftGoals<GoalChoice[]>();
       const draftGoals =
         Array.isArray(draftRaw) && draftRaw.length > 0 ? normalizeStoredGoals(draftRaw.slice(0, 3)) : null;
@@ -146,8 +151,8 @@ export function useGoals(seedGoals?: GoalChoice[] | null) {
     setDraftGoals(trimmed);
   };
 
-  const flushGoalsToServer = async () => {
-    const trimmed = normalizePersistGoals(goals);
+  const flushGoalsToServer = async (nextGoals?: GoalChoice[]) => {
+    const trimmed = normalizePersistGoals(nextGoals ?? goals);
     persistGoalsLocally(trimmed);
     await persistGoalsToServer(trimmed);
     return trimmed;

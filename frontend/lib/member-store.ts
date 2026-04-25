@@ -6,6 +6,7 @@ export type MemberRecord = {
   name: string;
   email: string;
   password: string;
+  role?: string;
   seeded?: boolean;
   createdAt: string;
 };
@@ -81,6 +82,7 @@ function normalizeMember(raw: unknown): MemberRecord | null {
     name,
     email,
     password: "password" in raw ? String(raw.password ?? "") : "",
+    role: "role" in raw ? String(raw.role ?? "사용자") : "사용자",
     seeded: "seeded" in raw ? Boolean(raw.seeded) : false,
     createdAt: "createdAt" in raw ? String(raw.createdAt ?? new Date().toISOString()) : new Date().toISOString()
   };
@@ -234,53 +236,96 @@ function upsertMemberInStore(next: MemberRecord) {
   writeStoredMembers(merged);
 }
 
-/**
- * 로컬 가입 회원 우선, 없으면 SQLite(TB_USER / TB_USER_AUTH) 기반 로그인.
- */
 export async function loginMemberWithServerFallback(loginValue: string, passwordValue: string) {
-  const local = loginMember(loginValue, passwordValue);
-  if (local.ok) {
-    return local;
-  }
-  if (local.error !== "등록된 회원을 찾지 못했습니다.") {
-    return local;
+  if (typeof window === "undefined") {
+    return { ok: false as const, error: "클라이언트에서만 사용할 수 있습니다." };
   }
 
-  if (typeof window === "undefined") {
-    return local;
-  }
+  const normalizedLogin = loginValue.trim();
+  let serverError = "";
 
   try {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ loginId: loginValue.trim(), password: passwordValue })
+      body: JSON.stringify({ loginId: normalizedLogin, password: passwordValue })
     });
     const payload = (await response.json()) as {
       ok?: boolean;
       error?: string;
-      data?: { userId: string; name: string; email: string };
+      data?: { userId: string; name: string; email: string; role?: string };
     };
 
-    if (!response.ok || !payload.ok || !payload.data) {
-      return { ok: false as const, error: payload.error || "등록된 회원을 찾지 못했습니다." };
+    if (response.ok && payload.ok && payload.data) {
+      const d = payload.data;
+      const member: MemberRecord = {
+        id: `db-${d.userId}`,
+        userId: d.userId,
+        name: d.name,
+        email: d.email.trim().toLowerCase(),
+        password: "",
+        role: d.role || "사용자",
+        seeded: false,
+        createdAt: new Date().toISOString()
+      };
+      upsertMemberInStore(member);
+      window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
+      return { ok: true as const, member };
     }
 
-    const d = payload.data;
-    const member: MemberRecord = {
-      id: `db-${d.userId}`,
-      userId: d.userId,
-      name: d.name,
-      email: d.email.trim().toLowerCase(),
+    serverError = payload.error || "등록된 회원을 찾지 못했습니다.";
+    if (serverError !== "등록된 회원을 찾지 못했습니다.") {
+      return { ok: false as const, error: serverError };
+    }
+  } catch {
+    serverError = "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
+  }
+
+  const local = loginMember(loginValue, passwordValue);
+  if (local.ok) {
+    return local;
+  }
+  if (serverError && local.error === "등록된 회원을 찾지 못했습니다.") {
+    return { ok: false as const, error: serverError };
+  }
+  return local;
+}
+
+export async function loginGuestBySavedContact(email: string) {
+  if (typeof window === "undefined") {
+    return { ok: false as const, error: "클라이언트에서만 사용할 수 있습니다." };
+  }
+  const contactId = email.trim().toLowerCase();
+  if (!contactId) {
+    return { ok: false as const, error: "이메일을 입력해 주세요." };
+  }
+  try {
+    const query = new URLSearchParams({ contactType: "email", contactId });
+    const response = await fetch(`/api/onboarding/guest-temp?${query.toString()}`, { method: "GET", cache: "no-store" });
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      data?: {
+        snapshot?: { profile?: unknown; scores?: unknown; goals?: unknown };
+      } | null;
+      expired?: boolean;
+    };
+    if (!response.ok || !payload.ok || !payload.data?.snapshot) {
+      return { ok: false as const, error: payload.expired ? "임시 저장이 만료되었습니다." : "임시 저장 내역이 없습니다." };
+    }
+
+    const guestMember: MemberRecord = {
+      id: `guest-${contactId}`,
+      userId: `guest:${contactId}`,
+      name: "임시회원",
+      email: contactId,
       password: "",
-      seeded: false,
+      role: "비회원",
       createdAt: new Date().toISOString()
     };
-    upsertMemberInStore(member);
-    window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
-    return { ok: true as const, member };
+    window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(guestMember));
+    return { ok: true as const, member: guestMember, snapshot: payload.data.snapshot };
   } catch {
-    return { ok: false as const, error: "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요." };
+    return { ok: false as const, error: "임시 저장 조회 중 오류가 발생했습니다." };
   }
 }
 

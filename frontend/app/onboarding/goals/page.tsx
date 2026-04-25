@@ -27,11 +27,14 @@ function normalizeGoalRanks(input: GoalRankState[]): GoalRankState[] {
 export default function OnboardingGoalsPage() {
   const searchParams = useSearchParams();
   const focus = Number(searchParams.get("focus") ?? "1");
-  const seededGoals = parseSeededGoals(searchParams);
+  const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
+  const hasSeededGoals = seededGoals.length > 0;
   const { goals, updateGoals, hydrated, flushGoalsToServer } = useGoals(seededGoals);
   const [activeMode, setActiveMode] = useState<(typeof onboardingTabs)[number]>(onboardingTabs[1]);
   const [goalRanks, setGoalRanks] = useState<GoalRankState[]>(
-    goals.length > 0
+    hasSeededGoals
+      ? normalizeGoalRanks(seededGoals)
+      : goals.length > 0
       ? goals
       : initialUniversities.map((university) => ({
           university,
@@ -40,10 +43,10 @@ export default function OnboardingGoalsPage() {
   );
 
   useEffect(() => {
-    if (hydrated && goals.length > 0) {
+    if (!hasSeededGoals && hydrated && goals.length > 0) {
       setGoalRanks(normalizeGoalRanks(goals));
     }
-  }, [goals, hydrated]);
+  }, [goals, hasSeededGoals, hydrated]);
 
   const helperText = useMemo(() => {
     if (activeMode === onboardingTabs[0]) {
@@ -76,7 +79,7 @@ export default function OnboardingGoalsPage() {
   };
 
   const handleNext = async () => {
-    await flushGoalsToServer();
+    await flushGoalsToServer(goalRanks);
   };
 
   return (

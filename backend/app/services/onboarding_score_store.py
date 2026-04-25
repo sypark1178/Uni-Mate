@@ -130,7 +130,7 @@ def compute_settings_display_from_tables(connection: sqlite3.Connection, student
 
     if latest_mock is not None:
         inquiry_type = str(latest_mock["inquiry_type"] or "").strip()
-        inquiry_grade = latest_mock["social_grade"] if inquiry_type == "사회탐구" else latest_mock["science_grade"]
+        inquiry_grade = latest_mock["social_grade"] if inquiry_type in {"사회탐구", "사탐"} else latest_mock["science_grade"]
         if inquiry_grade is None:
             inquiry_grade = latest_mock["social_grade"] if latest_mock["social_grade"] is not None else latest_mock["science_grade"]
 
@@ -360,6 +360,16 @@ class OnboardingScoreStore:
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(table_name_en, field_name_en)
                 );
+
+                CREATE TABLE IF NOT EXISTS TB_GUEST_TEMP_SESSION (
+                    temp_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    contact_type TEXT NOT NULL,
+                    contact_id TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL,
+                    UNIQUE(contact_type, contact_id)
+                );
                 """
             )
             self._ensure_user_columns(connection)
@@ -367,6 +377,7 @@ class OnboardingScoreStore:
             self._ensure_academic_columns(connection)
             self._ensure_csat_columns(connection)
             self._ensure_metadata_field_map_columns(connection)
+            self._ensure_metadata_aligned_columns(connection)
             connection.execute(
                 """
                 INSERT INTO TB_USER (email, password_hash, user_type, is_active)
@@ -404,6 +415,92 @@ class OnboardingScoreStore:
                     updated_at = CURRENT_TIMESTAMP
                 """
             )
+
+    def _ensure_columns(self, connection: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
+        """주어진 테이블에 누락된 컬럼을 안전하게 추가합니다."""
+        rows = connection.execute(f"PRAGMA table_info({table})").fetchall()
+        existing = {str(r[1]) for r in rows}
+        for column_name, column_type in columns.items():
+            if column_name not in existing:
+                connection.execute(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_type}")
+
+    def _ensure_metadata_aligned_columns(self, connection: sqlite3.Connection) -> None:
+        """
+        메타 엑셀(TB_METADATA_FIELD_MAP)에 정의된 필드 중 현재 SQLite 스키마에
+        없는 컬럼을 최소 범위로 보강합니다.
+        """
+        self._ensure_columns(connection, "TB_USER", {"user_alias": "TEXT"})
+        self._ensure_columns(
+            connection,
+            "TB_STUDENT_PROFILE",
+            {
+                "source_row_no": "INTEGER",
+                "school_sido": "TEXT",
+                "school_sigungu": "TEXT",
+                "school_address": "TEXT",
+                "residence_sido": "TEXT",
+                "residence_sigungu": "TEXT",
+                "residence_dong": "TEXT",
+                "student_grade": "TEXT",
+                "academic_avg_grade": "REAL",
+                "record_total_score": "REAL",
+                "attendance_score": "REAL",
+                "record_grade_band": "TEXT",
+            },
+        )
+        self._ensure_columns(
+            connection,
+            "TB_ADMISSION_TYPE",
+            {
+                "univ_admission_year": "INTEGER",
+                "admission_name": "TEXT",
+                "evaluation_focus": "TEXT",
+                "key_traits": "TEXT",
+                "source_doc": "TEXT",
+            },
+        )
+        self._ensure_columns(
+            connection,
+            "TB_ADMISSION_CUTOFF",
+            {
+                "avg_grade": "REAL",
+                "three_grade_possible": "INTEGER",
+                "record_importance": "TEXT",
+                "grade_policy_note": "TEXT",
+                "support_notes": "TEXT",
+                "source_doc": "TEXT",
+            },
+        )
+        self._ensure_columns(
+            connection,
+            "TB_CSAT_SCORE",
+            {
+                "school_year": "INTEGER",
+                "exam_month": "INTEGER",
+            },
+        )
+        self._ensure_columns(connection, "TB_APPLICATION_LIST", {"priority_rank": "INTEGER", "analysis_note": "TEXT"})
+        self._ensure_columns(
+            connection,
+            "TB_AI_ANALYSIS",
+            {
+                "analysis_summary": "TEXT",
+                "record_strength": "TEXT",
+                "fit_keyword_count": "INTEGER",
+                "analysis_version": "TEXT",
+                "created_at": "TEXT",
+            },
+        )
+        self._ensure_columns(
+            connection,
+            "TB_RECOMMENDATION",
+            {
+                "priority_rank": "INTEGER",
+                "reason_summary": "TEXT",
+            },
+        )
+        self._ensure_columns(connection, "TB_CONSULTING_SESSION", {"memo": "TEXT"})
+        self._ensure_columns(connection, "TB_NOTIFICATION", {"message_body": "TEXT"})
 
     def _ensure_metadata_field_map_columns(self, connection: sqlite3.Connection) -> None:
         """기존 DB에 TB_METADATA_FIELD_MAP 설명 컬럼이 없으면 추가합니다."""
@@ -463,27 +560,29 @@ class OnboardingScoreStore:
     def _mock_exam_type_from_term(term: str) -> str:
         normalized = str(term or "").strip().lower()
         if normalized.startswith("mock-csat-"):
-            month = normalized.replace("mock-csat-", "")
-            return f"대학수학능력시험 {month}월"
+            return "대학수학능력시험"
         if normalized.startswith("mock-nat-"):
-            month = normalized.replace("mock-nat-", "")
-            return f"전국연합학력평가 {month}월"
+            return "전국연합학력평가"
         mapping = {
-            "march": "전국연합학력평가 3월",
-            "june": "전국연합학력평가 6월",
-            "september": "전국연합학력평가 9월",
-            "august-csat": "대학수학능력시험 9월",
+            "march": "전국연합학력평가",
+            "june": "전국연합학력평가",
+            "september": "전국연합학력평가",
+            "august-csat": "대학수학능력시험",
         }
-        return mapping.get(normalized, str(term or "모의고사"))
+        return mapping.get(normalized, "전국연합학력평가")
 
     @staticmethod
-    def _mock_term_from_exam_type(exam_type: str) -> str:
+    def _mock_term_from_exam_type(exam_type: str, exam_month: Any = None) -> str:
         normalized = str(exam_type or "").strip().lower()
         is_csat = "대학수학능력시험" in normalized or "수능" in normalized or "csat" in normalized
         month = "3"
-        month_match = re.search(r"(3|4|6|7|9|10|11)", normalized)
-        if month_match:
-            month = month_match.group(1)
+        month_from_col = OnboardingScoreStore._safe_int(exam_month)
+        if month_from_col is not None:
+            month = str(month_from_col)
+        else:
+            month_match = re.search(r"(3|4|6|7|9|10|11)", normalized)
+            if month_match:
+                month = month_match.group(1)
         if is_csat:
             if month not in {"6", "9"}:
                 month = "6"
@@ -495,8 +594,10 @@ class OnboardingScoreStore:
     @staticmethod
     def _mock_subjects_from_row(row: sqlite3.Row) -> list[dict[str, Any]]:
         inquiry_type_raw = str(row["inquiry_type"] or "").strip()
-        inquiry_type = "과탐" if inquiry_type_raw == "과탐" else "사탐"
-        inquiry_grade = row["social_grade"] if row["social_grade"] is not None else row["science_grade"]
+        inquiry_type = "과탐" if inquiry_type_raw in {"과탐", "과학탐구"} else "사탐"
+        inquiry_grade = row["social_grade"] if inquiry_type == "사탐" else row["science_grade"]
+        if inquiry_grade is None:
+            inquiry_grade = row["social_grade"] if row["social_grade"] is not None else row["science_grade"]
         return [
             {"subject": "국어", "score": "" if row["korean_grade"] is None else str(int(row["korean_grade"])), "isCustom": False},
             {"subject": "수학", "score": "" if row["math_grade"] is None else str(int(row["math_grade"])), "isCustom": False},
@@ -693,6 +794,7 @@ class OnboardingScoreStore:
         mock_records = payload.get("mockExams", [])
         for record in mock_records:
             year, _ = self._infer_period(record)
+            term = str(record.get("term") or "")
             overall = record.get("overallAverage")
             try:
                 total = float(overall) if overall not in (None, "") else None
@@ -705,10 +807,9 @@ class OnboardingScoreStore:
             english_grade = self._safe_int(subject_map.get("영어", {}).get("score"))
             social_grade = self._safe_int(subject_map.get("사탐", {}).get("score"))
             science_grade = self._safe_int(subject_map.get("과탐", {}).get("score"))
-            inquiry_type = "과탐" if science_grade is not None else "사탐"
-            inquiry_grade = science_grade if inquiry_type == "과탐" else social_grade
-            if inquiry_grade is None:
-                inquiry_grade = social_grade if social_grade is not None else science_grade
+            if all(value is None for value in [korean_grade, math_grade, english_grade, social_grade, science_grade, total]):
+                continue
+            inquiry_type = "과학탐구" if science_grade is not None else "사회탐구"
             connection.execute(
                 """
                 INSERT INTO TB_CSAT_SCORE (
@@ -731,14 +832,14 @@ class OnboardingScoreStore:
                     student_id,
                     year,
                     year,
-                    self._mock_exam_type_from_term(str(record.get("term") or "")),
-                    self._safe_int(str(record.get("term") or "").split("-")[-1]),
+                        self._mock_exam_type_from_term(term),
+                        self._safe_int(term.split("-")[-1]),
                     korean_grade,
                     math_grade,
                     english_grade,
-                    inquiry_grade,
+                        science_grade,
                     inquiry_type,
-                    inquiry_grade,
+                        social_grade,
                     total,
                 ),
             )
@@ -893,6 +994,7 @@ class OnboardingScoreStore:
                     school_year,
                     exam_year,
                     exam_type,
+                    exam_month,
                     korean_grade,
                     math_grade,
                     english_grade,
@@ -936,7 +1038,7 @@ class OnboardingScoreStore:
                 grade_year = "1"
                 if year_val in (1, 2, 3):
                     grade_year = str(year_val)
-                term = self._mock_term_from_exam_type(str(mrow["exam_type"] or ""))
+                term = self._mock_term_from_exam_type(str(mrow["exam_type"] or ""), mrow["exam_month"])
                 subjects = self._mock_subjects_from_row(mrow)
                 mock_exams.append(
                     {
@@ -1046,12 +1148,34 @@ class OnboardingScoreStore:
             connection.execute(
                 """
                 UPDATE TB_USER
-                SET profile_image_url = ?
+                SET profile_image_url = COALESCE(NULLIF(?, ''), profile_image_url)
                 WHERE user_id = ?
                 """,
                 (str(payload.get("profileImageUrl") or ""), user_id),
             )
         return {"ok": True, "source": "sqlite", "savedAt": saved_at, "data": payload}
+
+    def save_profile_image(self, payload: dict[str, Any], user_key: str = "local-user") -> dict[str, Any]:
+        """설정 화면 아바타 전용 저장: 대시보드 저장과 분리."""
+        saved_at = datetime.now(timezone.utc).isoformat()
+        profile_image_url = str(payload.get("profileImageUrl") or "")
+        with self._connect() as connection:
+            user_id, _ = self._ensure_user_and_student(connection, user_key)
+            self._touch_user_log_at(connection, user_id)
+            connection.execute(
+                """
+                UPDATE TB_USER
+                SET profile_image_url = ?
+                WHERE user_id = ?
+                """,
+                (profile_image_url, user_id),
+            )
+        return {
+            "ok": True,
+            "source": "sqlite",
+            "savedAt": saved_at,
+            "data": {"profileImageUrl": profile_image_url},
+        }
 
     def get_profile(self, user_key: str = "local-user") -> dict[str, Any]:
         with self._connect() as connection:
@@ -1163,7 +1287,7 @@ class OnboardingScoreStore:
             row = connection.execute(
                 """
                 SELECT u.user_id, u.email, u.password_hash AS user_password,
-                       a.login_id, a.password_hash AS auth_password,
+                       a.login_id, a.password_hash AS auth_password, a.role AS role,
                        trim(coalesce(sp.student_name, '')) AS student_name
                 FROM TB_USER u
                 INNER JOIN TB_USER_AUTH a ON a.user_id = u.user_id
@@ -1199,6 +1323,9 @@ class OnboardingScoreStore:
             if pwd != user_pwd:
                 return {"ok": False, "error": "비밀번호가 일치하지 않습니다."}
 
+        with self._connect() as connection:
+            self._touch_user_log_at(connection, int(row["user_id"]))
+
         login_key = str(row["login_id"] or "").strip() or lid
         name = str(row["student_name"] or "").strip() or login_key
         email = str(row["email"] or "").strip().lower()
@@ -1208,7 +1335,7 @@ class OnboardingScoreStore:
         return {
             "ok": True,
             "source": "sqlite",
-            "data": {"userId": login_key, "name": name, "email": email},
+            "data": {"userId": login_key, "name": name, "email": email, "role": str(row["role"] or "사용자")},
         }
 
     def save_analysis_result(self, payload: dict[str, Any], user_key: str = "local-user") -> dict[str, Any]:
@@ -1241,7 +1368,7 @@ class OnboardingScoreStore:
         return {"ok": True, "source": "sqlite", "savedAt": saved_at, "data": payload}
 
     def save_guest_temp(self, payload: dict[str, Any], user_key: str = "guest-temp") -> dict[str, Any]:
-        """비회원 저장: 연락 식별자 기준 24시간 임시 보관."""
+        """비회원 저장: 연락 식별자 기준 24시간 임시 테이블 보관."""
         saved_at_dt = datetime.now(timezone.utc)
         expires_at_dt = saved_at_dt + timedelta(hours=24)
         saved_at = saved_at_dt.isoformat()
@@ -1252,10 +1379,7 @@ class OnboardingScoreStore:
         if contact_type not in {"email", "kakao"} or not contact_id:
             return {"ok": False, "source": "sqlite", "error": "연락 식별자(email/kakao)를 입력해 주세요."}
 
-        temp_user_key = f"guest:{contact_type}:{contact_id}"
         with self._connect() as connection:
-            user_id, student_id = self._ensure_user_and_student(connection, temp_user_key)
-            self._touch_user_log_at(connection, user_id)
             body = {
                 "savedAt": saved_at,
                 "expiresAt": expires_at,
@@ -1265,17 +1389,14 @@ class OnboardingScoreStore:
             }
             connection.execute(
                 """
-                DELETE FROM TB_STUDENT_RECORD
-                WHERE student_id = ? AND record_type = 'guest-temp' AND subject_name = ?
+                INSERT INTO TB_GUEST_TEMP_SESSION (contact_type, contact_id, payload_json, expires_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(contact_type, contact_id) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    expires_at = excluded.expires_at,
+                    created_at = CURRENT_TIMESTAMP
                 """,
-                (student_id, f"{contact_type}:{contact_id}"),
-            )
-            connection.execute(
-                """
-                INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, academic_year, semester)
-                VALUES (?, 'guest-temp', ?, ?, NULL, NULL)
-                """,
-                (student_id, f"{contact_type}:{contact_id}", json.dumps(body, ensure_ascii=False)),
+                (contact_type, contact_id, json.dumps(body, ensure_ascii=False), expires_at),
             )
 
         return {
@@ -1292,40 +1413,28 @@ class OnboardingScoreStore:
         if contact_type not in {"email", "kakao"} or not contact_id:
             return {"ok": False, "source": "sqlite", "error": "연락 식별자(email/kakao)를 입력해 주세요."}
 
-        temp_user_key = f"guest:{contact_type}:{contact_id}"
         with self._connect() as connection:
-            user_id = self._resolve_user_id(connection, temp_user_key)
-            if user_id is None:
-                return {"ok": True, "source": "sqlite", "data": None}
-            student_row = connection.execute(
-                "SELECT student_id FROM TB_STUDENT_PROFILE WHERE user_id = ?",
-                (user_id,),
-            ).fetchone()
-            if student_row is None:
-                return {"ok": True, "source": "sqlite", "data": None}
-            student_id = int(student_row["student_id"])
             row = connection.execute(
                 """
-                SELECT record_id, content_body
-                FROM TB_STUDENT_RECORD
-                WHERE student_id = ? AND record_type = 'guest-temp' AND subject_name = ?
-                ORDER BY record_id DESC
+                SELECT temp_id, payload_json, expires_at
+                FROM TB_GUEST_TEMP_SESSION
+                WHERE contact_type = ? AND contact_id = ?
                 LIMIT 1
                 """,
-                (student_id, f"{contact_type}:{contact_id}"),
+                (contact_type, contact_id),
             ).fetchone()
             if row is None:
                 return {"ok": True, "source": "sqlite", "data": None}
-            data = json.loads(str(row["content_body"] or "{}"))
-            expires_at = str(data.get("expiresAt") or "")
+            data = json.loads(str(row["payload_json"] or "{}"))
+            expires_at = str(row["expires_at"] or data.get("expiresAt") or "")
             try:
                 expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
             except ValueError:
                 expires_dt = datetime.now(timezone.utc) - timedelta(seconds=1)
             if expires_dt <= datetime.now(timezone.utc):
                 connection.execute(
-                    "DELETE FROM TB_STUDENT_RECORD WHERE record_id = ?",
-                    (int(row["record_id"]),),
+                    "DELETE FROM TB_GUEST_TEMP_SESSION WHERE temp_id = ?",
+                    (int(row["temp_id"]),),
                 )
                 return {"ok": True, "source": "sqlite", "data": None, "expired": True}
             return {"ok": True, "source": "sqlite", "data": data}
