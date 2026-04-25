@@ -30,6 +30,122 @@ textarea {
   font: inherit;
 }
 
+/* 브라우저 기본(주황) 포커스 대신 Uni-Mate 네이비 포커스 컬러 사용 */
+select:focus,
+select:focus-visible,
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible {
+  outline: none !important;
+  border-color: #163c77 !important;
+  box-shadow: 0 0 0 1px #163c77 !important;
+  -webkit-box-shadow: 0 0 0 1px #163c77 !important;
+}
+
 .app-shell {
   min-height: 100vh;
+}
+
+.simulation-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 10px;
+  border-radius: 9999px;
+  border: 1px solid #b9c1cd;
+  background-color: #ffffff;
+  background-image: linear-gradient(#163c77, #163c77);
+  background-repeat: no-repeat;
+}
+
+.simulation-slider::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.simulation-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -7px;
+  border-radius: 9999px;
+  border: 2px solid #163c77;
+  background: #163c77;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.2);
+  cursor: pointer;
+}
+
+.simulation-slider::-moz-range-track {
+  height: 10px;
+  border-radius: 9999px;
+  border: 1px solid #b9c1cd;
+  background: #ffffff;
+}
+
+.simulation-slider::-moz-range-progress {
+  height: 10px;
+  border-radius: 9999px;
+  background: #163c77;
+}
+
+.simulation-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  border: 2px solid #163c77;
+  background: #163c77;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.2);
+  cursor: pointer;
+}
+
+.simulation-slider:focus,
+.simulation-slider:focus-visible {
+  border-color: #163c77 !important;
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+}
+
+.app-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #101828;
+}
+
+.app-info-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #101828;
+}
+
+.app-info-body {
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.375;
+  color: #667085;
+}
+
+.goal-chip-button {
+  min-width: 0;
+  border-radius: 9999px;
+  padding: 0.5rem 0.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.goal-chip-button-active {
+  background: #163c77;
+  color: #ffffff;
+  border: 1px solid #163c77;
+}
+
+.goal-chip-button-inactive {
+  background: #ffffff;
+  color: #101828;
+  border: 1px solid #d0d5dd;
 }

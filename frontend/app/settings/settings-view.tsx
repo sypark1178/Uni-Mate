@@ -78,7 +78,7 @@ export function SettingsView() {
 
   return (
     <>
-      <PhoneFrame title="설정" subtitle="기본정보, 성적, 목표 대학과 알림 설정을 한곳에서 관리할 수 있어요.">
+      <PhoneFrame title="설정">
         <div className="mb-4 flex flex-wrap gap-2">
           {chips.map((chip) => (
             <span key={chip} className="rounded-full bg-safe px-3 py-1 text-xs leading-none text-black">
@@ -88,7 +88,7 @@ export function SettingsView() {
         </div>
 
         <section className="mb-5">
-          <h2 className="mb-3 text-lg font-semibold">기본정보</h2>
+          <h2 className="app-section-title mb-3">기본정보</h2>
           <div className="rounded-[22px] border border-line bg-white p-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
@@ -152,7 +152,7 @@ export function SettingsView() {
         </section>
 
         <section className="mb-5">
-          <h2 className="mb-3 text-lg font-semibold">성적정보</h2>
+          <h2 className="app-section-title mb-3">성적정보</h2>
           <div className="overflow-hidden rounded-[22px] border border-line bg-white">
             <div className="grid grid-cols-[1fr_1fr_auto] items-stretch max-sm:grid-cols-1">
               <div className="p-5">
@@ -180,7 +180,7 @@ export function SettingsView() {
         </section>
 
         <section className="mb-5">
-          <h2 className="mb-3 text-lg font-semibold">목표정보</h2>
+          <h2 className="app-section-title mb-3">목표정보</h2>
           <div className="space-y-3">
             {goalAnalyses.length > 0 ? (
               goalAnalyses.map((item, index) => (
@@ -190,7 +190,7 @@ export function SettingsView() {
                 >
                   <div className="flex items-center gap-3">
                     <div
-                      className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${goalRankNumberToneClass(index)}`}
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${goalRankNumberToneClass(index)}`}
                     >
                       {index + 1}
                     </div>
@@ -222,7 +222,7 @@ export function SettingsView() {
         </section>
 
         <section className="mb-5">
-          <h2 className="mb-3 text-lg font-semibold">알림</h2>
+          <h2 className="app-section-title mb-3">알림</h2>
           <div className="space-y-3">
             {[
               { key: "guideline" as const, title: "입시 정보 변경 알림", sub: "관심 대학 모집요강 변경 내용" },
@@ -256,7 +256,7 @@ export function SettingsView() {
         </section>
 
         <section className="mb-5">
-          <h2 className="mb-3 text-lg font-semibold">데이터와 권한</h2>
+          <h2 className="app-section-title mb-3">데이터와 권한</h2>
           <div className="rounded-[22px] border border-line bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -286,7 +286,7 @@ export function SettingsView() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-lg font-semibold">계정 관리</h2>
+          <h2 className="app-section-title mb-3">계정 관리</h2>
           <div className="space-y-4 rounded-[22px] border border-line bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <div>

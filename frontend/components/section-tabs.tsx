@@ -23,7 +23,7 @@ function tabClass(active: boolean) {
 function SectionTabsFallback({ tabs }: SectionTabsProps) {
   const pathname = usePathname();
   return (
-    <div className="mb-4 flex gap-2 overflow-x-auto">
+    <div className="mb-4 flex gap-2 overflow-x-auto pr-2">
       {tabs.map((tab) => {
         const active = pathname === tab.href;
         return (
@@ -41,7 +41,7 @@ function SectionTabsInner({ tabs }: SectionTabsProps) {
   const searchParams = useSearchParams();
 
   return (
-    <div className="mb-4 flex gap-2 overflow-x-auto">
+    <div className="mb-4 flex gap-2 overflow-x-auto pr-2">
       {tabs.map((tab) => {
         const active = pathname === tab.href;
         const resolvedHref = mergeHrefWithSearchParams(tab.href, searchParams);

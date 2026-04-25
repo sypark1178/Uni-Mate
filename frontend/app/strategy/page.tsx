@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
@@ -15,7 +16,7 @@ import type { Recommendation } from "@/lib/types";
 export default function StrategyPage() {
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Recommendation | null>(null);
-  const [activeFilter, setActiveFilter] = useState<"전체" | "도전" | "적정" | "안정">("전체");
+  const activeFilter = (searchParams.get("filter") as "전체" | "도전" | "적정" | "안정" | null) ?? "전체";
   const seededGoals = parseSeededGoals(searchParams);
   const { goals } = useGoals(seededGoals);
   const { summary } = useScoreRecords();
@@ -50,6 +51,17 @@ export default function StrategyPage() {
       .filter((item) => item.category === activeFilter)
       .sort((left, right) => left.fitScore - right.fitScore);
   }, [activeFilter, recommendations]);
+
+  const filterHref = (filter: "전체" | "도전" | "적정" | "안정") => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (filter === "전체") {
+      params.delete("filter");
+    } else {
+      params.set("filter", filter);
+    }
+    const next = params.toString();
+    return next ? `/strategy?${next}` : "/strategy";
+  };
 
   const enrichedRecommendations = useMemo(() => {
     const schoolAverageRaw = Number.parseFloat(summary.schoolAverage);
@@ -120,8 +132,8 @@ export default function StrategyPage() {
 
         <div className="mb-4">
           <section className="rounded-xl bg-[#ebebeb] px-4 py-3">
-            <h2 className="text-base font-semibold leading-tight">추천 전략이 중요한 이유</h2>
-            <p className="mt-2 text-sm leading-snug text-muted">
+            <h2 className="text-sm font-bold leading-tight text-ink">추천 전략이 중요한 이유</h2>
+            <p className="mt-1 text-xs leading-snug text-muted">
               지원 가능한 학교를 구간별로 나눠, 합격 가능성을 한눈에 확인할 수 있어요. 전략 없이 지원하면 실패 확률이 높기 때문에, 기준을 잡고 준비하는 것이 중요해요.
             </p>
           </section>
@@ -130,11 +142,11 @@ export default function StrategyPage() {
         <section className="mt-0">
           <div className="mb-1 flex flex-nowrap items-center gap-1">
             {(["전체", "도전", "적정", "안정"] as const).map((filter) => (
-              <button
+              <Link
                 key={filter}
-                type="button"
-                onClick={() => setActiveFilter(filter)}
-                className={`inline-flex min-w-[68px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold leading-none ${
+                href={filterHref(filter)}
+                prefetch={false}
+                className={`inline-flex min-w-[68px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${
                   filter === "전체"
                     ? activeFilter === filter
                       ? "border border-black bg-[#e5e7eb] text-black"
@@ -152,8 +164,8 @@ export default function StrategyPage() {
                           : "bg-safe text-black"
                 }`}
               >
-                {`${filter}${filterCounts[filter]}`}
-              </button>
+                {`${filter} ${filterCounts[filter]}`}
+              </Link>
             ))}
           </div>
         </section>

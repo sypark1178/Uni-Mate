@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
@@ -110,7 +111,7 @@ export default function StrategyStudyPlanPage() {
     };
   }, [recommendations]);
 
-  const [activeFilter, setActiveFilter] = useState<"전체" | "도전" | "적정" | "안정">("전체");
+  const activeFilter = (searchParams.get("filter") as "전체" | "도전" | "적정" | "안정" | null) ?? "전체";
 
   const upcoming = useMemo(() => SLOTS.filter((s) => !s.done), []);
   const [activeId, setActiveId] = useState(upcoming[0]?.id ?? "g2s2m");
@@ -153,6 +154,17 @@ export default function StrategyStudyPlanPage() {
       .sort((left, right) => left.fitScore - right.fitScore);
   }, [activeFilter, recommendations]);
 
+  const filterHref = (filter: "전체" | "도전" | "적정" | "안정") => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (filter === "전체") {
+      params.delete("filter");
+    } else {
+      params.set("filter", filter);
+    }
+    const next = params.toString();
+    return next ? `/strategy/study-plan?${next}` : "/strategy/study-plan";
+  };
+
   return (
     <>
       <PhoneFrame title="추천 공부계획" bottomPaddingClassName={activeFilter === "전체" ? "pb-[100px]" : "pb-[66px]"}>
@@ -166,9 +178,9 @@ export default function StrategyStudyPlanPage() {
 
         <div className="mb-4">
           <section className="rounded-xl bg-[#ebebeb] px-4 py-3">
-            <h2 className="text-base font-semibold leading-tight">추천 공부계획이 중요한 이유</h2>
-            <p className="mt-2 text-sm leading-snug text-muted">
-              목표 학교에 맞춰 지금 무엇을 어떻게 공부해야 할지 바로 알 수 있어요. 학년·학기에 맞는 계획으로 준비하면, 시험 대비를 더 효율적으로 할 수 있어요.
+            <h2 className="app-info-title">추천 공부계획이 중요한 이유</h2>
+            <p className="mt-1 app-info-body">
+              지원 가능한 학교에 맞춰 지금 무엇을 어떻게 공부해야 할지 바로 알 수 있어요. 학년·학기에 맞는 계획으로 준비하면, 시험 대비를 더 효율적으로 할 수 있어요.
             </p>
           </section>
         </div>
@@ -223,11 +235,11 @@ export default function StrategyStudyPlanPage() {
         <section className="mt-5">
           <div className="mb-2 flex flex-nowrap items-center gap-1">
             {(["전체", "도전", "적정", "안정"] as const).map((filter) => (
-              <button
+              <Link
                 key={filter}
-                type="button"
-                onClick={() => setActiveFilter(filter)}
-                className={`inline-flex min-w-[68px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold leading-none ${
+                href={filterHref(filter)}
+                prefetch={false}
+                className={`inline-flex min-w-[68px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${
                   filter === "전체"
                     ? activeFilter === filter
                       ? "border border-black bg-[#e5e7eb] text-black"
@@ -245,8 +257,8 @@ export default function StrategyStudyPlanPage() {
                           : "bg-safe text-black"
                 }`}
               >
-                {`${filter}${filterCounts[filter]}`}
-              </button>
+                {`${filter} ${filterCounts[filter]}`}
+              </Link>
             ))}
           </div>
         </section>
@@ -261,11 +273,11 @@ export default function StrategyStudyPlanPage() {
               <article key={rec.id} className="rounded-[18px] border border-line bg-white p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-base font-semibold leading-tight">{compactGoalLine(rec.university, rec.major)}</h3>
+                    <h3 className="truncate app-section-title">{compactGoalLine(rec.university, rec.major)}</h3>
                     <p className="mt-1 text-xs text-muted">{activeSlot.title}</p>
                   </div>
                   <span
-                    className={`inline-flex min-w-[56px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${categoryBadgeClass[rec.category]}`}
+                    className={`inline-flex min-w-[68px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${categoryBadgeClass[rec.category]}`}
                   >
                     {rec.category}
                   </span>

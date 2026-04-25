@@ -241,17 +241,17 @@ function StrategySubjectsPageInner() {
 
         <div className="mb-4 space-y-2">
           <section className="rounded-xl bg-[#ebebeb] px-4 py-3">
-            <h2 className="text-base font-semibold leading-tight">수강과목이 중요한 이유</h2>
-            <p className="mt-2 text-sm leading-snug text-muted">
+            <h2 className="app-info-title">추천 수강과목이 중요한 이유</h2>
+            <p className="mt-1 app-info-body">
               희망하는 대학·학과와 관련된 과목을 선택하면 입시에서 좋은 평가를 받을 수 있어요. 과목 선택은 한 번 결정하면 바꾸기 어려우니, 미리 확인하고 준비하는 것이 중요해요.
             </p>
           </section>
           <section className="rounded-xl bg-[#f7d3d3] px-4 py-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#B42318]">
+            <div className="app-info-title flex items-center gap-2 text-[#B42318]">
               <span aria-hidden="true">⚠️</span>
               <span>확인</span>
             </div>
-            <p className="mt-1 text-sm leading-snug text-ink/85">
+            <p className="mt-1 app-info-body text-ink/85">
               선택과목은 한 번 정하면 학교 규정에 따라 변경이 어려울 수 있어요. 과목을 선택하기 전에는 꼭 담임 선생님이나 과목 선생님과 상담해보세요.
             </p>
           </section>
@@ -264,8 +264,8 @@ function StrategySubjectsPageInner() {
                   key={`${goal.university}-${goal.major}-${index}`}
                   type="button"
                   onClick={() => setSelectedGoalIndex(index)}
-                  className={`min-w-0 truncate rounded-full px-2 py-2 text-center text-xs ${
-                    isActive ? "bg-navy text-white" : "border border-line bg-white text-ink"
+                  className={`goal-chip-button truncate ${
+                    isActive ? "goal-chip-button-active" : "goal-chip-button-inactive"
                   }`}
                   title={`${goal.university} ${goal.major}`}
                 >

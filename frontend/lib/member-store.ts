@@ -50,6 +50,15 @@ const seededMembers: MemberRecord[] = [
     password: "",
     seeded: true,
     createdAt: "2026-04-21T00:00:00.000Z"
+  },
+  {
+    id: "seed-kim-minji",
+    userId: "kmg11",
+    name: "김민지",
+    email: "kmg11@gmail.com",
+    password: "",
+    seeded: true,
+    createdAt: "2026-04-21T00:00:00.000Z"
   }
 ];
 

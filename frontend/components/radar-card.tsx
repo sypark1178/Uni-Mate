@@ -26,7 +26,7 @@ export function RadarCard({ academicFit, majorFit, minRequirement }: RadarCardPr
   return (
     <section className="rounded-[24px] bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-lg font-semibold">합격 가능성 레이더</h3>
+        <h3 className="text-lg font-semibold">합격 가능성 체크</h3>
         <span className="text-xs text-muted">W1 / W2 / W3 기반</span>
       </div>
       <svg viewBox="0 0 140 140" className="mx-auto block h-[210px] w-full max-w-[260px]">

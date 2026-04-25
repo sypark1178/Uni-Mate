@@ -371,11 +371,11 @@ export default function DashboardPage() {
 
                 <section>
                   <div className="mb-3 flex items-center justify-between px-1">
-                    <h2 className="text-lg font-bold">목표대학 / 학과</h2>
+                    <h2 className="app-section-title">목표대학 / 학과</h2>
                     <button
                       type="button"
                       onClick={() => safeNavigate(router, goalsHref)}
-                      className="rounded-full border border-line bg-white px-3 py-2 text-sm font-semibold text-muted"
+                      className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-muted"
                     >
                       수정
                     </button>
@@ -406,7 +406,7 @@ export default function DashboardPage() {
                 </section>
 
                 <section>
-                  <div className="mb-3 px-1 text-lg font-bold">주요 D-Day</div>
+                  <div className="app-section-title mb-3 px-1">주요 D-Day</div>
                   <div className="space-y-3">
                     {ddayItems.map((item, index) => (
                       <div key={item.label} className="flex items-center justify-between rounded-[18px] border border-line bg-white px-4 py-3">

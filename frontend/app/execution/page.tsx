@@ -7,7 +7,6 @@ import { LayoutGroup, motion } from "framer-motion";
 import { BottomNav } from "@/components/bottom-nav";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams } from "@/lib/navigation";
-import { compactGoalLine } from "@/lib/goal-display";
 import { parseSeededGoals } from "@/lib/planning";
 import { useGoals } from "@/lib/use-goals";
 
@@ -63,7 +62,7 @@ const executionData: Record<"week" | "month", ExecutionMode> = {
     trendTitle: "월간 진도율 변화",
     trendLabels: ["2월", "3월", "4월", "5월"],
     trendValues: [51, 59, 63, 73],
-    listTitle: "이번 달 도달 미션",
+    listTitle: "이번 달 핵심 미션",
     items: [
       { title: "영어 모의 2등급 달성", desc: "목표까지 약 20점 부족", status: "urgent", checked: false },
       { title: "서강대 학교 활동 포인트 발굴", desc: "탐구 및 통합 활동 1건 기획", status: "urgent", checked: false },
@@ -73,32 +72,17 @@ const executionData: Record<"week" | "month", ExecutionMode> = {
   }
 };
 
-const statusClassMap = {
-  done: "bg-normal",
-  progress: "bg-safe",
-  urgent: "bg-danger"
-} as const;
-
-const statusLabelMap = {
-  done: "완료",
-  progress: "진행",
-  urgent: "긴급"
-} as const;
-
-function checklistBadge(item: ExecutionItem): { label: string; className: string } {
-  if (item.checked) {
-    return { label: statusLabelMap.done, className: statusClassMap.done };
-  }
-  if (item.status === "urgent") {
-    return { label: statusLabelMap.urgent, className: statusClassMap.urgent };
-  }
-  return { label: statusLabelMap.progress, className: statusClassMap.progress };
-}
+const CHART_MIN_X = 24;
+const CHART_MAX_X = 296;
+const CHART_TOP_Y = 18;
+const CHART_BOTTOM_Y = 58;
+const CHART_MIN_VALUE = 0;
+const CHART_MAX_VALUE = 100;
 
 export default function ExecutionPage() {
   const searchParams = useSearchParams();
   const seededGoals = parseSeededGoals(searchParams);
-  const { goals } = useGoals(seededGoals);
+  useGoals(seededGoals);
   const [mode, setMode] = useState<"week" | "month">("week");
   const [itemsByMode, setItemsByMode] = useState(() => ({
     week: executionData.week.items,
@@ -115,19 +99,27 @@ export default function ExecutionPage() {
   }, [currentItems]);
   const checkedCount = currentItems.filter((item) => item.checked).length;
   const computedPercent = Math.round((checkedCount / currentItems.length) * 100);
+  const percentTextClass = computedPercent >= 100 ? "text-[18px]" : "text-[22px]";
+  const trendValues = useMemo(() => {
+    const base = [...currentData.trendValues];
+    if (base.length === 0) return base;
+    base[base.length - 1] = computedPercent;
+    return base;
+  }, [computedPercent, currentData.trendValues]);
 
   const points = useMemo(() => {
-    const values = currentData.trendValues;
-    const min = 40;
-    const max = 80;
+    const values = trendValues;
     return values
       .map((value, index) => {
-        const x = 15 + (290 / (values.length - 1)) * index;
-        const y = 60 - ((value - min) / (max - min)) * 40;
+        const clamped = Math.min(CHART_MAX_VALUE, Math.max(CHART_MIN_VALUE, value));
+        const x = CHART_MIN_X + ((CHART_MAX_X - CHART_MIN_X) / (values.length - 1)) * index;
+        const y =
+          CHART_BOTTOM_Y -
+          ((clamped - CHART_MIN_VALUE) / (CHART_MAX_VALUE - CHART_MIN_VALUE)) * (CHART_BOTTOM_Y - CHART_TOP_Y);
         return `${x},${y}`;
       })
       .join(" ");
-  }, [currentData.trendValues]);
+  }, [trendValues]);
 
   const toggleItem = (title: string) => {
     setItemsByMode((prev) => ({
@@ -140,12 +132,8 @@ export default function ExecutionPage() {
 
   return (
     <>
-      <PhoneFrame title="실행 관리" subtitle="체크리스트와 실행률을 주간 또는 월간 기준으로 확인할 수 있어요.">
-        <div className="mb-3 rounded-2xl bg-mist px-4 py-3 text-xs leading-5 text-muted">
-          목표 입력:{" "}
-          {goals.map((goal, index) => `${index + 1}순위 ${compactGoalLine(goal.university, goal.major)}`).join(" / ")}
-        </div>
-        <div className="flex gap-2 rounded-full border border-line bg-white p-1">
+      <PhoneFrame title="실행 관리">
+        <div className="flex w-full gap-2">
           {[
             { key: "week", label: "이번 주" },
             { key: "month", label: "이번 달" }
@@ -154,8 +142,8 @@ export default function ExecutionPage() {
               key={tab.key}
               type="button"
               onClick={() => setMode(tab.key as "week" | "month")}
-              className={`flex-1 rounded-full px-4 py-3 text-sm font-semibold ${
-                mode === tab.key ? "bg-navy text-white" : "text-ink"
+              className={`flex-1 rounded-full border px-4 py-3 text-sm font-semibold ${
+                mode === tab.key ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
               }`}
             >
               {tab.label}
@@ -163,132 +151,127 @@ export default function ExecutionPage() {
           ))}
         </div>
 
-        <section className="mt-4 rounded-[24px] border border-line bg-white p-5">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center">
-            <div className="relative h-32 w-32 shrink-0">
-              <svg viewBox="0 0 120 120" className="h-32 w-32 -rotate-90">
-                <circle cx="60" cy="60" r="46" fill="none" stroke="#E9EDF3" strokeWidth="12" />
+        <section className="mt-4 rounded-[24px] border border-line bg-white p-4">
+          <div className="flex items-center gap-3">
+            <div className="relative h-[84px] w-[84px] shrink-0">
+              <svg viewBox="0 0 120 120" className="h-[84px] w-[84px] -rotate-90">
+                <circle cx="60" cy="60" r="46" fill="none" stroke="#E9EDF3" strokeWidth="9" />
                 <circle
                   cx="60"
                   cy="60"
                   r="46"
                   fill="none"
                   stroke="#15356A"
-                  strokeWidth="12"
+                  strokeWidth="9"
                   strokeLinecap="round"
                   strokeDasharray={289}
                   strokeDashoffset={289 - (289 * computedPercent) / 100}
                 />
               </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                <div className="text-3xl font-extrabold text-navy">{computedPercent}%</div>
-                <div className="mt-2 text-xs font-semibold text-muted">{currentData.label}</div>
+              <div className="absolute inset-0 flex items-center justify-center text-center">
+                <div className={`${percentTextClass} font-extrabold leading-none text-navy`}>{computedPercent}%</div>
               </div>
             </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-extrabold">
-                {currentData.headlineBase} {computedPercent}% 달성 중
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-ink">{currentData.summary}</p>
-              <div className="mt-3 text-sm font-semibold text-muted">
-                {currentData.deltaLabel} <strong className="text-[#166534]">{currentData.delta}</strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 border-t border-slate-100 pt-4">
-            <h3 className="text-base font-extrabold">{currentData.trendTitle}</h3>
-            <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-              <svg viewBox="0 0 320 80" className="h-24 w-full">
-                <polyline
-                  points={points}
-                  fill="none"
-                  stroke="#15356A"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                {currentData.trendValues.map((value, index) => {
-                  const x = 15 + (290 / (currentData.trendValues.length - 1)) * index;
-                  const y = 60 - ((value - 40) / 40) * 40;
-                  return (
-                    <g key={`${value}-${index}`}>
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r="5"
-                        fill={index === currentData.trendValues.length - 1 ? "#111111" : "#FFFFFF"}
-                        stroke="#111111"
-                        strokeWidth="1.5"
-                      />
-                      <text
-                        x={x}
-                        y={y - 10}
-                        textAnchor="middle"
-                        fontSize="11"
-                        fontWeight="700"
-                        fill={index === currentData.trendValues.length - 1 ? "#FC8B00" : "#111111"}
-                      >
-                        {value}%
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
-              <div className="mt-2 grid grid-cols-4 text-center text-xs text-muted">
-                {currentData.trendLabels.map((label) => (
-                  <div key={label}>{label}</div>
-                ))}
-              </div>
+            <div className="min-w-0 flex-1">
+              <p className="app-section-title">{currentData.label}</p>
+              <p className="mt-1 text-[22px] font-extrabold leading-tight text-navy">
+                {currentData.headlineBase} <span className="text-accent">{computedPercent}%</span> 달성 중
+              </p>
+              <p className="mt-1 text-sm font-semibold leading-tight text-muted">
+                {currentData.deltaLabel} <span className="text-[#1f7a3d]">{currentData.delta}↑</span>
+              </p>
             </div>
           </div>
         </section>
 
-        <section className="mt-4 rounded-[24px] border border-line bg-white p-5">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-extrabold">{currentData.listTitle}</h3>
-              <p className="mt-1 text-sm text-muted">항목을 체크하면 실행률이 즉시 반영됩니다.</p>
-            </div>
-            <Link
-              href={analysisLoadingHref}
-              className="min-w-[144px] whitespace-nowrap rounded-full bg-navy px-5 py-3 text-center text-sm font-extrabold text-white"
-            >
-              AI 분석 시작
-            </Link>
+        <section className="mt-3">
+          <h3 className="app-section-title">{currentData.trendTitle}</h3>
+          <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+            <svg viewBox="0 0 320 112" className="h-[132px] w-full">
+              <polyline
+                points={points}
+                fill="none"
+                stroke="#15356A"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {trendValues.map((value, index) => {
+                const clamped = Math.min(CHART_MAX_VALUE, Math.max(CHART_MIN_VALUE, value));
+                const x =
+                  CHART_MIN_X + ((CHART_MAX_X - CHART_MIN_X) / (trendValues.length - 1)) * index;
+                const y =
+                  CHART_BOTTOM_Y -
+                  ((clamped - CHART_MIN_VALUE) / (CHART_MAX_VALUE - CHART_MIN_VALUE)) * (CHART_BOTTOM_Y - CHART_TOP_Y);
+                return (
+                  <g key={`${value}-${index}`}>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r="5"
+                      fill={index === trendValues.length - 1 ? "#FC8B00" : "#FFFFFF"}
+                      stroke="#111111"
+                      strokeWidth="1.5"
+                    />
+                    <text
+                      x={x}
+                      y={y - 10}
+                      textAnchor="middle"
+                      fontSize="11"
+                      fontWeight="700"
+                      fill={index === trendValues.length - 1 ? "#FC8B00" : "#111111"}
+                    >
+                      {value}%
+                    </text>
+                    <text x={x} y={100} textAnchor="middle" fontSize="11" fontWeight="600" fill="#667085">
+                      {currentData.trendLabels[index]}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </section>
+
+        <section className="mt-4">
+          <div className="mb-3">
+            <h3 className="app-section-title">{currentData.listTitle}</h3>
           </div>
           <LayoutGroup id={`execution-checklist-${mode}`}>
             <div className="space-y-3">
               {sortedChecklistItems.map((item) => {
-                const badge = checklistBadge(item);
                 return (
-                <motion.label
-                  key={`${mode}-${item.title}`}
-                  layout
-                  transition={{
-                    type: "spring",
-                    stiffness: 420,
-                    damping: 34,
-                    mass: 0.85
-                  }}
-                  className="grid grid-cols-[28px_1fr_auto] items-center gap-3 rounded-2xl border border-line bg-white p-4"
-                >
-                  <input
-                    type="checkbox"
-                    checked={item.checked}
-                    onChange={() => toggleItem(item.title)}
-                    className="h-6 w-6 rounded-md border border-slate-300 accent-navy"
-                  />
-                  <div>
-                    <div className={`font-semibold ${item.checked ? "text-muted line-through" : ""}`}>{item.title}</div>
-                    <div className={`mt-1 text-xs ${item.checked ? "text-muted line-through" : "text-muted"}`}>
-                      {item.desc}
+                  <motion.label
+                    key={`${mode}-${item.title}`}
+                    layout
+                    transition={{
+                      type: "spring",
+                      stiffness: 420,
+                      damping: 34,
+                      mass: 0.85
+                    }}
+                    className="grid grid-cols-[28px_1fr_auto] items-center gap-3 rounded-2xl border border-line bg-white p-4"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={() => toggleItem(item.title)}
+                      className="h-6 w-6 rounded-md border border-slate-300 accent-navy"
+                    />
+                    <div>
+                      <div className={`font-semibold ${item.checked ? "text-muted line-through" : ""}`}>{item.title}</div>
+                      <div className={`mt-1 text-xs ${item.checked ? "text-muted line-through" : "text-muted"}`}>
+                        {item.desc}
+                      </div>
                     </div>
-                  </div>
-                  <span className={`rounded-full px-3 py-2 text-xs font-extrabold ${badge.className}`}>
-                    {badge.label}
-                  </span>
-                </motion.label>
+                    <span
+                      className={`rounded-full px-3 py-2 text-xs font-extrabold ${
+                        item.checked ? "bg-normal text-black" : "bg-[#F5D3D1] text-black"
+                      }`}
+                    >
+                      {item.checked ? "완료" : "할일"}
+                    </span>
+                  </motion.label>
                 );
               })}
             </div>
