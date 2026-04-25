@@ -5,6 +5,12 @@ const workspaceRoot = path.resolve(process.cwd(), "..");
 const pythonCliPath = path.join(workspaceRoot, "backend", "app", "cli", "onboarding_scores_cli.py");
 const pythonCommand = process.env.PYTHON_BIN || "python";
 const pythonPath = process.env.PYTHONPATH ? `${workspaceRoot}${path.delimiter}${process.env.PYTHONPATH}` : workspaceRoot;
+const pythonEnv = {
+  ...process.env,
+  PYTHONIOENCODING: "utf-8",
+  PYTHONUTF8: "1",
+  PYTHONPATH: pythonPath
+};
 
 type BridgeEntity = "scores" | "profile" | "goals" | "analysis" | "guest_temp";
 
@@ -22,10 +28,7 @@ export function runPythonBridge(
     }
     const child = spawn(pythonCommand, args, {
       cwd: workspaceRoot,
-      env: {
-        ...process.env,
-        PYTHONPATH: pythonPath
-      }
+      env: pythonEnv
     });
 
     let stdout = "";
@@ -65,10 +68,7 @@ export function runPythonLogin(payload: { loginId: string; password: string }): 
     }
     const child = spawn(pythonCommand, args, {
       cwd: workspaceRoot,
-      env: {
-        ...process.env,
-        PYTHONPATH: pythonPath
-      }
+      env: pythonEnv
     });
 
     let stdout = "";

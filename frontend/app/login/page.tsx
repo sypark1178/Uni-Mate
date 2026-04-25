@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PhoneFrame } from "@/components/phone-frame";
 import { ensureMemberSeeds, loginMemberWithServerFallback } from "@/lib/member-store";
+import { clearAllDrafts } from "@/lib/draft-store";
 
 export default function LoginPage() {
   const [loginValue, setLoginValue] = useState("");
@@ -27,6 +28,7 @@ export default function LoginPage() {
     }
 
     setErrorMessage("");
+    clearAllDrafts();
     goDashboard();
   };
 
