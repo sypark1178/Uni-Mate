@@ -7,7 +7,10 @@ import type {
   GradeYear,
   ScoreMemoryStore,
   ScoreTabKey,
+  StudentRecordAcademicYear,
   StudentRecordPeriod,
+  StudentRecordSemester,
+  StudentRecordType,
   SubjectScoreEntry,
   UploadedRecordFile
 } from "@/lib/types";
@@ -61,6 +64,35 @@ export const gradeYearOptions: Array<{ value: GradeYear; label: string }> = [
   { value: "1", label: "1학년" },
   { value: "2", label: "2학년" },
   { value: "3", label: "3학년" }
+];
+
+export const studentRecordAcademicYearOptions: Array<{ value: StudentRecordAcademicYear; label: string }> = [
+  2026,
+  2027,
+  2028,
+  2029,
+  2030,
+  2031,
+  2032,
+  2033,
+  2034,
+  2035,
+  2036
+].map((year) => ({ value: year as StudentRecordAcademicYear, label: String(year) }));
+
+export const studentRecordSemesterOptions: Array<{ value: StudentRecordSemester; label: string }> = [
+  { value: 1, label: "1학기" },
+  { value: 2, label: "2학기" }
+];
+
+export const studentRecordTypeOptions: Array<{ value: StudentRecordType; label: string }> = [
+  { value: "세특", label: "세특" },
+  { value: "동아리", label: "동아리" },
+  { value: "봉사", label: "봉사" },
+  { value: "진로", label: "진로" },
+  { value: "수상", label: "수상" },
+  { value: "독서", label: "독서" },
+  { value: "행동특성", label: "행동특성" }
 ];
 
 export const gradeTermOptions: Array<{ value: GradeTerm; label: string }> = [
@@ -140,6 +172,15 @@ function createSubjectEntries(subjectNames = defaultSubjectNames): SubjectScoreE
   }));
 }
 
+function extractStudentRecordTitle(content: string) {
+  const normalized = content.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return "";
+  }
+  const firstSentence = normalized.match(/^.+?[.!?。！？]/)?.[0] ?? normalized;
+  return firstSentence.slice(0, 80);
+}
+
 export function createEmptyGradeRecord(year: GradeYear, term: GradeTerm): GradePeriodRecord {
   return {
     id: buildKey(year, term),
@@ -151,11 +192,33 @@ export function createEmptyGradeRecord(year: GradeYear, term: GradeTerm): GradeP
   };
 }
 
-export function createEmptyStudentRecord(year: GradeYear, term: GradeTerm): StudentRecordPeriod {
+function buildStudentRecordKey(academicYear: StudentRecordAcademicYear, semester: StudentRecordSemester, recordType: StudentRecordType) {
+  return `${academicYear}-${semester}-${recordType}`;
+}
+
+function inferGradeYearFromAcademicYear(academicYear: StudentRecordAcademicYear): GradeYear {
+  const offset = academicYear - 2025;
+  if (offset === 2) return "2";
+  if (offset >= 3) return "3";
+  return "1";
+}
+
+function termFromStudentSemester(semester: StudentRecordSemester): GradeTerm {
+  return semester === 2 ? "2-final" : "1-final";
+}
+
+export function createEmptyStudentRecord(
+  academicYear: StudentRecordAcademicYear = 2026,
+  semester: StudentRecordSemester = 1,
+  recordType: StudentRecordType = "세특"
+): StudentRecordPeriod {
   return {
-    id: buildKey(year, term),
-    year,
-    term,
+    id: buildStudentRecordKey(academicYear, semester, recordType),
+    year: inferGradeYearFromAcademicYear(academicYear),
+    term: termFromStudentSemester(semester),
+    academicYear,
+    semester,
+    recordType,
     title: "",
     description: "",
     files: [],
@@ -166,11 +229,14 @@ export function createEmptyStudentRecord(year: GradeYear, term: GradeTerm): Stud
 export const defaultScoreMemoryStore: ScoreMemoryStore = {
   schoolRecords: [createEmptyGradeRecord("1", "1-midterm")],
   mockExams: [createEmptyGradeRecord("1", "1-midterm")],
-  studentRecords: [createEmptyStudentRecord("1", "1-midterm")],
+  studentRecords: [createEmptyStudentRecord(2026, 1, "세특")],
   uploads: [],
   activeTab: "schoolRecord",
   selectedYear: "1",
   selectedTerm: "1-midterm",
+  selectedStudentAcademicYear: 2026,
+  selectedStudentSemester: 1,
+  selectedStudentRecordType: "세특",
   updatedAt: nowIso()
 };
 
@@ -184,6 +250,18 @@ function sortByPeriod<T extends { year: GradeYear; term: GradeTerm }>(records: T
       return termOrder(left.term) - termOrder(right.term);
     }
     return Number(left.year) - Number(right.year);
+  });
+}
+
+function sortStudentRecords(records: StudentRecordPeriod[]) {
+  return [...records].sort((left, right) => {
+    if (left.academicYear !== right.academicYear) {
+      return left.academicYear - right.academicYear;
+    }
+    if (left.semester !== right.semester) {
+      return left.semester - right.semester;
+    }
+    return studentRecordTypeOptions.findIndex((item) => item.value === left.recordType) - studentRecordTypeOptions.findIndex((item) => item.value === right.recordType);
   });
 }
 
@@ -245,20 +323,58 @@ function normalizeUpload(raw: unknown): UploadedRecordFile | null {
 }
 
 function normalizeStudentRecord(raw: unknown): StudentRecordPeriod {
-  const rawYear = typeof raw === "object" && raw && "year" in raw ? String(raw.year) : "1";
-  const rawTerm = typeof raw === "object" && raw && "term" in raw ? String(raw.term) : "1-midterm";
-  const year = (gradeYearOptions.find((item) => item.value === rawYear)?.value ?? "1") as GradeYear;
-  const term = (gradeTermOptions.find((item) => item.value === rawTerm)?.value ?? "1-midterm") as GradeTerm;
+  const rawRecordId =
+    typeof raw === "object" && raw && "recordId" in raw
+      ? Number(raw.recordId)
+      : typeof raw === "object" && raw && "record_id" in raw
+        ? Number(raw.record_id)
+        : null;
+  const rawAcademicYearValue =
+    typeof raw === "object" && raw && "academicYear" in raw
+      ? Number(raw.academicYear)
+      : typeof raw === "object" && raw && "academic_year" in raw
+        ? Number(raw.academic_year)
+        : 2026;
+  const rawSemesterValue =
+    typeof raw === "object" && raw && "semester" in raw
+      ? Number(raw.semester)
+      : typeof raw === "object" && raw && "term" in raw
+        ? Number(String(raw.term).slice(0, 1))
+        : 1;
+  const rawRecordType =
+    typeof raw === "object" && raw && "recordType" in raw
+      ? String(raw.recordType)
+      : typeof raw === "object" && raw && "record_type" in raw
+        ? String(raw.record_type)
+        : "세특";
+  const academicYear = (studentRecordAcademicYearOptions.find((item) => item.value === rawAcademicYearValue)?.value ?? 2026) as StudentRecordAcademicYear;
+  const semester = (studentRecordSemesterOptions.find((item) => item.value === rawSemesterValue)?.value ?? 1) as StudentRecordSemester;
+  const recordType = (studentRecordTypeOptions.find((item) => item.value === rawRecordType)?.value ?? "세특") as StudentRecordType;
+  const year = inferGradeYearFromAcademicYear(academicYear);
+  const term = termFromStudentSemester(semester);
   const files =
     typeof raw === "object" && raw && "files" in raw && Array.isArray(raw.files)
       ? raw.files.map(normalizeUpload).filter((item): item is UploadedRecordFile => item !== null)
       : [];
 
   return {
-    id: typeof raw === "object" && raw && "id" in raw ? String(raw.id) : buildKey(year, term),
+    id: typeof raw === "object" && raw && "id" in raw ? String(raw.id) : buildStudentRecordKey(academicYear, semester, recordType),
+    recordId: rawRecordId !== null && Number.isInteger(rawRecordId) && rawRecordId > 0 ? rawRecordId : undefined,
     year,
     term,
-    title: typeof raw === "object" && raw && "title" in raw ? String(raw.title ?? "") : "",
+    academicYear,
+    semester,
+    recordType,
+    subjectName:
+      typeof raw === "object" && raw && "subjectName" in raw
+        ? String(raw.subjectName ?? "")
+        : typeof raw === "object" && raw && "subject_name" in raw
+          ? String(raw.subject_name ?? "")
+          : undefined,
+    title:
+      typeof raw === "object" && raw && "title" in raw
+        ? String(raw.title ?? "")
+        : extractStudentRecordTitle(typeof raw === "object" && raw && "description" in raw ? String(raw.description ?? "") : ""),
     description: typeof raw === "object" && raw && "description" in raw ? String(raw.description ?? "") : "",
     files,
     updatedAt: typeof raw === "object" && raw && "updatedAt" in raw ? String(raw.updatedAt) : nowIso()
@@ -285,15 +401,21 @@ function normalizeScoreStore(raw: unknown): ScoreMemoryStore {
   const activeTab = "activeTab" in raw ? String(raw.activeTab) : "schoolRecord";
   const selectedYear = "selectedYear" in raw ? String(raw.selectedYear) : "1";
   const selectedTerm = "selectedTerm" in raw ? String(raw.selectedTerm) : "1-midterm";
+  const selectedStudentAcademicYear = "selectedStudentAcademicYear" in raw ? Number(raw.selectedStudentAcademicYear) : 2026;
+  const selectedStudentSemester = "selectedStudentSemester" in raw ? Number(raw.selectedStudentSemester) : 1;
+  const selectedStudentRecordType = "selectedStudentRecordType" in raw ? String(raw.selectedStudentRecordType) : "세특";
 
   return {
     schoolRecords: sortByPeriod(schoolRecords),
     mockExams: sortByPeriod(mockExams),
-    studentRecords: sortByPeriod(studentRecords),
+    studentRecords: sortStudentRecords(studentRecords),
     uploads,
     activeTab: (scoreTabOptions.find((item) => item.key === activeTab)?.key ?? "schoolRecord") as ScoreTabKey,
     selectedYear: (gradeYearOptions.find((item) => item.value === selectedYear)?.value ?? "1") as GradeYear,
     selectedTerm: (gradeTermOptions.find((item) => item.value === selectedTerm)?.value ?? "1-midterm") as GradeTerm,
+    selectedStudentAcademicYear: (studentRecordAcademicYearOptions.find((item) => item.value === selectedStudentAcademicYear)?.value ?? 2026) as StudentRecordAcademicYear,
+    selectedStudentSemester: (studentRecordSemesterOptions.find((item) => item.value === selectedStudentSemester)?.value ?? 1) as StudentRecordSemester,
+    selectedStudentRecordType: (studentRecordTypeOptions.find((item) => item.value === selectedStudentRecordType)?.value ?? "세특") as StudentRecordType,
     updatedAt: "updatedAt" in raw ? String(raw.updatedAt) : nowIso()
   };
 }
@@ -315,17 +437,50 @@ function upsertScoreRecord(records: GradePeriodRecord[], nextRecord: GradePeriod
 }
 
 function upsertStudentRecord(records: StudentRecordPeriod[], nextRecord: StudentRecordPeriod) {
-  const next = records.filter((record) => !(record.year === nextRecord.year && record.term === nextRecord.term));
+  const next = records.filter(
+    (record) =>
+      !(
+        (record.recordId !== undefined && nextRecord.recordId !== undefined && record.recordId === nextRecord.recordId) ||
+        record.academicYear === nextRecord.academicYear &&
+        record.semester === nextRecord.semester &&
+        record.recordType === nextRecord.recordType
+      )
+  );
   next.push({ ...nextRecord, updatedAt: nowIso() });
-  return sortByPeriod(next);
+  return sortStudentRecords(next);
 }
 
 export function getScoreRecord(store: ScoreMemoryStore, tab: "schoolRecord" | "mockExam", year: GradeYear, term: GradeTerm) {
   return getScoreRecordBucket(store, tab).find((record) => record.year === year && record.term === term) ?? createEmptyGradeRecord(year, term);
 }
 
-export function getStudentRecord(store: ScoreMemoryStore, year: GradeYear, term: GradeTerm) {
-  return store.studentRecords.find((record) => record.year === year && record.term === term) ?? createEmptyStudentRecord(year, term);
+export function getStudentRecord(
+  store: ScoreMemoryStore,
+  academicYear: StudentRecordAcademicYear,
+  semester: StudentRecordSemester,
+  recordType: StudentRecordType
+) {
+  return (
+    store.studentRecords.find(
+      (record) => record.academicYear === academicYear && record.semester === semester && record.recordType === recordType
+    ) ?? createEmptyStudentRecord(academicYear, semester, recordType)
+  );
+}
+
+function mergeServerStudentRecords(baseStore: ScoreMemoryStore, serverStore: ScoreMemoryStore | null) {
+  if (!serverStore || serverStore.studentRecords.length === 0) {
+    return baseStore;
+  }
+
+  let nextStudentRecords = baseStore.studentRecords;
+  serverStore.studentRecords.forEach((serverRecord) => {
+    nextStudentRecords = upsertStudentRecord(nextStudentRecords, serverRecord);
+  });
+
+  return {
+    ...baseStore,
+    studentRecords: nextStudentRecords
+  };
 }
 
 function persistStore(nextStore: ScoreMemoryStore) {
@@ -501,13 +656,13 @@ export function useScoreRecords(options: UseScoreRecordsOptions = {}) {
       }
 
       const resolvedHints: ScoreSettingsDisplay | null = serverHints;
-      const finalStore = resolvedStore ?? defaultScoreMemoryStore;
+      const finalStore = mergeServerStudentRecords(resolvedStore ?? defaultScoreMemoryStore, serverStore);
 
       if (!cancelled) {
         setStore(finalStore);
         setSettingsDisplay(resolvedHints);
-        if (resolvedStore) {
-          persistStore(resolvedStore);
+        if (resolvedStore || serverStore?.studentRecords.length) {
+          persistStore(finalStore);
         }
         setHydrated(true);
       }
@@ -536,6 +691,20 @@ export function useScoreRecords(options: UseScoreRecordsOptions = {}) {
 
   const setSelectedPeriod = (year: GradeYear, term: GradeTerm) => {
     commit((previous) => ({ ...previous, selectedYear: year, selectedTerm: term, updatedAt: nowIso() }));
+  };
+
+  const setSelectedStudentRecordPeriod = (
+    academicYear: StudentRecordAcademicYear,
+    semester: StudentRecordSemester,
+    recordType: StudentRecordType
+  ) => {
+    commit((previous) => ({
+      ...previous,
+      selectedStudentAcademicYear: academicYear,
+      selectedStudentSemester: semester,
+      selectedStudentRecordType: recordType,
+      updatedAt: nowIso()
+    }));
   };
 
   const updateSubjectScore = (tab: "schoolRecord" | "mockExam", year: GradeYear, term: GradeTerm, entryId: string, value: string) => {
@@ -612,10 +781,18 @@ export function useScoreRecords(options: UseScoreRecordsOptions = {}) {
     });
   };
 
-  const updateStudentRecordField = (year: GradeYear, term: GradeTerm, field: "title" | "description", value: string) => {
+  const updateStudentRecordField = (field: "title" | "description", value: string) => {
     commit((previous) => {
-      const current = getStudentRecord(previous, year, term);
-      const nextRecord: StudentRecordPeriod = { ...current, [field]: value, updatedAt: nowIso() };
+      const current = getStudentRecord(
+        previous,
+        previous.selectedStudentAcademicYear,
+        previous.selectedStudentSemester,
+        previous.selectedStudentRecordType
+      );
+      const nextRecord: StudentRecordPeriod =
+        field === "description"
+          ? { ...current, description: value, title: extractStudentRecordTitle(value), updatedAt: nowIso() }
+          : { ...current, title: value, updatedAt: nowIso() };
       return {
         ...previous,
         studentRecords: upsertStudentRecord(previous.studentRecords, nextRecord),
@@ -638,7 +815,12 @@ export function useScoreRecords(options: UseScoreRecordsOptions = {}) {
       }));
 
       if (sourceTab === "studentRecord") {
-        const current = getStudentRecord(previous, year, term);
+        const current = getStudentRecord(
+          previous,
+          previous.selectedStudentAcademicYear,
+          previous.selectedStudentSemester,
+          previous.selectedStudentRecordType
+        );
         const nextRecord: StudentRecordPeriod = {
           ...current,
           files: [...current.files, ...nextFiles],
@@ -682,7 +864,10 @@ export function useScoreRecords(options: UseScoreRecordsOptions = {}) {
     return getScoreRecord(store, store.activeTab, store.selectedYear, store.selectedTerm);
   }, [store]);
 
-  const currentStudentRecord = useMemo(() => getStudentRecord(store, store.selectedYear, store.selectedTerm), [store]);
+  const currentStudentRecord = useMemo(
+    () => getStudentRecord(store, store.selectedStudentAcademicYear, store.selectedStudentSemester, store.selectedStudentRecordType),
+    [store]
+  );
   const summary = useMemo(
     () => buildScoreSummary(store, settingsDisplay, useDbSchoolAverage, useDbMockAverage),
     [store, settingsDisplay, useDbSchoolAverage, useDbMockAverage]
@@ -697,6 +882,7 @@ export function useScoreRecords(options: UseScoreRecordsOptions = {}) {
     summary,
     setActiveTab,
     setSelectedPeriod,
+    setSelectedStudentRecordPeriod,
     updateSubjectScore,
     updateSubjectName,
     updateOverallAverage,

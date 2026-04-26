@@ -14,11 +14,27 @@ class OnboardingScoreStoreTests(unittest.TestCase):
         self.payload = {
             "schoolRecords": [{"id": "1-1-midterm"}],
             "mockExams": [{"id": "1-1-midterm"}],
-            "studentRecords": [{"id": "1-1-midterm", "title": "club"}],
+            "studentRecords": [
+                {
+                    "id": "2026-1-세특",
+                    "year": "1",
+                    "term": "1-final",
+                    "academicYear": 2026,
+                    "semester": 1,
+                    "recordType": "세특",
+                    "title": "탐구 활동을 수행했습니다.",
+                    "description": "탐구 활동을 수행했습니다. 후속 연구 계획을 정리했습니다.",
+                    "files": [],
+                    "updatedAt": "2026-04-20T10:00:00Z",
+                }
+            ],
             "uploads": [{"id": "upload-1"}],
             "activeTab": "studentRecord",
             "selectedYear": "2",
             "selectedTerm": "1-final",
+            "selectedStudentAcademicYear": 2026,
+            "selectedStudentSemester": 1,
+            "selectedStudentRecordType": "세특",
             "updatedAt": "2026-04-20T10:00:00Z",
         }
 
@@ -38,11 +54,245 @@ class OnboardingScoreStoreTests(unittest.TestCase):
 
         self.assertTrue(saved["ok"])
         self.assertEqual(saved["source"], "sqlite")
-        self.assertEqual(loaded["data"], self.payload)
+        self.assertEqual(loaded["data"]["uploads"], self.payload["uploads"])
+        loaded_student_record = loaded["data"]["studentRecords"][0]
+        self.assertEqual(loaded_student_record["academicYear"], 2026)
+        self.assertEqual(loaded_student_record["semester"], 1)
+        self.assertEqual(loaded_student_record["recordType"], "세특")
+        self.assertEqual(loaded_student_record["title"], "탐구 활동을 수행했습니다.")
+        self.assertEqual(loaded_student_record["description"], "탐구 활동을 수행했습니다. 후속 연구 계획을 정리했습니다.")
         self.assertEqual(loaded["summary"]["uploadCount"], 1)
         self.assertIn("settingsDisplay", loaded)
         self.assertEqual(loaded["settingsDisplay"]["schoolGradeAverage"], "-")
         self.assertEqual(loaded["settingsDisplay"]["latestMockFourGradeAverage"], "-")
+
+    def test_student_record_maps_to_student_record_table(self) -> None:
+        self.store.save_snapshot(self.payload, user_key="student-record-map")
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                """
+                SELECT sr.record_type, sr.subject_name, sr.content_body, sr.academic_year, sr.semester
+                FROM TB_STUDENT_RECORD sr
+                JOIN TB_STUDENT_PROFILE sp ON sp.student_id = sr.student_id
+                JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
+                WHERE a.login_id = ?
+                  AND sr.record_type != 'snapshot'
+                LIMIT 1
+                """,
+                ("student-record-map",),
+            ).fetchone()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["record_type"], "세특")
+        self.assertIsNone(row["subject_name"])
+        self.assertEqual(row["content_body"], "탐구 활동을 수행했습니다. 후속 연구 계획을 정리했습니다.")
+        self.assertEqual(row["academic_year"], 2026)
+        self.assertEqual(row["semester"], 1)
+
+    def test_student_record_round_trip_preserves_record_id_and_subject_name(self) -> None:
+        self.store.save_profile(
+            {
+                "name": "임도윤",
+                "gradeLabel": "고1",
+                "region": "서울",
+                "district": "강남구",
+                "schoolName": "테스트고",
+                "track": "인문",
+                "targetYear": 2027,
+            },
+            user_key="LDY01",
+        )
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                """
+                SELECT sp.student_id
+                FROM TB_STUDENT_PROFILE sp
+                JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
+                WHERE a.login_id = ?
+                """,
+                ("LDY01",),
+            ).fetchone()
+            self.assertIsNotNone(row)
+            sid = int(row["student_id"])
+            connection.execute(
+                """
+                INSERT INTO TB_STUDENT_RECORD
+                    (record_id, student_id, record_type, subject_name, content_body, academic_year, semester)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (1, sid, "세특", "국어, 수학", "국어 세특: 기존 내용.", 2026, 1),
+            )
+            connection.commit()
+
+        loaded = self.store.get_snapshot(user_key="LDY01")
+        record = loaded["data"]["studentRecords"][0]
+        self.assertEqual(record["recordId"], 1)
+        self.assertEqual(record["subjectName"], "국어, 수학")
+        self.assertEqual(record["description"], "국어 세특: 기존 내용.")
+
+        next_payload = json.loads(json.dumps(self.payload))
+        next_payload["studentRecords"] = [
+            {
+                **record,
+                "description": "국어 세특: 수정 내용.",
+            }
+        ]
+        self.store.save_snapshot(next_payload, user_key="LDY01")
+        with self.store._connect() as connection:  # noqa: SLF001
+            updated = connection.execute(
+                "SELECT subject_name, content_body FROM TB_STUDENT_RECORD WHERE record_id = 1",
+            ).fetchone()
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated["subject_name"], "국어, 수학")
+        self.assertEqual(updated["content_body"], "국어 세특: 수정 내용.")
+
+    def test_save_snapshot_preserves_existing_student_records_when_payload_is_empty(self) -> None:
+        self.store.save_profile(
+            {
+                "name": "김민지",
+                "gradeLabel": "고1",
+                "region": "제주",
+                "district": "서귀포시",
+                "schoolName": "테스트고",
+                "track": "인문",
+                "targetYear": 2027,
+            },
+            user_key="KMJ11",
+        )
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                """
+                SELECT sp.student_id
+                FROM TB_STUDENT_PROFILE sp
+                JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
+                WHERE a.login_id = ?
+                """,
+                ("KMJ11",),
+            ).fetchone()
+            self.assertIsNotNone(row)
+            sid = int(row["student_id"])
+            connection.execute(
+                """
+                INSERT INTO TB_STUDENT_RECORD
+                    (record_id, student_id, record_type, subject_name, content_body, academic_year, semester)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (694, sid, "세특", "수학, 경제, 경영", "경제 세특: ESG경영 탐구.", 2026, 1),
+            )
+            connection.commit()
+
+        next_payload = json.loads(json.dumps(self.payload))
+        next_payload["studentRecords"] = []
+        self.store.save_snapshot(next_payload, user_key="KMJ11")
+        loaded = self.store.get_snapshot(user_key="KMJ11")
+
+        student_records = loaded["data"]["studentRecords"]
+        self.assertTrue(any(record["recordType"] == "세특" and record["academicYear"] == 2026 for record in student_records))
+        with self.store._connect() as connection:  # noqa: SLF001
+            restored = connection.execute("SELECT content_body FROM TB_STUDENT_RECORD WHERE record_id = 694").fetchone()
+        self.assertIsNotNone(restored)
+        self.assertEqual(restored["content_body"], "경제 세특: ESG경영 탐구.")
+
+    def test_save_snapshot_updates_same_record_key_without_creating_duplicates(self) -> None:
+        self.store.save_snapshot(self.payload, user_key="key-upsert")
+        next_payload = json.loads(json.dumps(self.payload))
+        next_payload["studentRecords"] = [
+            {
+                "academicYear": 2026,
+                "semester": 1,
+                "recordType": "세특",
+                "description": "세특 수정 내용",
+            }
+        ]
+        self.store.save_snapshot(next_payload, user_key="key-upsert")
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                """
+                SELECT sp.student_id
+                FROM TB_STUDENT_PROFILE sp
+                JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
+                WHERE a.login_id = ?
+                """,
+                ("key-upsert",),
+            ).fetchone()
+            self.assertIsNotNone(row)
+            sid = int(row["student_id"])
+            count_row = connection.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM TB_STUDENT_RECORD
+                WHERE student_id = ?
+                  AND record_type = '세특'
+                  AND academic_year = 2026
+                  AND semester = 1
+                """,
+                (sid,),
+            ).fetchone()
+            self.assertIsNotNone(count_row)
+            self.assertEqual(int(count_row["cnt"]), 1)
+
+    def test_save_snapshot_keeps_other_users_student_records(self) -> None:
+        self.store.save_snapshot(self.payload, user_key="user-a")
+        self.store.save_snapshot(self.payload, user_key="user-b")
+        with self.store._connect() as connection:  # noqa: SLF001
+            rows = connection.execute(
+                """
+                SELECT a.login_id, sp.student_id
+                FROM TB_STUDENT_PROFILE sp
+                JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
+                WHERE a.login_id IN ('user-a', 'user-b')
+                ORDER BY a.login_id
+                """
+            ).fetchall()
+            self.assertEqual(len(rows), 2)
+            sid_a = int(rows[0]["student_id"])
+            sid_b = int(rows[1]["student_id"])
+            connection.execute(
+                """
+                INSERT INTO TB_STUDENT_RECORD
+                    (student_id, record_type, subject_name, content_body, academic_year, semester)
+                VALUES (?, '세특', '국어', 'A 사용자 세특', 2026, 1)
+                """,
+                (sid_a,),
+            )
+            connection.execute(
+                """
+                INSERT INTO TB_STUDENT_RECORD
+                    (student_id, record_type, subject_name, content_body, academic_year, semester)
+                VALUES (?, '세특', '국어', 'B 사용자 세특', 2030, 2)
+                """,
+                (sid_b,),
+            )
+            connection.commit()
+
+        next_payload = json.loads(json.dumps(self.payload))
+        next_payload["studentRecords"] = [
+            {"academicYear": 2026, "semester": 1, "recordType": "세특", "description": "A 사용자 세특 수정"}
+        ]
+        self.store.save_snapshot(next_payload, user_key="user-a")
+        with self.store._connect() as connection:  # noqa: SLF001
+            a_row = connection.execute(
+                """
+                SELECT content_body FROM TB_STUDENT_RECORD
+                WHERE student_id = ? AND record_type = '세특' AND academic_year = 2026 AND semester = 1
+                ORDER BY record_id ASC
+                LIMIT 1
+                """,
+                (sid_a,),
+            ).fetchone()
+            b_row = connection.execute(
+                """
+                SELECT content_body FROM TB_STUDENT_RECORD
+                WHERE student_id = ? AND record_type = '세특' AND academic_year = 2030 AND semester = 2
+                ORDER BY record_id ASC
+                LIMIT 1
+                """,
+                (sid_b,),
+            ).fetchone()
+        self.assertIsNotNone(a_row)
+        self.assertIsNotNone(b_row)
+        self.assertEqual(a_row["content_body"], "A 사용자 세특 수정")
+        self.assertEqual(b_row["content_body"], "B 사용자 세특")
 
     def test_settings_display_uses_academic_grade_and_latest_csat_grades(self) -> None:
         self.store.save_snapshot(self.payload, user_key="student-3")

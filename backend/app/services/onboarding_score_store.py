@@ -821,10 +821,17 @@ class OnboardingScoreStore:
         semester = 1 if term_raw.startswith("1-") else 2 if term_raw.startswith("2-") else None
         return year, semester
 
+    @staticmethod
+    def _student_record_title_from_content(content: Any) -> str:
+        normalized = re.sub(r"\s+", " ", str(content or "").strip())
+        if not normalized:
+            return ""
+        match = re.match(r"^.+?[.!?。！？]", normalized)
+        return (match.group(0) if match else normalized)[:80]
+
     def _upsert_score_payload(self, connection: sqlite3.Connection, student_id: int, payload: dict[str, Any]) -> None:
         connection.execute("DELETE FROM TB_ACADEMIC_SCORE WHERE student_id = ?", (student_id,))
         connection.execute("DELETE FROM TB_CSAT_SCORE WHERE student_id = ?", (student_id,))
-        connection.execute("DELETE FROM TB_STUDENT_RECORD WHERE student_id = ?", (student_id,))
 
         school_records = payload.get("schoolRecords", [])
         for record in school_records:
@@ -914,21 +921,82 @@ class OnboardingScoreStore:
 
         student_records = payload.get("studentRecords", [])
         for record in student_records:
-            year, semester_no = self._infer_period(record)
-            connection.execute(
-                """
-                INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, academic_year, semester)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    student_id,
-                    "활동",
-                    str(record.get("title") or "활동기록"),
-                    str(record.get("description") or ""),
-                    2026 + (year or 1),
-                    semester_no,
-                ),
-            )
+            record_id = self._safe_int(record.get("recordId") or record.get("record_id"))
+            legacy_year, legacy_semester = self._infer_period(record)
+            academic_year = self._safe_int(record.get("academicYear") or record.get("academic_year"))
+            if academic_year is None:
+                academic_year = 2025 + legacy_year if legacy_year in (1, 2, 3) else 2026
+            semester_no = self._safe_int(record.get("semester")) or legacy_semester or 1
+            record_type = str(record.get("recordType") or record.get("record_type") or "세특").strip()
+            if record_type not in {"세특", "동아리", "봉사", "진로", "수상", "독서", "행동특성"}:
+                record_type = "세특"
+            content = str(record.get("description") if "description" in record else record.get("content_body") if "content_body" in record else "")
+            subject_name = str(record.get("subjectName") or record.get("subject_name") or "").strip() or None
+            existing_record = None
+            if record_id is not None:
+                existing_record = connection.execute(
+                    """
+                    SELECT record_id
+                    FROM TB_STUDENT_RECORD
+                    WHERE record_id = ?
+                      AND student_id = ?
+                      AND NOT (record_type = 'snapshot' AND subject_name = 'onboarding-json')
+                    LIMIT 1
+                    """,
+                    (record_id, student_id),
+                ).fetchone()
+            if existing_record is None:
+                existing_record = connection.execute(
+                    """
+                    SELECT record_id
+                    FROM TB_STUDENT_RECORD
+                    WHERE student_id = ?
+                      AND record_type = ?
+                      AND academic_year = ?
+                      AND semester = ?
+                      AND NOT (record_type = 'snapshot' AND subject_name = 'onboarding-json')
+                    ORDER BY record_id ASC
+                    LIMIT 1
+                    """,
+                    (student_id, record_type, academic_year, semester_no),
+                ).fetchone()
+            if existing_record is None and not content.strip():
+                continue
+            if existing_record is not None:
+                if subject_name is None:
+                    connection.execute(
+                        """
+                        UPDATE TB_STUDENT_RECORD
+                        SET content_body = ?
+                        WHERE record_id = ?
+                        """,
+                        (content, int(existing_record["record_id"])),
+                    )
+                else:
+                    connection.execute(
+                        """
+                        UPDATE TB_STUDENT_RECORD
+                        SET subject_name = ?,
+                            content_body = ?
+                        WHERE record_id = ?
+                        """,
+                        (subject_name, content, int(existing_record["record_id"])),
+                    )
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, academic_year, semester)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        student_id,
+                        record_type,
+                        subject_name,
+                        content,
+                        academic_year,
+                        semester_no,
+                    ),
+                )
 
     def _resolve_goal_admission(self, connection: sqlite3.Connection, university: str, major: str, year: int) -> int:
         univ_code = f"U{abs(hash(university)) % 10_000_000:07d}"
@@ -1093,6 +1161,16 @@ class OnboardingScoreStore:
                 """,
                 (student_id,),
             ).fetchall()
+            student_rows = connection.execute(
+                """
+                SELECT record_id, record_type, subject_name, content_body, academic_year, semester
+                FROM TB_STUDENT_RECORD
+                WHERE student_id = ?
+                  AND NOT (record_type = 'snapshot' AND subject_name = 'onboarding-json')
+                ORDER BY academic_year ASC, semester ASC, record_id ASC
+                """,
+                (student_id,),
+            ).fetchall()
 
         payload: dict[str, Any]
         if row is None:
@@ -1167,13 +1245,57 @@ class OnboardingScoreStore:
                         entry["score"] = str(grade_val)
                         break
             payload["schoolRecords"] = list(grouped.values())
+        if student_rows:
+            existing_records = payload.get("studentRecords", [])
+            files_by_key: dict[tuple[str, str, str], list[Any]] = {}
+            if isinstance(existing_records, list):
+                for item in existing_records:
+                    if not isinstance(item, dict):
+                        continue
+                    key = (
+                        str(item.get("academicYear") or item.get("academic_year") or 2026),
+                        str(item.get("semester") or 1),
+                        str(item.get("recordType") or item.get("record_type") or "세특"),
+                    )
+                    files = item.get("files")
+                    files_by_key[key] = files if isinstance(files, list) else []
+
+            next_student_records: list[dict[str, Any]] = []
+            for srow in student_rows:
+                academic_year = self._safe_int(srow["academic_year"]) or 2026
+                if academic_year < 2026 or academic_year > 2036:
+                    academic_year = 2026
+                semester_no = self._safe_int(srow["semester"]) or 1
+                semester = "2" if semester_no == 2 else "1"
+                record_type = str(srow["record_type"] or "세특").strip()
+                if record_type not in {"세특", "동아리", "봉사", "진로", "수상", "독서", "행동특성"}:
+                    record_type = "세특"
+                content = str(srow["content_body"] or "")
+                key = (str(academic_year), semester, record_type)
+                next_student_records.append(
+                    {
+                        "id": f"{academic_year}-{semester}-{record_type}",
+                        "recordId": int(srow["record_id"]),
+                        "year": "1" if academic_year <= 2026 else "2" if academic_year == 2027 else "3",
+                        "term": "2-final" if semester == "2" else "1-final",
+                        "academicYear": academic_year,
+                        "semester": semester_no,
+                        "recordType": record_type,
+                        "subjectName": str(srow["subject_name"] or ""),
+                        "title": self._student_record_title_from_content(content),
+                        "description": content,
+                        "files": files_by_key.get(key, []),
+                        "updatedAt": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            payload["studentRecords"] = next_student_records
         summary = build_payload_summary(payload)
         return {
             "ok": True,
             "source": "sqlite",
             "savedAt": datetime.now(timezone.utc).isoformat(),
             "summary": summary,
-            "data": payload if (row is not None or mock_rows or school_rows) else None,
+            "data": payload if (row is not None or mock_rows or school_rows or student_rows) else None,
             "settingsDisplay": settings_display,
         }
 

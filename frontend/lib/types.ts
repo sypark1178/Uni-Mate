@@ -49,6 +49,23 @@ export type GradeTerm =
   | "mock-csat-6"
   | "mock-csat-9";
 
+export type StudentRecordAcademicYear =
+  | 2026
+  | 2027
+  | 2028
+  | 2029
+  | 2030
+  | 2031
+  | 2032
+  | 2033
+  | 2034
+  | 2035
+  | 2036;
+
+export type StudentRecordSemester = 1 | 2;
+
+export type StudentRecordType = "세특" | "동아리" | "봉사" | "진로" | "수상" | "독서" | "행동특성";
+
 export type SubjectScoreEntry = {
   id: string;
   subject: string;
@@ -78,8 +95,13 @@ export type UploadedRecordFile = {
 
 export type StudentRecordPeriod = {
   id: string;
+  recordId?: number;
   year: GradeYear;
   term: GradeTerm;
+  academicYear: StudentRecordAcademicYear;
+  semester: StudentRecordSemester;
+  recordType: StudentRecordType;
+  subjectName?: string;
   title: string;
   description: string;
   files: UploadedRecordFile[];
@@ -94,6 +116,9 @@ export type ScoreMemoryStore = {
   activeTab: ScoreTabKey;
   selectedYear: GradeYear;
   selectedTerm: GradeTerm;
+  selectedStudentAcademicYear: StudentRecordAcademicYear;
+  selectedStudentSemester: StudentRecordSemester;
+  selectedStudentRecordType: StudentRecordType;
   updatedAt: string;
 };
 

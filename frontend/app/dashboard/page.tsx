@@ -183,14 +183,6 @@ export default function DashboardPage() {
     };
   }, [analysisDone]);
 
-  useEffect(() => {
-    // 기존회원 로그인 직후에는 서버에서 조회한 상태를 기준점으로 두고
-    // 이전 세션의 dirty 플래그를 초기화한다.
-    if (isLoggedInMember && profileHydrated) {
-      markDraftDirty(false);
-    }
-  }, [isLoggedInMember, profileHydrated]);
-
   const handleSaveAll = async () => {
     if (!isLoggedInMember) {
       setShowSaveModal(true);

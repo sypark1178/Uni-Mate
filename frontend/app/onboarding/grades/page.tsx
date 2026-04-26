@@ -11,9 +11,20 @@ import {
   gradeTermOptions,
   gradeYearOptions,
   scoreTabOptions,
+  studentRecordAcademicYearOptions,
+  studentRecordSemesterOptions,
+  studentRecordTypeOptions,
   useScoreRecords
 } from "@/lib/score-storage";
-import type { GradeTerm, GradeYear, ScoreTabKey, SubjectScoreEntry } from "@/lib/types";
+import type {
+  GradeTerm,
+  GradeYear,
+  ScoreTabKey,
+  StudentRecordAcademicYear,
+  StudentRecordSemester,
+  StudentRecordType,
+  SubjectScoreEntry
+} from "@/lib/types";
 
 const fixedScoreLabels = ["국어", "수학", "영어", "사탐", "과탐"] as const;
 
@@ -132,6 +143,7 @@ export default function OnboardingGradesPage() {
     currentStudentRecord,
     setActiveTab,
     setSelectedPeriod,
+    setSelectedStudentRecordPeriod,
     updateSubjectScore,
     updateSubjectName,
     updateOverallAverage,
@@ -145,6 +157,9 @@ export default function OnboardingGradesPage() {
   const selectedTab = store.activeTab;
   const selectedYear = store.selectedYear;
   const selectedTerm = store.selectedTerm;
+  const selectedStudentAcademicYear = store.selectedStudentAcademicYear;
+  const selectedStudentSemester = store.selectedStudentSemester;
+  const selectedStudentRecordType = store.selectedStudentRecordType;
   const selectedSchoolTerm = useMemo(() => splitSchoolTerm(selectedTerm), [selectedTerm]);
   const selectedMockExamType = useMemo(() => inferMockExamType(selectedTerm), [selectedTerm]);
   const selectedMockMonth = useMemo(() => inferMockMonth(selectedTerm), [selectedTerm]);
@@ -201,10 +216,12 @@ export default function OnboardingGradesPage() {
 
   const currentUploads = useMemo(
     () =>
-      store.uploads
-        .filter((file) => file.sourceTab === selectedTab && file.year === selectedYear && file.term === selectedTerm)
-        .map((file) => file.name),
-    [selectedTab, selectedTerm, selectedYear, store.uploads]
+      selectedTab === "studentRecord"
+        ? currentStudentRecord.files.map((file) => file.name)
+        : store.uploads
+            .filter((file) => file.sourceTab === selectedTab && file.year === selectedYear && file.term === selectedTerm)
+            .map((file) => file.name),
+    [currentStudentRecord.files, selectedTab, selectedTerm, selectedYear, store.uploads]
   );
 
   const fixedSubjectSlots = useMemo(
@@ -254,6 +271,7 @@ export default function OnboardingGradesPage() {
       .map((entry) => `${entry.subject}: ${entry.score}등급`);
   }, [activeScoreRecord]);
   const displayedSubjectCount = fixedSubjectSlots.length + customSubjects.length;
+  const studentRecordPeriodTitle = `${selectedStudentAcademicYear}학년도 / ${selectedStudentSemester}학기 / ${selectedStudentRecordType}`;
 
   const uploadHref = useMemo(() => {
     const params = new URLSearchParams(searchParams.toString());
@@ -333,7 +351,7 @@ export default function OnboardingGradesPage() {
   const uploadTitle = selectedTab === "studentRecord" ? "생기부 / 활동 자료 업로드" : "PDF / 사진 성적 업로드";
   const uploadDescription =
     selectedTab === "studentRecord"
-      ? "생기부, 활동증빙, 특기자료를 올리면 현재 학년/학기 기록과 함께 저장됩니다."
+      ? "생기부, 활동증빙, 특기자료를 올리면 현재 학년도/학기/기록유형 기록과 함께 저장됩니다."
       : "내신과 모의고사 성적표를 올리면 OCR 파이프라인으로 이어집니다.";
 
   return (
@@ -358,8 +376,8 @@ export default function OnboardingGradesPage() {
         ))}
       </div>
 
-      <div className={`mt-4 grid gap-3 ${selectedTab === "schoolRecord" || selectedTab === "mockExam" ? "grid-cols-3" : "grid-cols-2"}`}>
-        {selectedTab !== "mockExam" ? (
+      <div className="mt-4 grid grid-cols-3 gap-3">
+        {selectedTab === "schoolRecord" ? (
           <label className="space-y-2">
             <span className="text-sm text-muted">학년 구분</span>
             <select
@@ -475,21 +493,69 @@ export default function OnboardingGradesPage() {
             </label>
           </>
         ) : null}
-        {selectedTab !== "schoolRecord" && selectedTab !== "mockExam" ? (
-          <label className="space-y-2">
-            <span className="text-sm text-muted">학기 구분</span>
-            <select
-              className="w-full rounded-full border border-line bg-white px-4 py-3"
-              value={selectedTerm}
-              onChange={(event) => setSelectedPeriod(selectedYear, event.target.value as GradeTerm)}
-            >
-              {availableTermOptions.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
+        {selectedTab === "studentRecord" ? (
+          <>
+            <label className="space-y-2">
+              <span className="text-sm text-muted">학년도</span>
+              <select
+                className="w-full rounded-full border border-line bg-white px-4 py-3"
+                value={selectedStudentAcademicYear}
+                onChange={(event) =>
+                  setSelectedStudentRecordPeriod(
+                    Number(event.target.value) as StudentRecordAcademicYear,
+                    selectedStudentSemester,
+                    selectedStudentRecordType
+                  )
+                }
+              >
+                {studentRecordAcademicYearOptions.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm text-muted">학기구분</span>
+              <select
+                className="w-full rounded-full border border-line bg-white px-4 py-3"
+                value={selectedStudentSemester}
+                onChange={(event) =>
+                  setSelectedStudentRecordPeriod(
+                    selectedStudentAcademicYear,
+                    Number(event.target.value) as StudentRecordSemester,
+                    selectedStudentRecordType
+                  )
+                }
+              >
+                {studentRecordSemesterOptions.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm text-muted">기록유형</span>
+              <select
+                className="w-full rounded-full border border-line bg-white px-4 py-3"
+                value={selectedStudentRecordType}
+                onChange={(event) =>
+                  setSelectedStudentRecordPeriod(
+                    selectedStudentAcademicYear,
+                    selectedStudentSemester,
+                    event.target.value as StudentRecordType
+                  )
+                }
+              >
+                {studentRecordTypeOptions.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
         ) : null}
       </div>
 
@@ -500,22 +566,22 @@ export default function OnboardingGradesPage() {
               <span className="text-sm text-muted">활동 제목</span>
               <input
                 className="w-full rounded-xl border border-white bg-white px-4 py-3"
-                placeholder="예: 동아리 프로젝트 / 탐구 활동"
+                placeholder="기록내용의 첫 문장을 제목으로 표시합니다."
                 value={currentStudentRecord.title}
-                onChange={(event) => updateStudentRecordField(selectedYear, selectedTerm, "title", event.target.value)}
+                readOnly
               />
             </label>
             <label className="space-y-2">
-              <span className="text-sm text-muted">특기 / 생기부 메모</span>
+              <span className="text-sm text-muted">특기/생기부 메모</span>
               <textarea
                 className="min-h-[128px] w-full rounded-xl border border-white bg-white px-4 py-3"
-                placeholder="학년/학기별 활동 내용, 교내 수상, 프로젝트 메모를 입력해 주세요."
+                placeholder="학생생활기록부의 기록내용을 입력해 주세요."
                 value={currentStudentRecord.description}
-                onChange={(event) => updateStudentRecordField(selectedYear, selectedTerm, "description", event.target.value)}
+                onChange={(event) => updateStudentRecordField("description", event.target.value)}
               />
             </label>
             <div className="rounded-2xl bg-white px-4 py-4 text-sm leading-6 text-muted">
-              생기부와 활동 자료는 현재 학년/학기 기록에 즉시 저장되고 목표설정과 AI 분석에도 함께 반영됩니다.
+              생기부와 활동 자료는 현재 선택한 {studentRecordPeriodTitle} 기록에 저장되고 목표설정과 AI 분석에도 함께 반영됩니다.
             </div>
           </div>
         ) : (
@@ -602,8 +668,14 @@ export default function OnboardingGradesPage() {
       <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-xs leading-5 text-muted">
         <div>
           현재 선택: {scoreTabOptions.find((tab) => tab.key === selectedTab)?.label} /{" "}
-          {gradeYearOptions.find((item) => item.value === selectedYear)?.label} /{" "}
-          {gradeTermOptions.find((item) => item.value === selectedTerm)?.label}
+          {selectedTab === "studentRecord" ? (
+            studentRecordPeriodTitle
+          ) : (
+            <>
+              {gradeYearOptions.find((item) => item.value === selectedYear)?.label} /{" "}
+              {gradeTermOptions.find((item) => item.value === selectedTerm)?.label}
+            </>
+          )}
         </div>
         {selectedTab !== "studentRecord" ? (
           <div className="mt-1">
@@ -613,6 +685,8 @@ export default function OnboardingGradesPage() {
           </div>
         ) : (
           <div className="mt-1">
+            현재 선택: {studentRecordPeriodTitle}
+            <br />
             생기부 제목: {currentStudentRecord.title || "-"} / 메모: {currentStudentRecord.description || "-"}
           </div>
         )}
