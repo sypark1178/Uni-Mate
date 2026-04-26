@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
+import { onboardingPrimaryCtaClass, onboardingSecondaryOutlineCtaClass } from "@/lib/onboarding-buttons";
 import { getGradeTermOptionsByTab, gradeTermOptions, gradeYearOptions, scoreTabOptions, useScoreRecords } from "@/lib/score-storage";
 import type { GradeTerm, GradeYear, ScoreTabKey } from "@/lib/types";
 
@@ -65,19 +66,11 @@ export default function GradeUploadPage() {
         initialFiles={existingFiles}
         onFilesSelected={(files) => registerUploads(files, tab, year, term)}
       />
-      <div className="mt-6 grid gap-3">
-        <button
-          type="button"
-          onClick={() => void handleBack()}
-          className="rounded-xl bg-navy px-4 py-3 text-center text-sm font-semibold text-white"
-        >
+      <div className="mt-6 grid w-full gap-3">
+        <button type="button" onClick={() => void handleBack()} className={onboardingPrimaryCtaClass}>
           추출 결과 확인하러 가기
         </button>
-        <button
-          type="button"
-          onClick={() => void handleBack()}
-          className="rounded-xl border border-line px-4 py-3 text-center text-sm font-semibold text-muted"
-        >
+        <button type="button" onClick={() => void handleBack()} className={onboardingSecondaryOutlineCtaClass}>
           성적 입력 화면으로 돌아가기
         </button>
       </div>

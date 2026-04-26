@@ -2,12 +2,14 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
+import { onboardingPrimaryCtaClass, onboardingSecondaryOutlineCtaClass } from "@/lib/onboarding-buttons";
 import { safeNavigate } from "@/lib/navigation";
 
 type OnboardingStepProps = {
   step: string;
   title: string;
   subtitle: string;
+  subtitleClassName?: string;
   children: React.ReactNode;
   prevHref?: string;
   prevLabel?: string;
@@ -42,6 +44,7 @@ export function OnboardingStep({
   step,
   title,
   subtitle,
+  subtitleClassName,
   children,
   prevHref,
   prevLabel = "이전으로",
@@ -75,29 +78,29 @@ export function OnboardingStep({
   };
 
   return (
-    <PhoneFrame title={title} subtitle={subtitle}>
-      <div className="mb-5 h-2 overflow-hidden rounded-full bg-slate-200">
-        <div
-          className="h-full rounded-full bg-navy"
-          style={{ width: step === "1/3" ? "33%" : step === "2/3" ? "66%" : "100%" }}
-        />
-      </div>
-      <div className="mb-4 text-sm text-muted">{step} 단계</div>
+    <PhoneFrame
+      title={title}
+      subtitle={subtitle}
+      subtitleClassName={subtitleClassName}
+      topSlot={
+        <>
+          <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full rounded-full bg-navy"
+              style={{ width: step === "1/3" ? "33%" : step === "2/3" ? "66%" : "100%" }}
+            />
+          </div>
+          <div className="mb-4 text-xs leading-5 text-muted">{step} 단계</div>
+        </>
+      }
+    >
       <div className="space-y-4">{children}</div>
       <div className="mt-8 space-y-3">
-        <button
-          type="button"
-          onClick={() => void handleNext()}
-          className="flex w-full items-center justify-center rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white"
-        >
+        <button type="button" onClick={() => void handleNext()} className={onboardingPrimaryCtaClass}>
           {nextLabel}
         </button>
         {resolvedPrevHref ? (
-          <button
-            type="button"
-            onClick={handleBack}
-            className="flex w-full items-center justify-center rounded-xl border border-line px-4 py-3 text-sm font-semibold text-muted"
-          >
+          <button type="button" onClick={handleBack} className={onboardingSecondaryOutlineCtaClass}>
             {prevLabel}
           </button>
         ) : null}

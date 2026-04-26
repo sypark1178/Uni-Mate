@@ -6,7 +6,7 @@ import { OnboardingStep } from "@/components/onboarding-step";
 import { examYears, regionDistrictSchoolMap } from "@/lib/admission-data";
 import { useStudentProfile } from "@/lib/profile-storage";
 
-const gradeOptions = ["고1", "고2", "고3", "N수생"];
+const gradeOptions = ["초등학생", "중학생", "고1", "고2", "고3", "N수생", "학부모", "교육관계자"];
 
 export default function OnboardingBasicPage() {
   const searchParams = useSearchParams();
@@ -14,7 +14,7 @@ export default function OnboardingBasicPage() {
   const regions = Object.keys(regionDistrictSchoolMap);
   const { studentProfile, updateField } = useStudentProfile();
 
-  const selectedGrade = studentProfile.gradeLabel || "고2";
+  const selectedGrade = studentProfile.gradeLabel || "";
   const selectedRegion = studentProfile.region || "서울";
   const selectedDistrict = studentProfile.district || "강남구";
   const selectedSchool = studentProfile.schoolName || "";
@@ -45,11 +45,12 @@ export default function OnboardingBasicPage() {
     <OnboardingStep
       step="1/3"
       title="기본 정보를 알려주세요"
-      subtitle="지역, 학년, 목표 연도는 전형과 일정 계산의 기준이 됩니다."
+      subtitle="학년, 지역, 수능 응시 연도 정보는 전형과 일정 계산의 기준이 됩니다."
+      subtitleClassName="text-xs leading-5 whitespace-nowrap"
       prevHref={returnTo ?? undefined}
       prevLabel={returnTo ? "호출한 메뉴로 돌아가기" : undefined}
       nextHref="/onboarding/grades"
-      nextLabel="성적입력으로"
+      nextLabel="2단계 성적 입력 →"
     >
       <input
         className="w-full rounded-xl border border-line px-4 py-3"
@@ -57,20 +58,20 @@ export default function OnboardingBasicPage() {
         value={studentProfile.name}
         onChange={(event) => updateField("name", event.target.value)}
       />
-      <div className="grid grid-cols-4 gap-2">
+      <select
+        className={`w-full rounded-xl border border-line px-4 py-3 ${selectedGrade ? "text-ink" : "text-muted"}`}
+        value={selectedGrade}
+        onChange={(event) => updateField("gradeLabel", event.target.value)}
+      >
+        <option value="" disabled hidden>
+          학년
+        </option>
         {gradeOptions.map((label) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => updateField("gradeLabel", label)}
-            className={`rounded-full border px-3 py-3 text-sm font-semibold ${
-              selectedGrade === label ? "border-navy bg-navy text-white" : "border-line bg-white"
-            }`}
-          >
+          <option key={label} value={label}>
             {label}
-          </button>
+          </option>
         ))}
-      </div>
+      </select>
       <select className="w-full rounded-xl border border-line px-4 py-3" value={selectedRegion} onChange={(event) => handleRegionChange(event.target.value)}>
         <option value={selectedRegion} hidden>
           {selectedRegion}
@@ -81,6 +82,9 @@ export default function OnboardingBasicPage() {
           </option>
         ))}
       </select>
+      <div className="-mt-1 text-xs leading-snug text-muted">
+        지역인재 등 전형 지원 가능 여부를 판단하는 데 사용됩니다.
+      </div>
       <select className="w-full rounded-xl border border-line px-4 py-3" value={selectedDistrict} onChange={(event) => handleDistrictChange(event.target.value)}>
         <option value={selectedDistrict} hidden>
           {selectedDistrict}
@@ -106,6 +110,9 @@ export default function OnboardingBasicPage() {
           </option>
         ))}
       </select>
+      <div className="-mt-1 text-xs leading-snug text-muted">
+        학교 알리미 데이터를 활용해 내신을 학교별로 알맞게 보정합니다.
+      </div>
       <select
         className="w-full rounded-xl border border-line px-4 py-3"
         value={selectedYear}

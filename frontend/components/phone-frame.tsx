@@ -4,6 +4,9 @@ type PhoneFrameProps = {
   children: ReactNode;
   title?: string;
   subtitle?: string;
+  /** 부제목 `<p>`에 추가할 클래스 (예: 한 줄 고정) */
+  subtitleClassName?: string;
+  topSlot?: ReactNode;
   fullBleed?: boolean;
   statusBarClassName?: string;
   bottomPaddingClassName?: string;
@@ -15,6 +18,8 @@ export function PhoneFrame({
   children,
   title,
   subtitle,
+  subtitleClassName,
+  topSlot,
   fullBleed = false,
   statusBarClassName = "bg-white",
   bottomPaddingClassName = "pb-[66px]",
@@ -57,10 +62,21 @@ export function PhoneFrame({
               : `min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 ${bottomPaddingClassName} pt-14`
           }
         >
+          {topSlot}
           {(title || subtitle) && (
             <header className="pb-3">
               {title && <h1 className="text-[28px] font-semibold tracking-[-0.03em]">{title}</h1>}
-              {subtitle && <p className="mt-2 text-sm leading-6 text-muted">{subtitle}</p>}
+              {subtitle && (
+                <div className={subtitleClassName?.includes("whitespace-nowrap") ? "mt-2 -mx-1 overflow-x-auto px-1" : "mt-2"}>
+                  <p
+                    className={
+                      subtitleClassName ? `text-muted ${subtitleClassName}` : "text-sm leading-6 text-muted"
+                    }
+                  >
+                    {subtitle}
+                  </p>
+                </div>
+              )}
             </header>
           )}
           {children}

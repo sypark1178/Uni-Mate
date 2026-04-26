@@ -120,6 +120,8 @@ export type ScoreMemoryStore = {
   selectedStudentSemester: StudentRecordSemester;
   selectedStudentRecordType: StudentRecordType;
   updatedAt: string;
+  /** 성적 스키마 마이그레이션 (예: 고정 사탐·과탐 제거) */
+  scoreSchemaVersion?: number;
 };
 
 export type StudentProfile = {
