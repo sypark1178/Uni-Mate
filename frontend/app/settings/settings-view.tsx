@@ -7,12 +7,12 @@ import { BottomNav } from "@/components/bottom-nav";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams } from "@/lib/navigation";
 import { compactGoalLine, goalRankNumberToneClass } from "@/lib/goal-display";
-import { buildGoalAnalyses, parseSeededGoals } from "@/lib/planning";
-import { useStudentProfile } from "@/lib/profile-storage";
-import { useScoreRecords } from "@/lib/score-storage";
+import { buildGoalAnalyses, goalStorageKey, parseSeededGoals } from "@/lib/planning";
+import { profileStorageKey, useStudentProfile } from "@/lib/profile-storage";
+import { scoreStorageKey, useScoreRecords } from "@/lib/score-storage";
 import { useGoals } from "@/lib/use-goals";
-import { logoutMember } from "@/lib/member-store";
-import { isDraftDirty, markDraftDirty } from "@/lib/draft-store";
+import { getCurrentMember, logoutMember } from "@/lib/member-store";
+import { clearAllDrafts, isDraftDirty } from "@/lib/draft-store";
 
 function shortenSchoolName(name: string) {
   return name.replace(/등학교$/, "");
@@ -39,6 +39,7 @@ export function SettingsView() {
   });
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const cleanedSearchParams = useMemo(() => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -75,6 +76,41 @@ export function SettingsView() {
     };
     reader.readAsDataURL(file);
     event.target.value = "";
+  };
+
+  const completeLogout = () => {
+    setShowLogoutModal(false);
+    logoutMember();
+    window.location.replace(`${window.location.origin}/login`);
+  };
+
+  const discardLocalChanges = () => {
+    const userKey = getCurrentMember()?.userId?.trim();
+    if (userKey && typeof window !== "undefined") {
+      window.localStorage.removeItem(`${profileStorageKey}:${userKey}`);
+      window.localStorage.removeItem(`${scoreStorageKey}:${userKey}`);
+      window.localStorage.removeItem(`${goalStorageKey}:${userKey}`);
+    }
+    clearAllDrafts();
+  };
+
+  const handleLogoutWithoutSave = () => {
+    discardLocalChanges();
+    completeLogout();
+  };
+
+  const handleSaveAndLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await flushProfileToServer();
+      await flushStoreToServer();
+      await flushGoalsToServer();
+      clearAllDrafts();
+      completeLogout();
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -331,37 +367,61 @@ export function SettingsView() {
       {showLogoutModal ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-5">
           <div className="w-full max-w-[340px] rounded-[24px] bg-white p-5">
-            <h3 className="text-center text-2xl font-bold">로그아웃하시겠어요?</h3>
-            <p className="mt-3 text-center text-sm leading-6 text-muted">로그아웃하면 다시 로그인해야 서비스를 이용할 수 있어요.</p>
-            <div className="mt-5 flex gap-3">
-              <button
-                type="button"
-                className="h-11 flex-1 rounded-xl border border-line text-sm font-semibold"
-                onClick={() => setShowLogoutModal(false)}
-              >
-                아니오
-              </button>
-              <Link
-                href="/login"
-                prefetch={false}
-                className="flex h-11 flex-1 items-center justify-center rounded-xl bg-navy text-sm font-semibold text-white"
-                onClick={async () => {
-                  if (isDraftDirty()) {
-                    const wantsSave = window.confirm("저장되지 않은 변경사항이 있습니다. 로그아웃 전에 저장할까요?");
-                    if (wantsSave) {
-                      await flushProfileToServer();
-                      await flushStoreToServer();
-                      await flushGoalsToServer();
-                      markDraftDirty(false);
-                    }
-                  }
-                  setShowLogoutModal(false);
-                  logoutMember();
-                }}
-              >
-                예
-              </Link>
-            </div>
+            {isDraftDirty() ? (
+              <>
+                <h3 className="text-center text-2xl font-bold">변경사항을 저장할까요?</h3>
+                <p className="mt-3 text-center text-sm leading-6 text-muted">
+                  온보딩 정보 또는 실행정보에 저장되지 않은 변경사항이 있습니다. 로그아웃 전에 백엔드로 저장할 수 있어요.
+                </p>
+                <div className="mt-5 grid gap-3">
+                  <button
+                    type="button"
+                    className="h-11 rounded-xl bg-navy text-sm font-semibold text-white disabled:opacity-60"
+                    disabled={isLoggingOut}
+                    onClick={() => void handleSaveAndLogout()}
+                  >
+                    {isLoggingOut ? "저장 중..." : "저장하고 나가기"}
+                  </button>
+                  <button
+                    type="button"
+                    className="h-11 rounded-xl border border-line text-sm font-semibold"
+                    disabled={isLoggingOut}
+                    onClick={handleLogoutWithoutSave}
+                  >
+                    그냥 나가기
+                  </button>
+                  <button
+                    type="button"
+                    className="h-11 rounded-xl text-sm font-semibold text-muted disabled:opacity-60"
+                    disabled={isLoggingOut}
+                    onClick={() => setShowLogoutModal(false)}
+                  >
+                    취소
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-center text-2xl font-bold">로그아웃하시겠어요?</h3>
+                <p className="mt-3 text-center text-sm leading-6 text-muted">로그아웃하면 다시 로그인해야 서비스를 이용할 수 있어요.</p>
+                <div className="mt-5 flex gap-3">
+                  <button
+                    type="button"
+                    className="h-11 flex-1 rounded-xl border border-line text-sm font-semibold"
+                    onClick={() => setShowLogoutModal(false)}
+                  >
+                    아니오
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-11 flex-1 items-center justify-center rounded-xl bg-navy text-sm font-semibold text-white"
+                    onClick={completeLogout}
+                  >
+                    예
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : null}

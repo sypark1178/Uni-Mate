@@ -77,6 +77,83 @@ class OnboardingScoreStoreTests(unittest.TestCase):
         self.assertEqual(loaded["settingsDisplay"]["schoolGradeAverage"], "2.50")
         self.assertEqual(loaded["settingsDisplay"]["latestMockFourGradeAverage"], "2.75")
 
+    def test_settings_display_uses_weighted_academic_average_by_major_group(self) -> None:
+        profile_payload = {
+            "name": "가중평균회원",
+            "gradeLabel": "고2",
+            "region": "서울",
+            "district": "강남구",
+            "schoolName": "테스트고",
+            "track": "인문",
+            "targetYear": 2027,
+        }
+        self.store.save_profile(profile_payload, user_key="weighted-business")
+        self.store.save_goals([{"university": "테스트대", "major": "경영학과"}], user_key="weighted-business")
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                """
+                SELECT sp.student_id
+                FROM TB_STUDENT_PROFILE sp
+                JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
+                WHERE a.login_id = 'weighted-business'
+                """
+            ).fetchone()
+            self.assertIsNotNone(row)
+            sid = int(row["student_id"])
+            connection.execute("DELETE FROM TB_ACADEMIC_SCORE WHERE student_id = ?", (sid,))
+            connection.executemany(
+                """
+                INSERT INTO TB_ACADEMIC_SCORE
+                    (student_id, school_year, semester, exam_period, subject_name, subject_cat, grade, credit_hours)
+                VALUES (?, ?, ?, ?, ?, '내신', ?, ?)
+                """,
+                [
+                    (sid, 1, "1", "중간", "국어", 2, 2),
+                    (sid, 1, "2", "기말", "국어", 4, 1),
+                    (sid, 1, "1", "중간", "영어", 3, 2),
+                    (sid, 1, "1", "중간", "수학", 2, 2),
+                    (sid, 1, "1", "중간", "사탐", 1, 1),
+                    (sid, 1, "2", "기말", "사탐", 3, 3),
+                    (sid, 1, "1", "중간", "과탐", 5, 4),
+                ],
+            )
+            connection.commit()
+
+        loaded = self.store.get_snapshot(user_key="weighted-business")
+        self.assertEqual(loaded["settingsDisplay"]["schoolGradeAverage"], "2.54")
+
+        self.store.save_goals([{"university": "테스트대", "major": "컴퓨터공학과"}], user_key="weighted-business")
+        loaded_engineering = self.store.get_snapshot(user_key="weighted-business")
+        self.assertEqual(loaded_engineering["settingsDisplay"]["schoolGradeAverage"], "3.17")
+
+    def test_settings_display_uses_latest_mock_group_by_exam_year_and_month(self) -> None:
+        self.store.save_snapshot(self.payload, user_key="mock-latest")
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                "SELECT student_id FROM TB_STUDENT_PROFILE sp JOIN TB_USER_AUTH a ON a.user_id = sp.user_id "
+                "WHERE a.login_id = ?",
+                ("mock-latest",),
+            ).fetchone()
+            self.assertIsNotNone(row)
+            sid = int(row["student_id"])
+            connection.execute("DELETE FROM TB_CSAT_SCORE WHERE student_id = ?", (sid,))
+            connection.executemany(
+                """
+                INSERT INTO TB_CSAT_SCORE
+                    (student_id, exam_year, exam_month, inquiry_type, korean_grade, math_grade, english_grade, social_grade, science_grade)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (sid, 2025, 9, "사회탐구", 1, 1, 1, 1, None),
+                    (sid, 2026, 6, "사회탐구", 2, 3, 4, 5, None),
+                    (sid, 2026, 9, "과학탐구", 3, 4, 2, None, 1),
+                ],
+            )
+            connection.commit()
+
+        loaded = self.store.get_snapshot(user_key="mock-latest")
+        self.assertEqual(loaded["settingsDisplay"]["latestMockFourGradeAverage"], "2.50")
+
     def test_save_snapshot_overwrites_same_user_key(self) -> None:
         self.store.save_snapshot(self.payload, user_key="student-1")
         next_payload = json.loads(json.dumps(self.payload))

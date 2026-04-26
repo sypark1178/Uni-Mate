@@ -21,6 +21,29 @@ export type ScoreSettingsDisplay = {
   schoolGradeAverage: string;
   latestMockFourGradeAverage: string;
 };
+
+type UseScoreRecordsOptions = {
+  useDbSchoolAverage?: boolean;
+  useDbMockAverage?: boolean;
+};
+
+function normalizeSettingsDisplay(raw: unknown): ScoreSettingsDisplay | null {
+  if (
+    raw &&
+    typeof raw === "object" &&
+    "schoolGradeAverage" in raw &&
+    "latestMockFourGradeAverage" in raw &&
+    typeof raw.schoolGradeAverage === "string" &&
+    typeof raw.latestMockFourGradeAverage === "string"
+  ) {
+    return {
+      schoolGradeAverage: raw.schoolGradeAverage,
+      latestMockFourGradeAverage: raw.latestMockFourGradeAverage
+    };
+  }
+  return null;
+}
+
 function getCurrentUserKey() {
   return getCurrentMember()?.userId?.trim() || "local-user";
 }
@@ -31,7 +54,7 @@ function getScopedScoreStorageKey() {
 export const scoreTabOptions: Array<{ key: ScoreTabKey; label: string }> = [
   { key: "schoolRecord", label: "내신" },
   { key: "mockExam", label: "모의고사" },
-  { key: "studentRecord", label: "특기 / 생기부" }
+  { key: "studentRecord", label: "특기/생기부" }
 ];
 
 export const gradeYearOptions: Array<{ value: GradeYear; label: string }> = [
@@ -329,15 +352,9 @@ async function loadServerStore(userKey?: string): Promise<{
       return { store: null, settingsDisplay: null };
     }
 
-    const payload = (await response.json()) as { data?: unknown; settingsDisplay?: ScoreSettingsDisplay | null };
+    const payload = (await response.json()) as { data?: unknown; settingsDisplay?: unknown };
     const store = payload.data ? normalizeScoreStore(payload.data) : null;
-    const settingsDisplay =
-      payload.settingsDisplay &&
-      typeof payload.settingsDisplay.schoolGradeAverage === "string" &&
-      typeof payload.settingsDisplay.latestMockFourGradeAverage === "string"
-        ? payload.settingsDisplay
-        : null;
-    return { store, settingsDisplay };
+    return { store, settingsDisplay: normalizeSettingsDisplay(payload.settingsDisplay) };
   } catch {
     return { store: null, settingsDisplay: null };
   }
@@ -345,18 +362,24 @@ async function loadServerStore(userKey?: string): Promise<{
 
 async function persistStoreToServer(nextStore: ScoreMemoryStore) {
   if (typeof window === "undefined") {
-    return;
+    return null;
   }
 
   try {
-    await fetch("/api/onboarding/scores", {
+    const response = await fetch("/api/onboarding/scores", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-user-key": getCurrentUserKey() },
       body: JSON.stringify(nextStore),
       keepalive: true
     });
+    if (!response.ok) {
+      return null;
+    }
+    const payload = (await response.json()) as { settingsDisplay?: unknown };
+    return normalizeSettingsDisplay(payload.settingsDisplay);
   } catch {
     // Keep local snapshot even if the backend bridge is temporarily unavailable.
+    return null;
   }
 }
 
@@ -396,14 +419,29 @@ function computeAverage(records: GradePeriodRecord[]) {
   return formatSummaryAverage(average);
 }
 
-export function buildScoreSummary(store: ScoreMemoryStore, settingsDisplay: ScoreSettingsDisplay | null = null) {
+export function buildScoreSummary(
+  store: ScoreMemoryStore,
+  settingsDisplay: ScoreSettingsDisplay | null = null,
+  useDbSchoolAverage = true,
+  useDbMockAverage = true
+) {
+  const localSchoolAverage = computeAverage(store.schoolRecords);
+  const dbSchoolAverage =
+    useDbSchoolAverage && settingsDisplay?.schoolGradeAverage && settingsDisplay.schoolGradeAverage !== "-"
+      ? settingsDisplay.schoolGradeAverage
+      : null;
+  const localMockAverage = computeAverage(store.mockExams);
+  const dbMockAverage =
+    useDbMockAverage && settingsDisplay?.latestMockFourGradeAverage && settingsDisplay.latestMockFourGradeAverage !== "-"
+      ? settingsDisplay.latestMockFourGradeAverage
+      : null;
   return {
-    schoolAverage: computeAverage(store.schoolRecords),
-    mockAverage: computeAverage(store.mockExams),
-    /** 설정 화면 전용: TB_ACADEMIC_SCORE 등급(grade) 평균(소수 2자리), 없으면 null → 화면에서 schoolAverage로 대체 */
-    settingsSchoolFromDb: settingsDisplay?.schoolGradeAverage ?? null,
-    /** 설정 화면 전용: TB_CSAT_SCORE 최신 4과목 등급 평균(소수 2자리), 없으면 null */
-    settingsMockFromDb: settingsDisplay?.latestMockFourGradeAverage ?? null,
+    schoolAverage: dbSchoolAverage ?? localSchoolAverage,
+    mockAverage: dbMockAverage ?? localMockAverage,
+    /** DB 기준: TB_ACADEMIC_SCORE의 과목별 이수단위 가중 평균을 학과군별 반영 과목으로 재평균 */
+    settingsSchoolFromDb: dbSchoolAverage,
+    /** DB 기준: TB_CSAT_SCORE의 시험년도 > 시험월도 최신 모의고사 평균 */
+    settingsMockFromDb: dbMockAverage,
     studentRecordCount: store.studentRecords.filter((record) => record.title || record.description || record.files.length > 0).length,
     uploadCount: store.uploads.length
   };
@@ -418,7 +456,9 @@ function getStoreTimestamp(store: ScoreMemoryStore | null) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-export function useScoreRecords() {
+export function useScoreRecords(options: UseScoreRecordsOptions = {}) {
+  const useDbSchoolAverage = options.useDbSchoolAverage ?? true;
+  const useDbMockAverage = options.useDbMockAverage ?? true;
   const [store, setStore] = useState<ScoreMemoryStore>(defaultScoreMemoryStore);
   const [settingsDisplay, setSettingsDisplay] = useState<ScoreSettingsDisplay | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -460,7 +500,7 @@ export function useScoreRecords() {
         resolvedStore = localStore;
       }
 
-      const resolvedHints: ScoreSettingsDisplay | null = draftWins ? null : serverHints;
+      const resolvedHints: ScoreSettingsDisplay | null = serverHints;
       const finalStore = resolvedStore ?? defaultScoreMemoryStore;
 
       if (!cancelled) {
@@ -628,7 +668,10 @@ export function useScoreRecords() {
 
   const flushStoreToServer = async () => {
     persistStore(store);
-    await persistStoreToServer(store);
+    const serverHints = await persistStoreToServer(store);
+    if (serverHints) {
+      setSettingsDisplay(serverHints);
+    }
     return store;
   };
 
@@ -640,7 +683,10 @@ export function useScoreRecords() {
   }, [store]);
 
   const currentStudentRecord = useMemo(() => getStudentRecord(store, store.selectedYear, store.selectedTerm), [store]);
-  const summary = useMemo(() => buildScoreSummary(store, settingsDisplay), [store, settingsDisplay]);
+  const summary = useMemo(
+    () => buildScoreSummary(store, settingsDisplay, useDbSchoolAverage, useDbMockAverage),
+    [store, settingsDisplay, useDbSchoolAverage, useDbMockAverage]
+  );
 
   return {
     store,

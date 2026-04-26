@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
 import { UploadDropzone } from "@/components/upload-dropzone";
@@ -16,7 +16,6 @@ import {
 import type { GradeTerm, GradeYear, ScoreTabKey, SubjectScoreEntry } from "@/lib/types";
 
 const fixedScoreLabels = ["국어", "수학", "영어", "사탐", "과탐"] as const;
-const coreAverageSubjects = ["국어", "수학", "영어"] as const;
 
 function parseNumericScore(value: string) {
   const trimmed = value.trim();
@@ -28,7 +27,7 @@ function parseNumericScore(value: string) {
 }
 
 function formatAverageValue(value: number) {
-  return value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+  return value.toFixed(2);
 }
 
 function isScoreTabKey(value: string | null): value is ScoreTabKey {
@@ -107,11 +106,26 @@ function buildFixedSubjectSlots(subjects: SubjectScoreEntry[]) {
   }));
 }
 
+function calculateDisplayedSubjectAverage(subjects: SubjectScoreEntry[]) {
+  const values = subjects
+    .filter((entry) => entry.subject.trim())
+    .map((entry) => entry.score)
+    .map(parseNumericScore)
+    .filter((value): value is number => value !== null);
+
+  if (values.length === 0) {
+    return "";
+  }
+
+  return formatAverageValue(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
 const subjectGradeOptions = ["1", "2", "3", "4", "5"] as const;
 
 export default function OnboardingGradesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const initialAverageCalculatedKeys = useRef(new Set<string>());
   const {
     store,
     currentScoreRecord,
@@ -126,7 +140,7 @@ export default function OnboardingGradesPage() {
     updateStudentRecordField,
     registerUploads,
     flushStoreToServer
-  } = useScoreRecords();
+  } = useScoreRecords({ useDbSchoolAverage: false, useDbMockAverage: false });
 
   const selectedTab = store.activeTab;
   const selectedYear = store.selectedYear;
@@ -199,23 +213,35 @@ export default function OnboardingGradesPage() {
   );
 
   useEffect(() => {
-    if (!activeScoreRecord || selectedTab === "studentRecord") {
+    if (selectedTab !== "schoolRecord" || !activeScoreRecord) {
       return;
     }
 
-    const inquiryScore =
-      activeScoreRecord.subjects.find((entry) => entry.subject.trim() === "사탐")?.score ??
-      activeScoreRecord.subjects.find((entry) => entry.subject.trim() === "과탐")?.score ??
-      "";
-    const values = [...coreAverageSubjects.map((subjectName) => activeScoreRecord.subjects.find((entry) => entry.subject.trim() === subjectName)?.score ?? ""), inquiryScore]
-      .map(parseNumericScore)
-      .filter((value): value is number => value !== null);
+    const recordKey = `${selectedTab}:${selectedYear}:${selectedTerm}`;
+    if (initialAverageCalculatedKeys.current.has(recordKey)) {
+      return;
+    }
 
-    const nextAverage = values.length === 0 ? "" : formatAverageValue(values.reduce((sum, value) => sum + value, 0) / values.length);
+    const nextAverage = calculateDisplayedSubjectAverage(activeScoreRecord.subjects);
+    if (!nextAverage) {
+      return;
+    }
+
+    initialAverageCalculatedKeys.current.add(recordKey);
     if (activeScoreRecord.overallAverage !== nextAverage) {
       updateOverallAverage(selectedTab, selectedYear, selectedTerm, nextAverage);
     }
   }, [activeScoreRecord, selectedTab, selectedTerm, selectedYear, updateOverallAverage]);
+
+  const handleSubjectScoreChange = (entry: SubjectScoreEntry, value: string) => {
+    if (selectedTab === "studentRecord") return;
+    if (!activeScoreRecord) return;
+    const nextSubjects = activeScoreRecord.subjects.map((subject) => (subject.id === entry.id ? { ...subject, score: value } : subject));
+    updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, value);
+    if (selectedTab === "schoolRecord" || selectedTab === "mockExam") {
+      updateOverallAverage(selectedTab, selectedYear, selectedTerm, calculateDisplayedSubjectAverage(nextSubjects));
+    }
+  };
 
   const customSubjects = useMemo(
     () => activeScoreRecord?.subjects.filter((entry) => entry.isCustom && entry.subject.trim()) ?? [],
@@ -277,7 +303,7 @@ export default function OnboardingGradesPage() {
   };
 
   const handleDeleteSubject = () => {
-    if (selectedTab === "studentRecord" || customSubjects.length === 0) {
+    if (selectedTab === "studentRecord" || !activeScoreRecord || customSubjects.length === 0) {
       window.alert("삭제할 추가 과목이 없습니다.");
       return;
     }
@@ -295,9 +321,13 @@ export default function OnboardingGradesPage() {
       return;
     }
 
+    const matchIds = new Set(matches.map((entry) => entry.id));
+    const nextSubjects = activeScoreRecord.subjects.filter((entry) => !matchIds.has(entry.id));
+
     matches.forEach((entry) => {
       removeSubject(selectedTab, selectedYear, selectedTerm, entry.id);
     });
+    updateOverallAverage(selectedTab, selectedYear, selectedTerm, calculateDisplayedSubjectAverage(nextSubjects));
   };
 
   const uploadTitle = selectedTab === "studentRecord" ? "생기부 / 활동 자료 업로드" : "PDF / 사진 성적 업로드";
@@ -497,7 +527,7 @@ export default function OnboardingGradesPage() {
                   value={entry?.score ?? ""}
                   onChange={(event) => {
                     if (!entry) return;
-                    updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, event.target.value);
+                    handleSubjectScoreChange(entry, event.target.value);
                   }}
                   className="w-full rounded-xl border border-white bg-white px-4 py-3 text-ink"
                 >
@@ -516,7 +546,7 @@ export default function OnboardingGradesPage() {
                 <span className="text-sm text-muted">{entry.subject}</span>
                 <select
                   value={entry.score}
-                  onChange={(event) => updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, event.target.value)}
+                  onChange={(event) => handleSubjectScoreChange(entry, event.target.value)}
                   className="w-full rounded-xl border border-white bg-white px-4 py-3 text-ink"
                 >
                   <option value="">등급 선택</option>
@@ -537,8 +567,8 @@ export default function OnboardingGradesPage() {
                 type="text"
                 inputMode="decimal"
                 value={activeScoreRecord?.overallAverage ?? ""}
-                readOnly
-                placeholder="자동 계산"
+                onChange={(event) => updateOverallAverage(selectedTab, selectedYear, selectedTerm, event.target.value)}
+                placeholder="자동 계산 / 수기 입력"
                 className="w-full rounded-xl border border-white bg-white px-4 py-3"
               />
             </label>

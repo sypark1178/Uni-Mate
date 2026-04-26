@@ -9,6 +9,7 @@ import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams } from "@/lib/navigation";
 import { parseSeededGoals } from "@/lib/planning";
 import { useGoals } from "@/lib/use-goals";
+import { markDraftDirty } from "@/lib/draft-store";
 
 type ExecutionItem = {
   title: string;
@@ -122,6 +123,7 @@ export default function ExecutionPage() {
   }, [trendValues]);
 
   const toggleItem = (title: string) => {
+    markDraftDirty(true);
     setItemsByMode((prev) => ({
       ...prev,
       [mode]: prev[mode].map((item) =>

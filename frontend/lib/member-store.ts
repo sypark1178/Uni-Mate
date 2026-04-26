@@ -14,6 +14,21 @@ export type MemberRecord = {
 const memberStorageKey = "uni-mate-members";
 const currentMemberStorageKey = "uni-mate-current-member";
 
+function clearLegacyCurrentMember() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.removeItem(currentMemberStorageKey);
+}
+
+function writeCurrentMember(member: MemberRecord) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  clearLegacyCurrentMember();
+  window.sessionStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
+}
+
 /** 로그인 입력: 공백·호환 문자 정리 (복사 붙여넣기 대비) */
 export function normalizeLoginInput(value: string) {
   const trimmed = value.trim().toLowerCase().replace(/[\u200B-\u200D\uFEFF]/g, "");
@@ -214,7 +229,7 @@ export function loginMember(loginValue: string, passwordValue: string) {
 
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
+      writeCurrentMember(member);
     } catch {
       /* 저장 실패해도 세션 이동은 진행 (비공개 모드 등) */
     }
@@ -269,7 +284,7 @@ export async function loginMemberWithServerFallback(loginValue: string, password
         createdAt: new Date().toISOString()
       };
       upsertMemberInStore(member);
-      window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
+      writeCurrentMember(member);
       return { ok: true as const, member };
     }
 
@@ -322,7 +337,7 @@ export async function loginGuestBySavedContact(email: string) {
       role: "비회원",
       createdAt: new Date().toISOString()
     };
-    window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(guestMember));
+    writeCurrentMember(guestMember);
     return { ok: true as const, member: guestMember, snapshot: payload.data.snapshot };
   } catch {
     return { ok: false as const, error: "임시 저장 조회 중 오류가 발생했습니다." };
@@ -335,7 +350,8 @@ export function getCurrentMember() {
   }
 
   try {
-    const raw = window.localStorage.getItem(currentMemberStorageKey);
+    clearLegacyCurrentMember();
+    const raw = window.sessionStorage.getItem(currentMemberStorageKey);
     return raw ? normalizeMember(JSON.parse(raw)) : null;
   } catch {
     return null;
@@ -346,12 +362,10 @@ export function logoutMember() {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.removeItem(currentMemberStorageKey);
+  clearLegacyCurrentMember();
+  window.sessionStorage.removeItem(currentMemberStorageKey);
 }
 
 export function setCurrentMember(member: MemberRecord) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
+  writeCurrentMember(member);
 }

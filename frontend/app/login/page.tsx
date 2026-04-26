@@ -5,7 +5,6 @@ import Link from "next/link";
 import { PhoneFrame } from "@/components/phone-frame";
 import { ensureMemberSeeds, loginGuestBySavedContact, loginMemberWithServerFallback } from "@/lib/member-store";
 import { clearAllDrafts } from "@/lib/draft-store";
-import { getCurrentMember } from "@/lib/member-store";
 import { profileStorageKey } from "@/lib/profile-storage";
 import { scoreStorageKey } from "@/lib/score-storage";
 import { goalStorageKey } from "@/lib/planning";
@@ -17,9 +16,6 @@ export default function LoginPage() {
 
   useEffect(() => {
     ensureMemberSeeds();
-    if (getCurrentMember()?.userId) {
-      goDashboard();
-    }
   }, []);
 
   /** 클라이언트 라우터 대신 전체 문서 이동 — Turbo·미리보기에서도 홈으로 확실히 전환 */

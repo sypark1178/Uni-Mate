@@ -19,132 +19,200 @@ def build_payload_summary(payload: dict[str, Any]) -> dict[str, int]:
     }
 
 
-def compute_settings_display_from_tables(connection: sqlite3.Connection, student_id: int) -> dict[str, str]:
-    """설정 화면용 점수:
-    - 내신: 최신 시점(학년>학기>중간/기말)에서 국/영/수/사탐/과탐 평균
-    - 모의: 최신 1건에서 국/영/수 + inquiry_type에 따른 탐구(사탐/과탐) 평균
-    """
-
-    def _to_float(value: Any) -> float | None:
-        if value is None:
-            return None
-        try:
-            return float(int(value))
-        except (TypeError, ValueError):
-            return None
-
-    def _normalize_academic_subject(subject_name: Any) -> str | None:
-        normalized = str(subject_name or "").strip().replace(" ", "")
-        if not normalized:
-            return None
-        if "국어" in normalized:
-            return "국어"
-        if "영어" in normalized:
-            return "영어"
-        if "수학" in normalized:
-            return "수학"
-        if "사탐" in normalized or "사회탐구" in normalized:
-            return "사탐"
-        if "과탐" in normalized or "과학탐구" in normalized:
-            return "과탐"
+def _to_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
         return None
 
-    def _exam_period_rank(exam_period: Any) -> int:
-        period = str(exam_period or "").strip()
-        if "기말" in period or "final" in period.lower():
-            return 2
-        if "중간" in period or "mid" in period.lower():
-            return 1
-        return 0
 
-    school_grade = "-"
-    latest_period = connection.execute(
+def _normalize_academic_subject(subject_name: Any) -> str | None:
+    normalized = str(subject_name or "").strip().replace(" ", "")
+    if not normalized:
+        return None
+    if "국어" in normalized:
+        return "국어"
+    if "영어" in normalized:
+        return "영어"
+    if "수학" in normalized:
+        return "수학"
+    if "사탐" in normalized or "사회탐구" in normalized:
+        return "사탐"
+    if "과탐" in normalized or "과학탐구" in normalized:
+        return "과탐"
+    return None
+
+
+def _academic_subjects_for_major(major: Any) -> list[str]:
+    normalized = str(major or "").strip().replace(" ", "")
+    if not normalized:
+        return ["국어", "영어", "수학"]
+
+    business_keywords = (
+        "경영",
+        "경제",
+        "사회과학",
+        "사회학",
+        "행정",
+        "정치",
+        "외교",
+        "국제",
+        "통상",
+        "무역",
+        "회계",
+        "세무",
+        "금융",
+    )
+    engineering_keywords = (
+        "전기",
+        "전자",
+        "컴퓨터",
+        "소프트웨어",
+        "정보통신",
+        "화학공학",
+        "화확공학",
+        "화공",
+        "기계",
+        "자동차",
+        "공학",
+    )
+
+    if any(keyword in normalized for keyword in business_keywords):
+        return ["국어", "영어", "수학", "사탐"]
+    if any(keyword in normalized for keyword in engineering_keywords):
+        return ["국어", "영어", "수학", "과탐"]
+    return ["국어", "영어", "수학"]
+
+
+def _resolve_primary_major(connection: sqlite3.Connection, student_id: int) -> str:
+    row = connection.execute(
         """
-        SELECT school_year, semester, exam_period
-        FROM TB_ACADEMIC_SCORE
-        WHERE student_id = ? AND grade IS NOT NULL
-        ORDER BY
-            COALESCE(school_year, 0) DESC,
-            COALESCE(CAST(semester AS INTEGER), 0) DESC,
-            CASE
-                WHEN lower(coalesce(exam_period, '')) LIKE '%기말%' OR lower(coalesce(exam_period, '')) LIKE '%final%' THEN 2
-                WHEN lower(coalesce(exam_period, '')) LIKE '%중간%' OR lower(coalesce(exam_period, '')) LIKE '%mid%' THEN 1
-                ELSE 0
-            END DESC,
-            score_id DESC
+        SELECT d.dept_name
+        FROM TB_APPLICATION_LIST a
+        JOIN TB_ADMISSION_TYPE atp ON atp.admission_id = a.admission_id
+        JOIN TB_DEPARTMENT d ON d.dept_id = atp.dept_id
+        WHERE a.student_id = ?
+        ORDER BY a.priority_no ASC, a.application_id ASC
         LIMIT 1
         """,
         (student_id,),
     ).fetchone()
+    if row is not None and str(row["dept_name"] or "").strip():
+        return str(row["dept_name"] or "").strip()
 
-    if latest_period is not None:
-        period_rows = connection.execute(
-            """
-            SELECT subject_name, grade
-            FROM TB_ACADEMIC_SCORE
-            WHERE student_id = ?
-              AND COALESCE(school_year, 0) = COALESCE(?, 0)
-              AND COALESCE(CAST(semester AS INTEGER), 0) = COALESCE(CAST(? AS INTEGER), 0)
-              AND COALESCE(exam_period, '') = COALESCE(?, '')
-              AND grade IS NOT NULL
-            ORDER BY score_id ASC
-            """,
-            (student_id, latest_period["school_year"], latest_period["semester"], latest_period["exam_period"]),
-        ).fetchall()
+    profile_row = connection.execute(
+        "SELECT target_major FROM TB_STUDENT_PROFILE WHERE student_id = ?",
+        (student_id,),
+    ).fetchone()
+    return "" if profile_row is None else str(profile_row["target_major"] or "").strip()
 
-        by_subject: dict[str, list[float]] = {"국어": [], "영어": [], "수학": [], "사탐": [], "과탐": []}
-        for row in period_rows:
-            key = _normalize_academic_subject(row["subject_name"])
-            val = _to_float(row["grade"])
-            if key is None or val is None:
-                continue
-            by_subject[key].append(val)
 
-        values: list[float] = []
-        for key in ["국어", "영어", "수학", "사탐", "과탐"]:
-            items = by_subject[key]
-            if not items:
-                continue
-            values.append(sum(items) / len(items))
-
-        if values:
-            school_grade = f"{sum(values) / len(values):.2f}"
-
-    mock_avg = "-"
-    latest_mock = connection.execute(
+def _compute_latest_mock_average(connection: sqlite3.Connection, student_id: int) -> str:
+    latest_group = connection.execute(
         """
         SELECT
-            school_year, exam_year, exam_month, inquiry_type,
-            korean_grade, english_grade, math_grade, social_grade, science_grade
+            COALESCE(exam_year, school_year, 0) AS exam_year_key,
+            COALESCE(exam_month, 0) AS exam_month_key
         FROM TB_CSAT_SCORE
         WHERE student_id = ?
-        ORDER BY
-            COALESCE(school_year, 0) DESC,
-            COALESCE(exam_year, 0) DESC,
-            COALESCE(exam_month, 0) DESC,
-            csat_id DESC
+        ORDER BY exam_year_key DESC, exam_month_key DESC, csat_id DESC
         LIMIT 1
         """,
         (student_id,),
     ).fetchone()
+    if latest_group is None:
+        return "-"
 
-    if latest_mock is not None:
-        inquiry_type = str(latest_mock["inquiry_type"] or "").strip()
-        inquiry_grade = latest_mock["social_grade"] if inquiry_type in {"사회탐구", "사탐"} else latest_mock["science_grade"]
+    rows = connection.execute(
+        """
+        SELECT
+            inquiry_type,
+            korean_grade,
+            english_grade,
+            math_grade,
+            social_grade,
+            science_grade
+        FROM TB_CSAT_SCORE
+        WHERE student_id = ?
+          AND COALESCE(exam_year, school_year, 0) = ?
+          AND COALESCE(exam_month, 0) = ?
+        ORDER BY csat_id ASC
+        """,
+        (student_id, latest_group["exam_year_key"], latest_group["exam_month_key"]),
+    ).fetchall()
+
+    row_averages: list[float] = []
+    for row in rows:
+        inquiry_type = str(row["inquiry_type"] or "").strip()
+        inquiry_grade = row["science_grade"] if inquiry_type in {"과학탐구", "과탐"} else row["social_grade"]
         if inquiry_grade is None:
-            inquiry_grade = latest_mock["social_grade"] if latest_mock["social_grade"] is not None else latest_mock["science_grade"]
+            inquiry_grade = row["social_grade"] if row["social_grade"] is not None else row["science_grade"]
 
-        nums = [
-            _to_float(latest_mock["korean_grade"]),
-            _to_float(latest_mock["english_grade"]),
-            _to_float(latest_mock["math_grade"]),
+        values = [
+            _to_float(row["korean_grade"]),
+            _to_float(row["english_grade"]),
+            _to_float(row["math_grade"]),
             _to_float(inquiry_grade),
         ]
-        vals = [v for v in nums if v is not None]
-        if vals:
-            mock_avg = f"{sum(vals) / len(vals):.2f}"
+        valid_values = [value for value in values if value is not None]
+        if valid_values:
+            row_averages.append(sum(valid_values) / len(valid_values))
 
-    return {"schoolGradeAverage": school_grade, "latestMockFourGradeAverage": mock_avg}
+    if not row_averages:
+        return "-"
+    return f"{sum(row_averages) / len(row_averages):.2f}"
+
+
+def compute_settings_display_from_tables(connection: sqlite3.Connection, student_id: int) -> dict[str, str]:
+    """설정 화면용 점수:
+    - 내신: TB_ACADEMIC_SCORE의 과목별 이수단위 가중 평균을 학과군별 반영 과목으로 재평균
+    - 모의: 시험년도 > 시험월도 최신 그룹에서 국/영/수 + inquiry_type에 따른 탐구(사탐/과탐) 평균
+    """
+    weighted_by_subject: dict[str, dict[str, float]] = {
+        "국어": {"gradeTotal": 0.0, "creditTotal": 0.0},
+        "영어": {"gradeTotal": 0.0, "creditTotal": 0.0},
+        "수학": {"gradeTotal": 0.0, "creditTotal": 0.0},
+        "사탐": {"gradeTotal": 0.0, "creditTotal": 0.0},
+        "과탐": {"gradeTotal": 0.0, "creditTotal": 0.0},
+    }
+    rows = connection.execute(
+        """
+        SELECT subject_name, grade, credit_hours
+        FROM TB_ACADEMIC_SCORE
+        WHERE student_id = ?
+          AND grade IS NOT NULL
+        ORDER BY score_id ASC
+        """,
+        (student_id,),
+    ).fetchall()
+
+    for row in rows:
+        subject_key = _normalize_academic_subject(row["subject_name"])
+        grade_value = _to_float(row["grade"])
+        if subject_key is None or grade_value is None:
+            continue
+
+        credit_value = _to_float(row["credit_hours"])
+        if credit_value is None or credit_value <= 0:
+            credit_value = 1.0
+
+        weighted_by_subject[subject_key]["gradeTotal"] += grade_value * credit_value
+        weighted_by_subject[subject_key]["creditTotal"] += credit_value
+
+    subject_averages: dict[str, float] = {}
+    for subject_key, totals in weighted_by_subject.items():
+        if totals["creditTotal"] > 0:
+            subject_averages[subject_key] = totals["gradeTotal"] / totals["creditTotal"]
+
+    target_subjects = _academic_subjects_for_major(_resolve_primary_major(connection, student_id))
+    selected_subject_averages = [subject_averages[key] for key in target_subjects if key in subject_averages]
+    school_grade = "-"
+    if selected_subject_averages:
+        school_grade = f"{sum(selected_subject_averages) / len(selected_subject_averages):.2f}"
+
+    return {"schoolGradeAverage": school_grade, "latestMockFourGradeAverage": _compute_latest_mock_average(connection, student_id)}
 
 
 class OnboardingScoreStore:
@@ -954,6 +1022,7 @@ class OnboardingScoreStore:
                 """,
                 (student_id, json.dumps(payload, ensure_ascii=False)),
             )
+            settings_display = compute_settings_display_from_tables(connection, student_id)
 
         return {
             "ok": True,
@@ -961,6 +1030,7 @@ class OnboardingScoreStore:
             "savedAt": saved_at,
             "summary": summary,
             "data": payload,
+            "settingsDisplay": settings_display,
         }
 
     def get_snapshot(self, user_key: str = "local-user") -> dict[str, Any]:
