@@ -429,6 +429,15 @@ class OnboardingScoreStore:
                     UNIQUE(table_name_en, field_name_en)
                 );
 
+                CREATE TABLE IF NOT EXISTS TB_SUBJECT (
+                    subject_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    subject_name_en TEXT NOT NULL UNIQUE,
+                    subject_name_ko TEXT NOT NULL,
+                    is_required TEXT NOT NULL,
+                    inquiry_type TEXT NOT NULL,
+                    credit_hours INTEGER NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS TB_GUEST_TEMP_SESSION (
                     temp_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     contact_type TEXT NOT NULL,
@@ -446,6 +455,9 @@ class OnboardingScoreStore:
             self._ensure_csat_columns(connection)
             self._ensure_metadata_field_map_columns(connection)
             self._ensure_metadata_aligned_columns(connection)
+            self._ensure_subject_table(connection)
+            self._seed_subject_table(connection)
+            self._upsert_subject_metadata(connection)
             connection.execute(
                 """
                 INSERT INTO TB_USER (email, password_hash, user_type, is_active)
@@ -578,6 +590,163 @@ class OnboardingScoreStore:
             connection.execute("ALTER TABLE TB_METADATA_FIELD_MAP ADD COLUMN table_description TEXT")
         if "field_description" not in col_names:
             connection.execute("ALTER TABLE TB_METADATA_FIELD_MAP ADD COLUMN field_description TEXT")
+
+    def _ensure_subject_table(self, connection: sqlite3.Connection) -> None:
+        """기존 DB에 TB_SUBJECT 컬럼 누락이 있으면 보강합니다."""
+        rows = connection.execute("PRAGMA table_info(TB_SUBJECT)").fetchall()
+        if not rows:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS TB_SUBJECT (
+                    subject_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    subject_name_en TEXT NOT NULL UNIQUE,
+                    subject_name_ko TEXT NOT NULL,
+                    is_required TEXT NOT NULL,
+                    inquiry_type TEXT NOT NULL,
+                    credit_hours INTEGER NOT NULL
+                )
+                """
+            )
+            return
+        col_names = {str(r[1]) for r in rows}
+        if "subject_name_en" not in col_names and "subject_name" in col_names:
+            connection.execute("ALTER TABLE TB_SUBJECT RENAME COLUMN subject_name TO subject_name_en")
+            col_names.remove("subject_name")
+            col_names.add("subject_name_en")
+        if "subject_name_ko" not in col_names and "subject_nam" in col_names:
+            connection.execute("ALTER TABLE TB_SUBJECT RENAME COLUMN subject_nam TO subject_name_ko")
+            col_names.remove("subject_nam")
+            col_names.add("subject_name_ko")
+        self._ensure_columns(
+            connection,
+            "TB_SUBJECT",
+            {
+                "subject_name_en": "TEXT",
+                "subject_name_ko": "TEXT",
+                "is_required": "TEXT",
+                "inquiry_type": "TEXT",
+                "credit_hours": "INTEGER",
+            },
+        )
+
+    def _seed_subject_table(self, connection: sqlite3.Connection) -> None:
+        subject_rows = [
+            ("korean_language", "국어", "필수", "기본", 4),
+            ("english", "영어", "필수", "기본", 4),
+            ("mathematics", "수학", "필수", "기본", 4),
+            ("life_and_ethics", "생활과윤리", "선택", "사회탐구", 3),
+            ("ethics_and_thought", "윤리와 사상", "선택", "사회탐구", 3),
+            ("korean_geography", "한국지리", "선택", "사회탐구", 3),
+            ("world_geography", "세계지리", "선택", "사회탐구", 3),
+            ("east_asian_history", "동아시아사", "선택", "사회탐구", 3),
+            ("world_history", "세계사", "선택", "사회탐구", 3),
+            ("economics", "경제", "선택", "사회탐구", 3),
+            ("politics_and_law", "정치와법", "선택", "사회탐구", 3),
+            ("society_and_culture", "사회문화", "선택", "사회탐구", 3),
+            ("physics_1", "물리학 I", "선택", "과학탐구", 3),
+            ("chemistry_1", "화학 I", "선택", "과학탐구", 3),
+            ("earth_science_1", "지구과학 I", "선택", "과학탐구", 3),
+            ("life_science_1", "생명과학 I", "선택", "과학탐구", 3),
+            ("physics_2", "물리학II", "선택", "과학탐구", 3),
+            ("chemistry_2", "화학II", "선택", "과학탐구", 3),
+            ("earth_science_2", "지구과학II", "선택", "과학탐구", 3),
+            ("life_science_2", "생명과학 II", "선택", "과학탐구", 3),
+            ("german_1", "독일어 I", "선택", "제2외국어", 3),
+            ("french_1", "프랑스어 I", "선택", "제2외국어", 3),
+            ("spanish_1", "스페인어 I", "선택", "제2외국어", 3),
+            ("chinese_1", "중국어 I", "선택", "제2외국어", 3),
+            ("japanese_1", "일본어 I", "선택", "제2외국어", 3),
+            ("russian_1", "러시아어 I", "선택", "제2외국어", 3),
+            ("vietnamese_1", "베트남어 I", "선택", "제2외국어", 3),
+            ("arabic_1", "아랍어 I", "선택", "제2외국어", 3),
+            ("classical_chinese_1", "한문 I", "선택", "제2외국어", 3),
+        ]
+        connection.executemany(
+            """
+            INSERT INTO TB_SUBJECT (subject_name_en, subject_name_ko, is_required, inquiry_type, credit_hours)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(subject_name_en) DO UPDATE
+            SET subject_name_ko = excluded.subject_name_ko,
+                is_required = excluded.is_required,
+                inquiry_type = excluded.inquiry_type,
+                credit_hours = excluded.credit_hours
+            """,
+            subject_rows,
+        )
+
+    def _upsert_subject_metadata(self, connection: sqlite3.Connection) -> None:
+        table_name_en = "TB_SUBJECT"
+        metadata_rows = [
+            (
+                table_name_en,
+                "과목 정보",
+                "subject_id",
+                "과목ID",
+                "과목별 이수단위/탐구유형 기준 테이블",
+                "과목 고유 식별자(PK)",
+                "onboarding_score_store.py",
+            ),
+            (
+                table_name_en,
+                "과목 정보",
+                "subject_name_en",
+                "과목영문명",
+                "과목별 이수단위/탐구유형 기준 테이블",
+                "영문 과목명(코드형, unique)",
+                "onboarding_score_store.py",
+            ),
+            (
+                table_name_en,
+                "과목 정보",
+                "subject_name_ko",
+                "과목명",
+                "과목별 이수단위/탐구유형 기준 테이블",
+                "국문 과목명",
+                "onboarding_score_store.py",
+            ),
+            (
+                table_name_en,
+                "과목 정보",
+                "is_required",
+                "필수여부",
+                "과목별 이수단위/탐구유형 기준 테이블",
+                "필수/선택 구분",
+                "onboarding_score_store.py",
+            ),
+            (
+                table_name_en,
+                "과목 정보",
+                "inquiry_type",
+                "탐구유형",
+                "과목별 이수단위/탐구유형 기준 테이블",
+                "기본/사회탐구/과학탐구/제2외국어 구분",
+                "onboarding_score_store.py",
+            ),
+            (
+                table_name_en,
+                "과목 정보",
+                "credit_hours",
+                "이수단위",
+                "과목별 이수단위/탐구유형 기준 테이블",
+                "과목별 이수 단위 수",
+                "onboarding_score_store.py",
+            ),
+        ]
+        connection.executemany(
+            """
+            INSERT INTO TB_METADATA_FIELD_MAP
+                (table_name_en, table_name_ko, field_name_en, field_name_ko, table_description, field_description, source_file)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(table_name_en, field_name_en) DO UPDATE
+            SET table_name_ko = excluded.table_name_ko,
+                field_name_ko = excluded.field_name_ko,
+                table_description = excluded.table_description,
+                field_description = excluded.field_description,
+                source_file = excluded.source_file,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            metadata_rows,
+        )
 
     def _ensure_user_columns(self, connection: sqlite3.Connection) -> None:
         """기존 DB에 TB_USER 프로필 이미지 컬럼이 없으면 추가합니다."""
