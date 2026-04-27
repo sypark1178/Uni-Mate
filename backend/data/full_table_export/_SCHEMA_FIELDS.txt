@@ -1,0 +1,204 @@
+### TB_ACADEMIC_SCORE
+  - score_id: INTEGER PK
+  - student_id: INTEGER NOT NULL
+  - school_year: INTEGER
+  - semester: TEXT NOT NULL
+  - exam_period: TEXT
+  - subject_name: TEXT NOT NULL
+  - subject_cat: TEXT
+  - raw_score: REAL
+  - grade: INTEGER
+  - credit_hours: REAL
+  - z_score: REAL
+
+### TB_ADMISSION_CUTOFF
+  - cutoff_id: INTEGER PK
+  - admission_id: INTEGER NOT NULL
+  - cutoff_year: INTEGER NOT NULL
+  - cutoff_50: REAL
+  - cutoff_70: REAL
+  - cutoff_80: REAL
+  - competition_ratio: REAL
+  - avg_grade: REAL
+  - three_grade_possible: INTEGER
+  - record_importance: TEXT
+  - grade_policy_note: TEXT
+  - support_notes: TEXT
+  - source_doc: TEXT
+
+### TB_ADMISSION_TYPE
+  - admission_id: INTEGER PK
+  - dept_id: INTEGER NOT NULL
+  - admission_year: INTEGER NOT NULL
+  - admission_type: TEXT NOT NULL
+  - admission_method: TEXT
+  - recruit_cnt: INTEGER
+  - doc_ratio: REAL
+  - interview_ratio: REAL
+  - csat_required: INTEGER NOT NULL
+  - univ_admission_year: INTEGER
+  - admission_name: TEXT
+  - evaluation_focus: TEXT
+  - key_traits: TEXT
+  - source_doc: TEXT
+
+### TB_AI_ANALYSIS
+  - analysis_id: INTEGER PK
+  - student_id: INTEGER NOT NULL
+  - analysis_type: TEXT
+  - pass_prob: REAL
+  - score_gap: REAL
+  - model_version: TEXT
+  - summary_text: TEXT
+  - analyzed_at: TEXT NOT NULL
+  - analysis_summary: TEXT
+  - record_strength: TEXT
+  - fit_keyword_count: INTEGER
+  - analysis_version: TEXT
+  - created_at: TEXT
+
+### TB_APPLICATION_LIST
+  - application_id: INTEGER PK
+  - student_id: INTEGER NOT NULL
+  - admission_id: INTEGER NOT NULL
+  - strategy_type: TEXT NOT NULL
+  - status: TEXT NOT NULL
+  - priority_no: INTEGER
+  - note: TEXT
+  - priority_rank: INTEGER
+  - analysis_note: TEXT
+
+### TB_CONSULTING_SESSION
+  - session_id: INTEGER PK
+  - student_id: INTEGER NOT NULL
+  - consultant_id: INTEGER
+  - session_date: TEXT
+  - status: TEXT
+  - session_type: TEXT
+  - note: TEXT
+  - memo: TEXT
+
+### TB_CSAT_SCORE
+  - csat_id: INTEGER PK
+  - student_id: INTEGER NOT NULL
+  - exam_year: INTEGER
+  - exam_type: TEXT
+  - korean_grade: INTEGER
+  - math_grade: INTEGER
+  - english_grade: INTEGER
+  - science_grade: INTEGER
+  - total_score: REAL
+  - percentile: REAL
+  - inquiry_type: TEXT
+  - social_grade: INTEGER
+  - school_year: INTEGER
+  - exam_month: INTEGER
+
+### TB_DEPARTMENT
+  - dept_id: INTEGER PK
+  - univ_id: INTEGER NOT NULL
+  - dept_name: TEXT NOT NULL
+  - college_name: TEXT
+  - major_field: TEXT
+  - dept_type: TEXT
+
+### TB_METADATA_FIELD_MAP
+  - meta_id: INTEGER PK
+  - table_name_en: TEXT NOT NULL
+  - table_name_ko: TEXT
+  - field_name_en: TEXT NOT NULL
+  - field_name_ko: TEXT
+  - table_description: TEXT
+  - field_description: TEXT
+  - source_file: TEXT
+  - created_at: TEXT NOT NULL
+  - updated_at: TEXT NOT NULL
+
+### TB_NOTIFICATION
+  - noti_id: INTEGER PK
+  - user_id: INTEGER NOT NULL
+  - noti_type: TEXT
+  - title: TEXT
+  - body: TEXT
+  - is_read: INTEGER NOT NULL
+  - created_at: TEXT NOT NULL
+  - message_body: TEXT
+
+### TB_RECOMMENDATION
+  - rec_id: INTEGER PK
+  - student_id: INTEGER NOT NULL
+  - admission_id: INTEGER NOT NULL
+  - rec_score: REAL
+  - strategy_type: TEXT
+  - reason_text: TEXT
+  - created_at: TEXT NOT NULL
+  - priority_rank: INTEGER
+  - reason_summary: TEXT
+
+### TB_STUDENT_PROFILE
+  - student_id: INTEGER PK
+  - user_id: INTEGER NOT NULL
+  - student_name: TEXT NOT NULL
+  - school_name: TEXT
+  - grade: INTEGER
+  - target_major: TEXT
+  - admission_year: INTEGER
+  - created_at: TEXT NOT NULL
+  - region: TEXT
+  - district: TEXT
+  - track: TEXT
+  - grade_label: TEXT
+  - current_grade: TEXT
+  - residence_city_county: TEXT
+  - residence_town: TEXT
+  - source_row_no: INTEGER
+  - school_sido: TEXT
+  - school_sigungu: TEXT
+  - school_address: TEXT
+  - residence_sido: TEXT
+  - residence_sigungu: TEXT
+  - residence_dong: TEXT
+  - student_grade: TEXT
+  - academic_avg_grade: REAL
+  - record_total_score: REAL
+  - attendance_score: REAL
+  - record_grade_band: TEXT
+
+### TB_STUDENT_RECORD
+  - record_id: INTEGER PK
+  - student_id: INTEGER NOT NULL
+  - record_type: TEXT
+  - subject_name: TEXT
+  - content_body: TEXT
+  - academic_year: INTEGER
+  - semester: INTEGER
+
+### TB_UNIVERSITY
+  - univ_id: INTEGER PK
+  - univ_code: TEXT NOT NULL
+  - univ_name: TEXT NOT NULL
+  - univ_type: TEXT NOT NULL
+  - region: TEXT NOT NULL
+  - homepage_url: TEXT
+  - created_at: TEXT NOT NULL
+
+### TB_USER
+  - user_id: INTEGER PK
+  - email: TEXT NOT NULL
+  - password_hash: TEXT NOT NULL
+  - user_type: TEXT NOT NULL
+  - phone: TEXT
+  - profile_image_url: TEXT
+  - created_at: TEXT NOT NULL
+  - last_login_at: TEXT
+  - is_active: INTEGER NOT NULL
+  - user_alias: TEXT
+
+### TB_USER_AUTH
+  - auth_id: INTEGER PK
+  - user_id: INTEGER NOT NULL
+  - login_id: TEXT NOT NULL
+  - password_hash: TEXT
+  - role: TEXT NOT NULL
+  - created_at: TEXT NOT NULL
+  - updated_at: TEXT NOT NULL
