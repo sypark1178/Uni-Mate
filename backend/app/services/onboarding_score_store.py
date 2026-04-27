@@ -28,6 +28,117 @@ def _to_float(value: Any) -> float | None:
         return None
 
 
+def _round2(value: float) -> float:
+    return round(value + 1e-12, 2)
+
+
+def _avg_non_null(values: list[Any]) -> float | None:
+    nums = [_to_float(v) for v in values]
+    valid = [v for v in nums if v is not None]
+    if not valid:
+        return None
+    return _round2(sum(valid) / len(valid))
+
+
+def _derive_mock_subject_group_averages(row: sqlite3.Row) -> dict[str, float | None]:
+    korean = _to_float(row["korean_grade"])
+    english = _to_float(row["english_grade"])
+    math = _to_float(row["math_grade"])
+    social = _avg_non_null(
+        [
+            row["social_grade"],
+            row["life_and_ethics"],
+            row["ethics_and_thought"],
+            row["korean_geography"],
+            row["world_geography"],
+            row["east_asian_history"],
+            row["world_history"],
+            row["economics"],
+            row["politics_and_law"],
+            row["society_and_culture"],
+        ]
+    )
+    science = _avg_non_null(
+        [
+            row["science_grade"],
+            row["physics_1"],
+            row["chemistry_1"],
+            row["earth_science_1"],
+            row["life_science_1"],
+            row["physics_2"],
+            row["chemistry_2"],
+            row["earth_science_2"],
+            row["life_science_2"],
+        ]
+    )
+    language = _avg_non_null(
+        [
+            row["language2_grade"],
+            row["german_1"],
+            row["french_1"],
+            row["spanish_1"],
+            row["chinese_1"],
+            row["japanese_1"],
+            row["russian_1"],
+            row["vietnamese_1"],
+            row["arabic_1"],
+            row["classical_chinese_1"],
+        ]
+    )
+    return {
+        "국어": korean,
+        "영어": english,
+        "수학": math,
+        "사회탐구": social,
+        "과학탐구": science,
+        "언어영역": language,
+    }
+
+
+def _group_mock_period_subject_averages(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[int, int], list[sqlite3.Row]] = {}
+    for row in rows:
+        exam_year = _to_float(row["exam_year"])
+        school_year = _to_float(row["school_year"])
+        year_key = int(exam_year if exam_year is not None else school_year if school_year is not None else 0)
+        month_raw = _to_float(row["exam_month"])
+        month_key = int(month_raw if month_raw is not None else 0)
+        grouped.setdefault((year_key, month_key), []).append(row)
+
+    period_results: list[dict[str, Any]] = []
+    for (year_key, month_key), period_rows in grouped.items():
+        by_subject: dict[str, list[float]] = {
+            "국어": [],
+            "영어": [],
+            "수학": [],
+            "사회탐구": [],
+            "과학탐구": [],
+            "언어영역": [],
+        }
+        for row in period_rows:
+            row_avgs = _derive_mock_subject_group_averages(row)
+            for key, value in row_avgs.items():
+                if value is not None:
+                    by_subject[key].append(value)
+
+        subject_avgs: dict[str, float | None] = {}
+        for key, values in by_subject.items():
+            subject_avgs[key] = _round2(sum(values) / len(values)) if values else None
+
+        all_subject_values = [v for v in subject_avgs.values() if v is not None]
+        period_results.append(
+            {
+                "exam_year": year_key,
+                "exam_month": month_key,
+                "subjects": subject_avgs,
+                "overall": _round2(sum(all_subject_values) / len(all_subject_values)) if all_subject_values else None,
+            }
+        )
+
+    period_results.sort(key=lambda item: (item["exam_year"], item["exam_month"]))
+    return period_results
+
+
 def _normalize_academic_subject(subject_name: Any) -> str | None:
     normalized = str(subject_name or "").strip().replace(" ", "")
     if not normalized:
@@ -110,59 +221,21 @@ def _resolve_primary_major(connection: sqlite3.Connection, student_id: int) -> s
 
 
 def _compute_latest_mock_average(connection: sqlite3.Connection, student_id: int) -> str:
-    latest_group = connection.execute(
-        """
-        SELECT
-            COALESCE(exam_year, school_year, 0) AS exam_year_key,
-            COALESCE(exam_month, 0) AS exam_month_key
-        FROM TB_CSAT_SCORE
-        WHERE student_id = ?
-        ORDER BY exam_year_key DESC, exam_month_key DESC, csat_id DESC
-        LIMIT 1
-        """,
-        (student_id,),
-    ).fetchone()
-    if latest_group is None:
-        return "-"
-
     rows = connection.execute(
         """
-        SELECT
-            inquiry_type,
-            korean_grade,
-            english_grade,
-            math_grade,
-            social_grade,
-            science_grade
+        SELECT *
         FROM TB_CSAT_SCORE
         WHERE student_id = ?
-          AND COALESCE(exam_year, school_year, 0) = ?
-          AND COALESCE(exam_month, 0) = ?
         ORDER BY csat_id ASC
         """,
-        (student_id, latest_group["exam_year_key"], latest_group["exam_month_key"]),
+        (student_id,),
     ).fetchall()
-
-    row_averages: list[float] = []
-    for row in rows:
-        inquiry_type = str(row["inquiry_type"] or "").strip()
-        inquiry_grade = row["science_grade"] if inquiry_type in {"과학탐구", "과탐"} else row["social_grade"]
-        if inquiry_grade is None:
-            inquiry_grade = row["social_grade"] if row["social_grade"] is not None else row["science_grade"]
-
-        values = [
-            _to_float(row["korean_grade"]),
-            _to_float(row["english_grade"]),
-            _to_float(row["math_grade"]),
-            _to_float(inquiry_grade),
-        ]
-        valid_values = [value for value in values if value is not None]
-        if valid_values:
-            row_averages.append(sum(valid_values) / len(valid_values))
-
-    if not row_averages:
+    grouped = _group_mock_period_subject_averages(rows)
+    if not grouped:
         return "-"
-    return f"{sum(row_averages) / len(row_averages):.2f}"
+    latest = grouped[-1]
+    overall = latest.get("overall")
+    return "-" if overall is None else f"{overall:.2f}"
 
 
 def compute_settings_display_from_tables(connection: sqlite3.Connection, student_id: int) -> dict[str, str]:
@@ -777,12 +850,43 @@ class OnboardingScoreStore:
 
     def _ensure_csat_columns(self, connection: sqlite3.Connection) -> None:
         """기존 DB의 TB_CSAT_SCORE에 탐구 컬럼이 없으면 추가합니다."""
-        rows = connection.execute("PRAGMA table_info(TB_CSAT_SCORE)").fetchall()
-        col_names = {str(r[1]) for r in rows}
-        if "inquiry_type" not in col_names:
-            connection.execute("ALTER TABLE TB_CSAT_SCORE ADD COLUMN inquiry_type TEXT")
-        if "social_grade" not in col_names:
-            connection.execute("ALTER TABLE TB_CSAT_SCORE ADD COLUMN social_grade INTEGER")
+        self._ensure_columns(
+            connection,
+            "TB_CSAT_SCORE",
+            {
+                "school_year": "INTEGER",
+                "exam_month": "INTEGER",
+                "inquiry_type": "TEXT",
+                "social_grade": "REAL",
+                "life_and_ethics": "REAL",
+                "ethics_and_thought": "REAL",
+                "korean_geography": "REAL",
+                "world_geography": "REAL",
+                "east_asian_history": "REAL",
+                "world_history": "REAL",
+                "economics": "REAL",
+                "politics_and_law": "REAL",
+                "society_and_culture": "REAL",
+                "physics_1": "REAL",
+                "chemistry_1": "REAL",
+                "earth_science_1": "REAL",
+                "life_science_1": "REAL",
+                "physics_2": "REAL",
+                "chemistry_2": "REAL",
+                "earth_science_2": "REAL",
+                "life_science_2": "REAL",
+                "language2_grade": "REAL",
+                "german_1": "REAL",
+                "french_1": "REAL",
+                "spanish_1": "REAL",
+                "chinese_1": "REAL",
+                "japanese_1": "REAL",
+                "russian_1": "REAL",
+                "vietnamese_1": "REAL",
+                "arabic_1": "REAL",
+                "classical_chinese_1": "REAL",
+            },
+        )
 
     @staticmethod
     def _safe_int(value: Any) -> int | None:
@@ -830,17 +934,14 @@ class OnboardingScoreStore:
 
     @staticmethod
     def _mock_subjects_from_row(row: sqlite3.Row) -> list[dict[str, Any]]:
-        inquiry_type_raw = str(row["inquiry_type"] or "").strip()
-        inquiry_type = "과탐" if inquiry_type_raw in {"과탐", "과학탐구"} else "사탐"
-        inquiry_grade = row["social_grade"] if inquiry_type == "사탐" else row["science_grade"]
-        if inquiry_grade is None:
-            inquiry_grade = row["social_grade"] if row["social_grade"] is not None else row["science_grade"]
+        grouped = _derive_mock_subject_group_averages(row)
         return [
-            {"subject": "국어", "score": "" if row["korean_grade"] is None else str(int(row["korean_grade"])), "isCustom": False},
-            {"subject": "수학", "score": "" if row["math_grade"] is None else str(int(row["math_grade"])), "isCustom": False},
-            {"subject": "영어", "score": "" if row["english_grade"] is None else str(int(row["english_grade"])), "isCustom": False},
-            {"subject": "사탐", "score": "" if inquiry_type != "사탐" or inquiry_grade is None else str(int(inquiry_grade)), "isCustom": False},
-            {"subject": "과탐", "score": "" if inquiry_type != "과탐" or inquiry_grade is None else str(int(inquiry_grade)), "isCustom": False},
+            {"subject": "국어", "score": "" if grouped["국어"] is None else f"{grouped['국어']:.2f}", "isCustom": False},
+            {"subject": "수학", "score": "" if grouped["수학"] is None else f"{grouped['수학']:.2f}", "isCustom": False},
+            {"subject": "영어", "score": "" if grouped["영어"] is None else f"{grouped['영어']:.2f}", "isCustom": False},
+            {"subject": "사회탐구", "score": "" if grouped["사회탐구"] is None else f"{grouped['사회탐구']:.2f}", "isCustom": False},
+            {"subject": "과학탐구", "score": "" if grouped["과학탐구"] is None else f"{grouped['과학탐구']:.2f}", "isCustom": False},
+            {"subject": "언어영역", "score": "" if grouped["언어영역"] is None else f"{grouped['언어영역']:.2f}", "isCustom": False},
         ]
 
     @staticmethod
@@ -1049,9 +1150,10 @@ class OnboardingScoreStore:
             korean_grade = self._safe_int(subject_map.get("국어", {}).get("score"))
             math_grade = self._safe_int(subject_map.get("수학", {}).get("score"))
             english_grade = self._safe_int(subject_map.get("영어", {}).get("score"))
-            social_grade = self._safe_int(subject_map.get("사탐", {}).get("score"))
-            science_grade = self._safe_int(subject_map.get("과탐", {}).get("score"))
-            if all(value is None for value in [korean_grade, math_grade, english_grade, social_grade, science_grade, total]):
+            social_grade = self._safe_int((subject_map.get("사회탐구") or subject_map.get("사탐") or {}).get("score"))
+            science_grade = self._safe_int((subject_map.get("과학탐구") or subject_map.get("과탐") or {}).get("score"))
+            language2_grade = self._safe_int((subject_map.get("언어영역") or subject_map.get("제2외국어") or {}).get("score"))
+            if all(value is None for value in [korean_grade, math_grade, english_grade, social_grade, science_grade, language2_grade, total]):
                 continue
             inquiry_type = "과학탐구" if science_grade is not None else "사회탐구"
             connection.execute(
@@ -1068,9 +1170,10 @@ class OnboardingScoreStore:
                     science_grade,
                     inquiry_type,
                     social_grade,
+                    language2_grade,
                     total_score
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     student_id,
@@ -1084,6 +1187,7 @@ class OnboardingScoreStore:
                         science_grade,
                     inquiry_type,
                         social_grade,
+                    language2_grade,
                     total,
                 ),
             )
@@ -1308,6 +1412,33 @@ class OnboardingScoreStore:
                     science_grade,
                     inquiry_type,
                     social_grade,
+                    life_and_ethics,
+                    ethics_and_thought,
+                    korean_geography,
+                    world_geography,
+                    east_asian_history,
+                    world_history,
+                    economics,
+                    politics_and_law,
+                    society_and_culture,
+                    physics_1,
+                    chemistry_1,
+                    earth_science_1,
+                    life_science_1,
+                    physics_2,
+                    chemistry_2,
+                    earth_science_2,
+                    life_science_2,
+                    language2_grade,
+                    german_1,
+                    french_1,
+                    spanish_1,
+                    chinese_1,
+                    japanese_1,
+                    russian_1,
+                    vietnamese_1,
+                    arabic_1,
+                    classical_chinese_1,
                     total_score
                 FROM TB_CSAT_SCORE
                 WHERE student_id = ?
@@ -1348,22 +1479,27 @@ class OnboardingScoreStore:
             payload = json.loads(row["content_body"])
         if mock_rows:
             mock_exams: list[dict[str, Any]] = []
-            for index, mrow in enumerate(mock_rows):
-                year_val = self._safe_int(mrow["school_year"])
-                if year_val is None:
-                    year_val = self._safe_int(mrow["exam_year"])
-                grade_year = "1"
-                if year_val in (1, 2, 3):
-                    grade_year = str(year_val)
-                term = self._mock_term_from_exam_type(str(mrow["exam_type"] or ""), mrow["exam_month"])
-                subjects = self._mock_subjects_from_row(mrow)
+            grouped_periods = _group_mock_period_subject_averages(list(mock_rows))
+            for index, period in enumerate(grouped_periods):
+                year_val = self._safe_int(period["exam_year"])
+                grade_year = "1" if year_val not in (1, 2, 3) else str(year_val)
+                term = self._mock_term_from_exam_type("", period["exam_month"])
+                subject_map = period["subjects"]
+                subjects = [
+                    {"subject": "국어", "score": "" if subject_map["국어"] is None else f"{subject_map['국어']:.2f}", "isCustom": False},
+                    {"subject": "수학", "score": "" if subject_map["수학"] is None else f"{subject_map['수학']:.2f}", "isCustom": False},
+                    {"subject": "영어", "score": "" if subject_map["영어"] is None else f"{subject_map['영어']:.2f}", "isCustom": False},
+                    {"subject": "사회탐구", "score": "" if subject_map["사회탐구"] is None else f"{subject_map['사회탐구']:.2f}", "isCustom": False},
+                    {"subject": "과학탐구", "score": "" if subject_map["과학탐구"] is None else f"{subject_map['과학탐구']:.2f}", "isCustom": False},
+                    {"subject": "언어영역", "score": "" if subject_map["언어영역"] is None else f"{subject_map['언어영역']:.2f}", "isCustom": False},
+                ]
                 mock_exams.append(
                     {
                         "id": f"{grade_year}-{term}-{index}",
                         "year": grade_year,
                         "term": term,
                         "subjects": subjects,
-                        "overallAverage": "" if mrow["total_score"] is None else f"{float(mrow['total_score']):.2f}",
+                        "overallAverage": "" if period["overall"] is None else f"{period['overall']:.2f}",
                         "updatedAt": datetime.now(timezone.utc).isoformat(),
                     }
                 )
@@ -1619,7 +1755,13 @@ class OnboardingScoreStore:
                 return {"ok": True, "source": "sqlite", "data": []}
             rows = connection.execute(
                 """
-                SELECT u.univ_name, d.dept_name
+                SELECT
+                    u.univ_name,
+                    d.dept_name,
+                    a.priority_no,
+                    a.strategy_type,
+                    a.status,
+                    a.note
                 FROM TB_APPLICATION_LIST a
                 JOIN TB_STUDENT_PROFILE sp ON sp.student_id = a.student_id
                 JOIN TB_ADMISSION_TYPE atp ON atp.admission_id = a.admission_id
@@ -1631,7 +1773,17 @@ class OnboardingScoreStore:
                 """,
                 (user_id,),
             ).fetchall()
-        data = [{"university": row["univ_name"], "major": row["dept_name"]} for row in rows]
+        data = [
+            {
+                "university": row["univ_name"],
+                "major": row["dept_name"],
+                "priority": row["priority_no"],
+                "strategyType": row["strategy_type"],
+                "status": row["status"],
+                "note": row["note"],
+            }
+            for row in rows
+        ]
         return {"ok": True, "source": "sqlite", "data": data}
 
     def try_login(self, login_id: str, password: str) -> dict[str, Any]:

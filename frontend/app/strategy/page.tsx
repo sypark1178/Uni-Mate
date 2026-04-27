@@ -86,7 +86,7 @@ export default function StrategyPage() {
       const target = categoryTarget[item.category];
       const gapValue = Math.abs(schoolAverage - target);
       const gap = gapValue.toFixed(1);
-      const schoolText = schoolAverage.toFixed(1);
+      const schoolText = schoolAverage.toFixed(2);
       const minMet = schoolAverage <= target + 0.3 ? "O" : "X";
       const riskByCategory: Record<Recommendation["category"], string> = {
         도전:
@@ -110,7 +110,7 @@ export default function StrategyPage() {
         : item.major.includes("경제")
           ? "이 학교가 보는 키워드 | 자료 읽기 · 말이 맞는지 따지기 · 뉴스 이해"
           : "이 학교가 보는 키워드 | 과에 맞는지 · 공부 태도 · 스스로 계획하기";
-      const scoreLineSuffix = mockAverage !== null ? ` / 모의 ${mockAverage.toFixed(1)}` : "";
+      const scoreLineSuffix = mockAverage !== null ? ` / 모의 ${mockAverage.toFixed(2)}` : "";
 
       return {
         ...item,

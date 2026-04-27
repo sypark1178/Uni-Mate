@@ -28,6 +28,10 @@ export type ChecklistItem = {
 export type GoalChoice = {
   university: string;
   major: string;
+  priority?: number | null;
+  strategyType?: string | null;
+  status?: string | null;
+  note?: string | null;
 };
 
 export type ScoreTabKey = "schoolRecord" | "mockExam" | "studentRecord";

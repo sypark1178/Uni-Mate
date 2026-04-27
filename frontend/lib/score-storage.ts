@@ -38,7 +38,11 @@ export const scoreTabOptions: Array<{ key: ScoreTabKey; label: string }> = [
 export const subjectGradeOptions = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
 function isSubjectGradeValue(value: string): boolean {
-  return (subjectGradeOptions as readonly string[]).includes(value);
+  if ((subjectGradeOptions as readonly string[]).includes(value)) {
+    return true;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 1 && parsed <= 9;
 }
 
 export const gradeYearOptions: Array<{ value: GradeYear; label: string }> = [
@@ -458,12 +462,23 @@ function parseNumber(input: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatSummaryAverage(value: number) {
-  return value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+function toPeriodRank(record: GradePeriodRecord): number {
+  const year = Number(record.year) || 0;
+  const month = mockTermCalendarMonth(record.term);
+  return year * 100 + month;
 }
 
-function computeAverage(records: GradePeriodRecord[]) {
-  const values = records
+function formatSummaryAverage(value: number) {
+  return value.toFixed(2);
+}
+
+function computeAverage(records: GradePeriodRecord[], latestOnly = false) {
+  const targetRecords =
+    latestOnly && records.length > 0
+      ? [records.reduce((latest, current) => (toPeriodRank(current) >= toPeriodRank(latest) ? current : latest))]
+      : records;
+
+  const values = targetRecords
     .map((record) => {
       if (record.overallAverage.trim()) {
         return parseNumber(record.overallAverage.trim());
@@ -489,7 +504,8 @@ function computeAverage(records: GradePeriodRecord[]) {
 export function buildScoreSummary(store: ScoreMemoryStore, settingsDisplay: ScoreSettingsDisplay | null = null) {
   return {
     schoolAverage: computeAverage(store.schoolRecords),
-    mockAverage: computeAverage(store.mockExams),
+    // 온보딩 외 화면은 최신 시험연월 모의고사 1회차를 기준으로 사용
+    mockAverage: computeAverage(store.mockExams, true),
     /** 설정 화면 전용: TB_ACADEMIC_SCORE 등급(grade) 평균(소수 2자리), 없으면 null → 화면에서 schoolAverage로 대체 */
     settingsSchoolFromDb: settingsDisplay?.schoolGradeAverage ?? null,
     /** 설정 화면 전용: TB_CSAT_SCORE 최신 4과목 등급 평균(소수 2자리), 없으면 null */

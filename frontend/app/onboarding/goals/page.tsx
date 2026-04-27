@@ -11,6 +11,9 @@ import { useGoals } from "@/lib/use-goals";
 type GoalRankState = {
   university: string;
   major: string;
+  strategyType?: string | null;
+  status?: string | null;
+  note?: string | null;
 };
 
 const initialUniversities = universityOptions.slice(0, 3);
@@ -20,8 +23,20 @@ function normalizeGoalRanks(input: GoalRankState[]): GoalRankState[] {
   return input.map((item) => {
     const university = universityOptions.includes(item.university) ? item.university : fallbackUniversity;
     const major = item.major ?? "";
-    return { university, major };
+    return {
+      university,
+      major,
+      strategyType: item.strategyType ?? null,
+      status: item.status ?? null,
+      note: item.note ?? null
+    };
   });
+}
+
+function defaultStrategyByRank(rankIndex: number): string {
+  if (rankIndex === 0) return "도전";
+  if (rankIndex === 1) return "적정";
+  return "안정";
 }
 
 export default function OnboardingGoalsPage() {
@@ -62,6 +77,7 @@ export default function OnboardingGoalsPage() {
     const next = goalRanks.map((item, itemIndex) =>
       itemIndex === index
         ? {
+            ...item,
             university,
             major: ""
           }
@@ -119,6 +135,10 @@ export default function OnboardingGoalsPage() {
             }`}
           >
             <div className="mb-3 text-sm font-semibold text-black">{index + 1}순위 목표</div>
+            <div className="mb-3 text-xs text-muted">
+              지원전략: {goalRank.strategyType?.trim() || defaultStrategyByRank(index)}
+              {goalRank.status ? ` · 상태: ${goalRank.status}` : ""}
+            </div>
             <div className="space-y-3">
               <select
                 className="w-full rounded-xl border border-line px-4 py-3"

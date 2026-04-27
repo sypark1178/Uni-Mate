@@ -220,7 +220,7 @@ export default function AnalysisPage() {
             major,
             category: "적정" as const,
             fitScore: Math.max(28, Math.min(86, Math.round(scoreSeed - Math.max(0, schoolAverage - 2.4) * 8 - Math.max(0, mockAverage - 2.6) * 5))),
-            notes: `${exactUniversity} ${major} 기준 추천 학과\n내신 ${schoolAverage.toFixed(1)} / 모의 ${mockAverage.toFixed(1)} 기준 상위 적합 학과`,
+            notes: `${exactUniversity} ${major} 기준 추천 학과\n내신 ${schoolAverage.toFixed(2)} / 모의 ${mockAverage.toFixed(2)} 기준 상위 적합 학과`,
             evidence: {
               title: `${exactUniversity} ${major} 전형 분석`,
               source: "Uni-Mate 학과 추천 로직",
@@ -357,8 +357,8 @@ export default function AnalysisPage() {
       }
 
       fitScore = Math.max(24, Math.min(88, fitScore));
-      const scoreLine = hasSchool ? `내신 평균 ${school.toFixed(1)}` : "내신 미입력";
-      const mockLine = hasMock ? `모의 평균 ${mock.toFixed(1)}` : "모의 미입력";
+      const scoreLine = hasSchool ? `내신 평균 ${school.toFixed(2)}` : "내신 미입력";
+      const mockLine = hasMock ? `모의 평균 ${mock.toFixed(2)}` : "모의 미입력";
       const readiness =
         fitScore >= 72 ? "현재 점수 기준으로 유리한 편이에요." : fitScore >= 55 ? "조금 더 보완하면 안정적으로 지원 가능해요." : "상향 지원에 가까워 보완 전략이 필요해요.";
 

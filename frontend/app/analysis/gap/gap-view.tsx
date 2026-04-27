@@ -36,7 +36,7 @@ function GapAnalysisViewInner() {
   const selectedGoal = rankedGoals[selectedGoalIndex] ?? rankedGoals[0];
   const selectedAnalysis = goalAnalyses[selectedGoalIndex] ?? goalAnalyses[0];
   const schoolAverage = Number.parseFloat(summary.schoolAverage);
-  const schoolAverageText = Number.isFinite(schoolAverage) ? schoolAverage.toFixed(1) : "-";
+  const schoolAverageText = Number.isFinite(schoolAverage) ? schoolAverage.toFixed(2) : "-";
 
   const topGaps = useMemo(() => {
     const uni = selectedGoal.university || "목표대학";

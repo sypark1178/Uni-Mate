@@ -10,7 +10,11 @@ import { getCurrentMember } from "@/lib/member-store";
 function normalizeStoredGoals(goals: GoalChoice[]): GoalChoice[] {
   return goals.map((goal) => ({
     university: normalizeUniversityName(goal.university),
-    major: (goal.major ?? "").trim()
+    major: (goal.major ?? "").trim(),
+    priority: typeof goal.priority === "number" ? goal.priority : null,
+    strategyType: goal.strategyType ?? null,
+    status: goal.status ?? null,
+    note: goal.note ?? null
   }));
 }
 
