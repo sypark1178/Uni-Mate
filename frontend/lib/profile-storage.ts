@@ -26,15 +26,23 @@ function withLoggedInMemberName(profile: StudentProfile): StudentProfile {
 
 function normalizeProfile(raw: unknown): StudentProfile {
   if (!raw || typeof raw !== "object") {
-    return defaultProfile;
+    return {
+      ...defaultProfile,
+      name: "",
+      gradeLabel: "",
+      region: "",
+      district: "",
+      schoolName: "",
+      hasRequiredInfo: false
+    };
   }
 
   const candidate = raw as Partial<StudentProfile>;
-  const region = typeof candidate.region === "string" ? candidate.region : defaultProfile.region;
-  const district = typeof candidate.district === "string" ? candidate.district : defaultProfile.district;
-  const schoolName = typeof candidate.schoolName === "string" ? candidate.schoolName : defaultProfile.schoolName;
-  const name = typeof candidate.name === "string" ? candidate.name : defaultProfile.name;
-  const gradeLabel = typeof candidate.gradeLabel === "string" ? candidate.gradeLabel : defaultProfile.gradeLabel;
+  const region = typeof candidate.region === "string" ? candidate.region : "";
+  const district = typeof candidate.district === "string" ? candidate.district : "";
+  const schoolName = typeof candidate.schoolName === "string" ? candidate.schoolName : "";
+  const name = typeof candidate.name === "string" ? candidate.name : "";
+  const gradeLabel = typeof candidate.gradeLabel === "string" ? candidate.gradeLabel : "";
   const track = typeof candidate.track === "string" ? candidate.track : defaultProfile.track;
   const targetYear =
     typeof candidate.targetYear === "number" && Number.isFinite(candidate.targetYear)
@@ -112,7 +120,7 @@ async function persistProfileImageToServer(profileImageUrl: string) {
 }
 
 export function useStudentProfile() {
-  const [studentProfile, setStudentProfile] = useState<StudentProfile>(defaultProfile);
+  const [studentProfile, setStudentProfile] = useState<StudentProfile>(() => normalizeProfile({}));
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -129,11 +137,7 @@ export function useStudentProfile() {
         window.localStorage.removeItem(getScopedProfileStorageKey());
         localProfile = defaultProfile;
       }
-      let serverProfile = await loadProfileFromServer();
-      // 비회원 기본 진입은 LDY01 샘플 프로필을 초기 디스플레이로 사용
-      if (!serverProfile && userKey === "local-user") {
-        serverProfile = await loadProfileFromServer("LDY01");
-      }
+      const serverProfile = await loadProfileFromServer();
       const draftProfile = getDraftProfile<StudentProfile>();
       const resolved = withLoggedInMemberName(draftProfile ?? serverProfile ?? localProfile ?? defaultProfile);
       if (!cancelled) {

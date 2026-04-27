@@ -89,15 +89,49 @@ const mockTermOptionsByYear: Record<GradeYear, Array<{ value: GradeTerm; label: 
     { value: "mock-nat-7", label: "전국연합학력평가 7월" },
     { value: "mock-nat-10", label: "전국연합학력평가 10월" },
     { value: "mock-csat-6", label: "대학수학능력시험 6월" },
-    { value: "mock-csat-9", label: "대학수학능력시험 9월" }
+    { value: "mock-csat-9", label: "대학수학능력시험 9월" },
+    { value: "mock-nat-11", label: "수능(11월)" }
   ]
 };
 
+function mockTermCalendarMonth(term: GradeTerm): number {
+  if (term.startsWith("mock-nat-")) {
+    return Number.parseInt(term.slice("mock-nat-".length), 10) || 0;
+  }
+  if (term.startsWith("mock-csat-")) {
+    return Number.parseInt(term.slice("mock-csat-".length), 10) || 0;
+  }
+  return 0;
+}
+
 export function getGradeTermOptionsByTab(tab: ScoreTabKey, year: GradeYear) {
   if (tab === "mockExam") {
-    return mockTermOptionsByYear[year];
+    const rows = [...mockTermOptionsByYear[year]];
+    rows.sort((a, b) => mockTermCalendarMonth(a.value) - mockTermCalendarMonth(b.value));
+    return rows;
   }
   return schoolTermOptions;
+}
+
+/**
+ * 모의고사 탭에서 학년·시기(term)에 따른 시험 구분.
+ * - `mock-nat-*`: 전국연합학력평가(학력평가)
+ * - `mock-csat-*`: 대학수학능력시험(교육부·평가원) 6·9월 모의고사
+ */
+export function getMockExamSeriesCaption(year: GradeYear, term: GradeTerm): string {
+  if (!term.startsWith("mock-")) {
+    return "";
+  }
+  if (term.startsWith("mock-csat-")) {
+    return "대학수학능력시험 (모의고사)";
+  }
+  if (term.startsWith("mock-nat-")) {
+    if (term === "mock-nat-11" && year === "3") {
+      return "수능(대학수학능력시험)";
+    }
+    return "전국연합학력평가(학력평가)";
+  }
+  return "";
 }
 
 const defaultSubjectNames = ["국어", "수학", "영어"];

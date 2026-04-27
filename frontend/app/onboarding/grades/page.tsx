@@ -20,6 +20,8 @@ import {
 
   getGradeTermOptionsByTab,
 
+  getMockExamSeriesCaption,
+
   gradeTermOptions,
 
   gradeYearOptions,
@@ -32,7 +34,7 @@ import {
 
 } from "@/lib/score-storage";
 
-import type { GradeTerm, GradeYear, ScoreTabKey, SubjectScoreEntry } from "@/lib/types";
+import type { GradePeriodRecord, GradeTerm, GradeYear, ScoreTabKey, SubjectScoreEntry } from "@/lib/types";
 
 
 
@@ -42,16 +44,11 @@ const fixedHeadCount = Math.max(0, fixedScoreLabels.length - 1);
 
 const coreAverageSubjects = ["국어", "수학", "영어"] as const;
 
-/** 모달 상단: 사회·과학 탐구 + 제2외국어 (표시만 다르고 패널은 social / science / foreign) */
-
+/** 모달 상단: 한국사 / 탐구 / 기타 */
 const extraInquiryModalEntries = [
-
-  { panel: "social" as const, label: "사회탐구" },
-
-  { panel: "science" as const, label: "과학탐구" },
-
-  { panel: "foreign" as const, label: "제2외국어" }
-
+  { panel: "history" as const, label: "한국사" },
+  { panel: "inquiry" as const, label: "탐구" },
+  { panel: "other" as const, label: "기타" }
 ] as const;
 
 
@@ -80,6 +77,8 @@ const socialInquirySubjectLabels = [
 
 ] as const;
 
+const integratedSocialSubjectLabels = ["통합사회"] as const;
+
 
 
 /** 수능 기준 과학탐구 선택 과목 (전체평균 탐구 반영용) */
@@ -104,10 +103,11 @@ const scienceInquirySubjectLabels = [
 
 ] as const;
 
+const integratedScienceSubjectLabels = ["통합과학"] as const;
 
 
-/** 제2외국어·한문 선택 과목 */
 
+/** 제2외국어 선택 과목 */
 const secondForeignSubjectLabels = [
 
   "독일어Ⅰ",
@@ -124,108 +124,100 @@ const secondForeignSubjectLabels = [
 
   "베트남어Ⅰ",
 
-  "아랍어Ⅰ",
-
-  "한문Ⅰ"
+  "아랍어Ⅰ"
 
 ] as const;
 
+const historySubjectLabels = ["한국사"] as const;
+const groupedInquirySubjectLabels = ["사탐", "과탐"] as const;
+const otherSubjectLabels = [...secondForeignSubjectLabels, "한문Ⅰ", "정보"] as const;
+const firstYearOtherSubjectLabels = ["한문Ⅰ", "정보"] as const;
 
+type ExtraInquiryPanel = "history" | "inquiry" | "other";
+type InquiryPickMode = "social" | "science";
 
-type ExtraInquiryPanel = "social" | "science" | "foreign";
-
-
-
-function labelsForExtraInquiryPanel(panel: ExtraInquiryPanel): readonly string[] {
-
-  if (panel === "social") {
-
-    return socialInquirySubjectLabels;
-
+function labelsForExtraInquiryPanel(panel: ExtraInquiryPanel, year: GradeYear, inquiryPickMode: InquiryPickMode): readonly string[] {
+  if (panel === "history") {
+    return historySubjectLabels;
   }
-
-  if (panel === "science") {
-
-    return scienceInquirySubjectLabels;
-
-  }
-
-  return secondForeignSubjectLabels;
-
-}
-
-
-
-function titleForExtraInquiryPanel(panel: ExtraInquiryPanel): string {
-
-  if (panel === "social") {
-
-    return "사회탐구 과목";
-
-  }
-
-  if (panel === "science") {
-
-    return "과학탐구 과목";
-
-  }
-
-  return "제2외국어·한문";
-
-}
-
-
-
-function scoreForFirstMatchingSubject(subjects: SubjectScoreEntry[], labels: readonly string[]): string {
-
-  for (const label of labels) {
-
-    const entry = subjects.find((item) => item.subject.trim() === label);
-
-    const raw = entry?.score?.trim() ?? "";
-
-    if (raw) {
-
-      return raw;
-
+  if (panel === "inquiry") {
+    if (inquiryPickMode === "social") {
+      return year === "1" ? integratedSocialSubjectLabels : socialInquirySubjectLabels;
     }
-
+    return year === "1" ? integratedScienceSubjectLabels : scienceInquirySubjectLabels;
   }
+  return year === "1" ? firstYearOtherSubjectLabels : otherSubjectLabels;
+}
 
-  return "";
+function titleForExtraInquiryPanel(panel: ExtraInquiryPanel, inquiryPickMode: InquiryPickMode): string {
+  if (panel === "history") return "한국사 과목";
+  if (panel === "inquiry") {
+    return inquiryPickMode === "social" ? "사회탐구 과목" : "과학탐구 과목";
+  }
+  return "기타(제2외국어·한문·정보)";
+}
 
+function isOneOfLabels(value: string, labels: readonly string[]): boolean {
+  return labels.some((label) => label === value);
 }
 
 
 
-function getInquiryScoreForAverage(subjects: SubjectScoreEntry[]): string {
+function getInquiryAverageScoreForAverage(subjects: SubjectScoreEntry[]): string {
 
-  const social = scoreForFirstMatchingSubject(subjects, socialInquirySubjectLabels);
+  const inquiryScores = subjects
+    .filter((entry) => {
+      const name = entry.subject.trim();
+      return (
+        isOneOfLabels(name, socialInquirySubjectLabels) ||
+        isOneOfLabels(name, scienceInquirySubjectLabels) ||
+        isOneOfLabels(name, integratedSocialSubjectLabels) ||
+        isOneOfLabels(name, integratedScienceSubjectLabels)
+      );
+    })
+    .map((entry) => parseNumericScore(entry.score))
+    .filter((value): value is number => value !== null);
 
-  if (social) {
-
-    return social;
-
+  if (inquiryScores.length > 0) {
+    return formatAverageValue(inquiryScores.reduce((sum, value) => sum + value, 0) / inquiryScores.length);
   }
 
-  const legacySocial = subjects.find((entry) => entry.subject.trim() === "사탐")?.score?.trim() ?? "";
+  const legacyScores = ["사탐", "과탐"]
+    .map((legacyName) => parseNumericScore(subjects.find((entry) => entry.subject.trim() === legacyName)?.score?.trim() ?? ""))
+    .filter((value): value is number => value !== null);
 
-  if (legacySocial) {
-
-    return legacySocial;
-
+  if (legacyScores.length === 0) {
+    return "";
   }
 
-  const science = scoreForFirstMatchingSubject(subjects, scienceInquirySubjectLabels);
+  return formatAverageValue(legacyScores.reduce((sum, value) => sum + value, 0) / legacyScores.length);
 
-  if (science) {
+}
 
-    return science;
-
+function formatCustomSubjectLabel(subject: string): string {
+  const trimmed = subject.trim();
+  if (isOneOfLabels(trimmed, socialInquirySubjectLabels)) {
+    return `사탐(${trimmed})`;
   }
-
-  return subjects.find((entry) => entry.subject.trim() === "과탐")?.score?.trim() ?? "";
-
+  if (trimmed === "사탐") {
+    return "사탐";
+  }
+  if (isOneOfLabels(trimmed, integratedSocialSubjectLabels)) {
+    return trimmed;
+  }
+  if (isOneOfLabels(trimmed, scienceInquirySubjectLabels)) {
+    return `과탐(${trimmed})`;
+  }
+  if (trimmed === "과탐") {
+    return "과탐";
+  }
+  if (isOneOfLabels(trimmed, integratedScienceSubjectLabels)) {
+    return trimmed;
+  }
+  if (isOneOfLabels(trimmed, secondForeignSubjectLabels)) {
+    return `제2외국어(${trimmed})`;
+  }
+  return trimmed;
 }
 
 
@@ -254,7 +246,97 @@ function formatAverageValue(value: number) {
 
 }
 
+function splitInquiryCustomSubjects(entries: SubjectScoreEntry[]) {
+  const social: SubjectScoreEntry[] = [];
+  const science: SubjectScoreEntry[] = [];
+  const other: SubjectScoreEntry[] = [];
+  for (const entry of entries) {
+    const name = entry.subject.trim();
+    if (name === "사탐" || isOneOfLabels(name, socialInquirySubjectLabels) || isOneOfLabels(name, integratedSocialSubjectLabels)) {
+      social.push(entry);
+    } else if (name === "과탐" || isOneOfLabels(name, scienceInquirySubjectLabels) || isOneOfLabels(name, integratedScienceSubjectLabels)) {
+      science.push(entry);
+    } else {
+      other.push(entry);
+    }
+  }
+  return { social, science, other };
+}
 
+function buildSavedGradeRows(subjects: SubjectScoreEntry[]) {
+  const rows: Array<{ name: string; grade: string }> = [];
+  for (const subjectName of coreAverageSubjects) {
+    const entry = subjects.find((item) => item.subject.trim() === subjectName && !item.isCustom);
+    const grade = entry?.score.trim() ?? "";
+    if (grade) {
+      rows.push({ name: subjectName, grade });
+    }
+  }
+  const customs = subjects.filter((item) => item.isCustom && item.subject.trim());
+  const { social, science, other } = splitInquiryCustomSubjects(customs);
+  for (const entry of social) {
+    const grade = entry.score.trim();
+    if (grade) {
+      rows.push({ name: entry.subject.trim(), grade });
+    }
+  }
+  for (const entry of science) {
+    const grade = entry.score.trim();
+    if (grade) {
+      rows.push({ name: entry.subject.trim(), grade });
+    }
+  }
+  for (const entry of other) {
+    const grade = entry.score.trim();
+    if (grade) {
+      rows.push({ name: formatCustomSubjectLabel(entry.subject), grade });
+    }
+  }
+  return rows;
+}
+
+function hasSavedGradeContent(record: GradePeriodRecord) {
+  if (record.overallAverage.trim()) {
+    return true;
+  }
+  return record.subjects.some((entry) => entry.score.trim().length > 0);
+}
+
+function buildSavedSummaryFromRecord(tabKey: "schoolRecord" | "mockExam", record: GradePeriodRecord) {
+  const tabLabel = scoreTabOptions.find((item) => item.key === tabKey)?.label ?? tabKey;
+  const yearLabel = gradeYearOptions.find((item) => item.value === record.year)?.label ?? record.year;
+  const termLabel =
+    getGradeTermOptionsByTab(tabKey, record.year).find((item) => item.value === record.term)?.label ??
+    gradeTermOptions.find((item) => item.value === record.term)?.label ??
+    record.term;
+  return {
+    periodKey: `${tabKey}:${record.year}:${record.term}`,
+    tabKey,
+    year: record.year,
+    term: record.term,
+    tabLabel,
+    periodCaption: `${yearLabel} · ${termLabel}`,
+    rows: buildSavedGradeRows(record.subjects),
+    overall: record.overallAverage.trim() || "—",
+    updatedAt: record.updatedAt
+  };
+}
+
+/** 과목 추가 모달: 탐구·제2외국어 등 추가 과목 그룹별 등급 평균 숫자 부분만 (표시용) */
+function getCustomSubjectGroupAverageGradeValue(
+  subjects: SubjectScoreEntry[],
+  subjectLabels: readonly string[]
+): string | null {
+  const nums = subjects
+    .filter((entry) => entry.isCustom && isOneOfLabels(entry.subject.trim(), subjectLabels))
+    .map((entry) => parseNumericScore(entry.score.trim()))
+    .filter((n): n is number => n !== null && n >= 1 && n <= 9);
+  if (nums.length === 0) {
+    return null;
+  }
+  const avg = nums.reduce((sum, n) => sum + n, 0) / nums.length;
+  return formatAverageValue(avg);
+}
 
 function isScoreTabKey(value: string | null): value is ScoreTabKey {
 
@@ -316,14 +398,6 @@ function inferMockMonth(term: GradeTerm): string {
 
 
 
-function buildMockTerm(month: "3" | "6" | "9"): GradeTerm {
-
-  return `mock-nat-${month}` as GradeTerm;
-
-}
-
-
-
 function buildFixedSubjectSlots(subjects: SubjectScoreEntry[]) {
 
   const subjectMap = new Map(
@@ -348,11 +422,16 @@ function buildFixedSubjectSlots(subjects: SubjectScoreEntry[]) {
 
 
 
-function SelectChevron({ active }: { active: boolean }) {
+function SelectChevron({ active, variant = "inset" }: { active: boolean; variant?: "inset" | "flush" }) {
+
+  const positionClass = variant === "flush" ? "right-0" : "right-4";
 
   return (
 
-    <span className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 ${active ? "text-ink" : "text-muted"}`} aria-hidden="true">
+    <span
+      className={`pointer-events-none absolute ${positionClass} top-1/2 -translate-y-1/2 ${active ? "text-ink" : "text-muted"}`}
+      aria-hidden="true"
+    >
 
       <svg viewBox="0 0 12 8" width="12" height="8" fill="none">
 
@@ -375,16 +454,18 @@ function TopFilterDropdown({
   ariaLabel,
   value,
   options,
-  onChange
+  onChange,
+  placeholder
 }: {
   ariaLabel: string;
   value: string;
   options: TopFilterDropdownOption[];
   onChange: (value: string) => void;
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const selectedLabel = options.find((item) => item.value === value)?.label ?? options[0]?.label ?? "";
+  const selectedLabel = value ? options.find((item) => item.value === value)?.label ?? options[0]?.label ?? "" : placeholder ?? "";
 
   useEffect(() => {
     if (!open) {
@@ -412,17 +493,21 @@ function TopFilterDropdown({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative z-20">
-      <button
-        type="button"
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-        className={`w-full rounded-full border bg-white px-4 py-3 pr-10 text-left text-sm font-normal text-ink ${open ? "border-navy" : "border-line"}`}
-      >
-        {selectedLabel}
-      </button>
-      <SelectChevron active />
+    <div ref={rootRef} className="relative z-20 h-fit w-full self-start">
+      <div className="relative w-full">
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          aria-expanded={open}
+          onClick={() => setOpen((prev) => !prev)}
+          className={`relative z-0 w-full whitespace-nowrap rounded-full border bg-white px-3 py-3 pr-10 text-left text-sm font-normal ${
+            value ? "text-ink" : "text-muted"
+          } ${open ? "border-navy" : "border-line"}`}
+        >
+          {selectedLabel}
+        </button>
+        <SelectChevron active />
+      </div>
       {open ? (
         <div className="absolute left-0 right-0 top-full z-30 mt-0 overflow-hidden rounded-none border border-[#707070] bg-white shadow-none">
           {options.map((option) => {
@@ -449,7 +534,84 @@ function TopFilterDropdown({
   );
 }
 
+function ModalInquirySubjectGroupBlock({
+  entries,
+  averageValue,
+  averageLeadingText,
+  selectedTab,
+  selectedYear,
+  selectedTerm,
+  updateSubjectScore,
+  onDeleteSubject
+}: {
+  entries: SubjectScoreEntry[];
+  averageValue: string | null;
+  averageLeadingText: string;
+  selectedTab: ScoreTabKey;
+  selectedYear: GradeYear;
+  selectedTerm: GradeTerm;
+  updateSubjectScore: (
+    tab: "schoolRecord" | "mockExam",
+    year: GradeYear,
+    term: GradeTerm,
+    entryId: string,
+    value: string
+  ) => void;
+  onDeleteSubject: (entryId: string) => void;
+}) {
+  if (entries.length === 0) {
+    return null;
+  }
 
+  return (
+    <div className="space-y-2">
+      {entries.map((entry) => (
+        <div key={entry.id} className="flex items-center gap-2 rounded-xl border border-white bg-white px-3 py-2.5">
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{entry.subject.trim()}</span>
+
+          <div className="relative min-w-[4.75rem] max-w-[6.5rem] shrink-0">
+            <select
+              value={entry.score}
+              onChange={(event) => {
+                if (selectedTab !== "schoolRecord" && selectedTab !== "mockExam") {
+                  return;
+                }
+                updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, event.target.value);
+              }}
+              aria-label={`${entry.subject.trim()} 내신 등급`}
+              className={`w-full cursor-pointer appearance-none border-0 border-b-2 border-navy/30 bg-transparent py-1 pl-0 pr-6 text-sm font-semibold transition-colors focus:border-navy focus:outline-none ${entry.score ? "text-ink" : "text-muted"}`}
+            >
+              <option value="">등급</option>
+              {subjectGradeOptions.map((grade) => (
+                <option key={grade} value={grade}>
+                  {grade}등급
+                </option>
+              ))}
+            </select>
+            <SelectChevron active={Boolean(entry.score)} variant="flush" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onDeleteSubject(entry.id)}
+            className="shrink-0 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-muted"
+          >
+            삭제
+          </button>
+        </div>
+      ))}
+
+      {averageValue ? (
+        <div className="mt-2 border-t border-line/80 pt-2">
+          <p className="text-center text-sm font-semibold leading-tight text-navy">
+            {averageLeadingText}
+            <span className="tabular-nums">{averageValue}</span>등급
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export default function OnboardingGradesPage() {
 
@@ -491,9 +653,18 @@ export default function OnboardingGradesPage() {
 
   const [subjectManageModalOpen, setSubjectManageModalOpen] = useState(false);
 
-  const [extraInquiryPanelOpen, setExtraInquiryPanelOpen] = useState<ExtraInquiryPanel | null>("social");
+  const [savedRecordsModalOpen, setSavedRecordsModalOpen] = useState(false);
+
+  const [savedRecordsFilterYear, setSavedRecordsFilterYear] = useState<"all" | GradeYear>("all");
+
+  const [savedRecordsFilterTab, setSavedRecordsFilterTab] = useState<"all" | "schoolRecord" | "mockExam">("all");
+
+  const [selectedStudentRecordType, setSelectedStudentRecordType] = useState("");
+
+  const [extraInquiryPanelOpen, setExtraInquiryPanelOpen] = useState<ExtraInquiryPanel | null>("history");
 
   const [extraInquiryPick, setExtraInquiryPick] = useState("");
+  const [inquiryPickMode, setInquiryPickMode] = useState<InquiryPickMode>("social");
 
   const [gradeSavePending, setGradeSavePending] = useState(false);
 
@@ -523,10 +694,6 @@ export default function OnboardingGradesPage() {
 
   >([]);
 
-  const [savedSummariesCollapsed, setSavedSummariesCollapsed] = useState(false);
-
-
-
   const selectedTab = store.activeTab;
 
   const selectedYear = store.selectedYear;
@@ -535,17 +702,42 @@ export default function OnboardingGradesPage() {
 
   const selectedSchoolTerm = useMemo(() => splitSchoolTerm(selectedTerm), [selectedTerm]);
 
-  const selectedMockMonth = useMemo(() => {
-
-    const month = inferMockMonth(selectedTerm);
-
-    return month === "3" || month === "6" || month === "9" ? month : "3";
-
-  }, [selectedTerm]);
-
   const availableTermOptions = useMemo(() => getGradeTermOptionsByTab(selectedTab, selectedYear), [selectedTab, selectedYear]);
 
+  const mockExamSeriesCaption = useMemo(() => {
 
+    if (selectedTab !== "mockExam") {
+
+      return "";
+
+    }
+
+    return getMockExamSeriesCaption(selectedYear, selectedTerm);
+
+  }, [selectedTab, selectedTerm, selectedYear]);
+
+  const filteredSavedGradeSummaries = useMemo(() => {
+    return savedGradeSummaries.filter((summary) => {
+      if (savedRecordsFilterYear !== "all" && summary.year !== savedRecordsFilterYear) {
+        return false;
+      }
+      if (savedRecordsFilterTab !== "all" && summary.tabKey !== savedRecordsFilterTab) {
+        return false;
+      }
+      return true;
+    });
+  }, [savedGradeSummaries, savedRecordsFilterYear, savedRecordsFilterTab]);
+
+  useEffect(() => {
+    const nextSummaries = [
+      ...store.schoolRecords
+        .filter((record) => hasSavedGradeContent(record))
+        .map((record) => buildSavedSummaryFromRecord("schoolRecord", record)),
+      ...store.mockExams.filter((record) => hasSavedGradeContent(record)).map((record) => buildSavedSummaryFromRecord("mockExam", record))
+    ].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+
+    setSavedGradeSummaries(nextSummaries.map(({ updatedAt: _updatedAt, ...summary }) => summary));
+  }, [store.schoolRecords, store.mockExams]);
 
   useEffect(() => {
 
@@ -577,7 +769,7 @@ export default function OnboardingGradesPage() {
 
   useEffect(() => {
 
-    if (selectedTab === "mockExam") {
+    if (availableTermOptions.length === 0) {
 
       return;
 
@@ -599,9 +791,10 @@ export default function OnboardingGradesPage() {
 
     setSubjectManageModalOpen(false);
 
-    setExtraInquiryPanelOpen("social");
+    setExtraInquiryPanelOpen("history");
 
     setExtraInquiryPick("");
+    setInquiryPickMode("social");
 
   }, [selectedTab, selectedYear, selectedTerm]);
 
@@ -611,9 +804,10 @@ export default function OnboardingGradesPage() {
 
     if (!subjectManageModalOpen) {
 
-      setExtraInquiryPanelOpen("social");
+      setExtraInquiryPanelOpen("history");
 
       setExtraInquiryPick("");
+      setInquiryPickMode("social");
 
     }
 
@@ -691,7 +885,7 @@ export default function OnboardingGradesPage() {
 
 
 
-    const inquiryScore = getInquiryScoreForAverage(activeScoreRecord.subjects);
+    const inquiryScore = getInquiryAverageScoreForAverage(activeScoreRecord.subjects);
 
     const values = [...coreAverageSubjects.map((subjectName) => activeScoreRecord.subjects.find((entry) => entry.subject.trim() === subjectName)?.score ?? ""), inquiryScore]
 
@@ -720,6 +914,158 @@ export default function OnboardingGradesPage() {
     [activeScoreRecord?.subjects]
 
   );
+
+  const socialLabelsForSelectedYear = useMemo(
+    () => (selectedYear === "1" ? integratedSocialSubjectLabels : socialInquirySubjectLabels),
+    [selectedYear]
+  );
+
+  const scienceLabelsForSelectedYear = useMemo(
+    () => (selectedYear === "1" ? integratedScienceSubjectLabels : scienceInquirySubjectLabels),
+    [selectedYear]
+  );
+
+  const modalSocialInquiryAverageValue = useMemo(
+
+    () => getCustomSubjectGroupAverageGradeValue(activeScoreRecord?.subjects ?? [], socialLabelsForSelectedYear),
+
+    [activeScoreRecord?.subjects, socialLabelsForSelectedYear]
+
+  );
+
+  const modalScienceInquiryAverageValue = useMemo(
+
+    () => getCustomSubjectGroupAverageGradeValue(activeScoreRecord?.subjects ?? [], scienceLabelsForSelectedYear),
+
+    [activeScoreRecord?.subjects, scienceLabelsForSelectedYear]
+
+  );
+
+  const modalSecondForeignAverageValue = useMemo(
+
+    () => getCustomSubjectGroupAverageGradeValue(activeScoreRecord?.subjects ?? [], secondForeignSubjectLabels),
+
+    [activeScoreRecord?.subjects]
+
+  );
+
+  const modalCustomSocialSubjects = useMemo(
+
+    () => customSubjects.filter((entry) => isOneOfLabels(entry.subject.trim(), socialLabelsForSelectedYear)),
+
+    [customSubjects, socialLabelsForSelectedYear]
+
+  );
+
+  const modalCustomScienceSubjects = useMemo(
+
+    () => customSubjects.filter((entry) => isOneOfLabels(entry.subject.trim(), scienceLabelsForSelectedYear)),
+
+    [customSubjects, scienceLabelsForSelectedYear]
+
+  );
+
+  const modalCustomForeignSubjects = useMemo(
+
+    () => customSubjects.filter((entry) => isOneOfLabels(entry.subject.trim(), secondForeignSubjectLabels)),
+
+    [customSubjects]
+
+  );
+
+  const modalCustomOrphanSubjects = useMemo(
+
+    () =>
+
+      customSubjects.filter((entry) => {
+
+        const t = entry.subject.trim();
+
+        return (
+          !isOneOfLabels(t, socialLabelsForSelectedYear) &&
+
+          !isOneOfLabels(t, scienceLabelsForSelectedYear) &&
+
+          !isOneOfLabels(t, secondForeignSubjectLabels)
+
+        );
+
+      }),
+
+    [customSubjects, scienceLabelsForSelectedYear, socialLabelsForSelectedYear]
+
+  );
+
+  const modalInquirySubjectsHaveGrades = useMemo(
+
+    () => customSubjects.some((entry) => entry.score.trim() !== ""),
+
+    [customSubjects]
+
+  );
+
+  const socialInquirySummaryLabel = useMemo(
+
+    () =>
+
+      modalCustomSocialSubjects.length > 0
+
+        ? selectedYear === "1"
+          ? modalCustomSocialSubjects.map((entry) => entry.subject.trim()).join("/")
+          : `사탐(${modalCustomSocialSubjects.map((entry) => entry.subject.trim()).join("/")})`
+
+        : null,
+
+    [modalCustomSocialSubjects, selectedYear]
+
+  );
+
+  const socialInquirySummaryGrade = useMemo(() => {
+
+    const v = modalSocialInquiryAverageValue;
+
+    return v ? `${v}등급` : "";
+
+  }, [modalSocialInquiryAverageValue]);
+
+  const scienceInquirySummaryLabel = useMemo(
+
+    () =>
+
+      modalCustomScienceSubjects.length > 0
+
+        ? selectedYear === "1"
+          ? modalCustomScienceSubjects.map((entry) => entry.subject.trim()).join("/")
+          : `과탐(${modalCustomScienceSubjects.map((entry) => entry.subject.trim()).join("/")})`
+
+        : null,
+
+    [modalCustomScienceSubjects, selectedYear]
+
+  );
+
+  const scienceInquirySummaryGrade = useMemo(() => {
+
+    const v = modalScienceInquiryAverageValue;
+
+    return v ? `${v}등급` : "";
+
+  }, [modalScienceInquiryAverageValue]);
+
+  const secondForeignSummaryLabel = useMemo(
+
+    () =>
+
+      modalCustomForeignSubjects.length > 0
+
+        ? `제2외국어(${modalCustomForeignSubjects.map((entry) => entry.subject.trim()).join("/")})`
+
+        : null,
+
+    [modalCustomForeignSubjects]
+
+  );
+
 
 
 
@@ -773,7 +1119,7 @@ export default function OnboardingGradesPage() {
 
 
 
-  const handleSaveGrades = async () => {
+  const handleSaveGrades = async (options?: { closeSubjectModalOnSuccess?: boolean }) => {
 
     setGradeSavePending(true);
 
@@ -783,55 +1129,14 @@ export default function OnboardingGradesPage() {
 
       if (activeScoreRecord && selectedTab !== "studentRecord") {
 
-        const tabLabel = scoreTabOptions.find((item) => item.key === selectedTab)?.label ?? selectedTab;
+        const nextSummary = buildSavedSummaryFromRecord(selectedTab, activeScoreRecord);
+        setSavedGradeSummaries((previous) => [nextSummary, ...previous.filter((item) => item.periodKey !== nextSummary.periodKey)]);
 
-        const yearLabel = gradeYearOptions.find((item) => item.value === selectedYear)?.label ?? selectedYear;
+      }
 
-        const termLabel =
+      if (options?.closeSubjectModalOnSuccess) {
 
-          availableTermOptions.find((item) => item.value === selectedTerm)?.label ??
-
-          gradeTermOptions.find((item) => item.value === selectedTerm)?.label ??
-
-          selectedTerm;
-
-        const periodCaption = `${yearLabel} · ${termLabel}`;
-
-        const periodKey = `${selectedTab}:${selectedYear}:${selectedTerm}`;
-
-        const nextSummary = {
-
-          periodKey,
-
-          tabKey: selectedTab,
-
-          year: selectedYear,
-
-          term: selectedTerm,
-
-          tabLabel,
-
-          periodCaption,
-
-          rows: activeScoreRecord.subjects
-
-            .map((entry) => ({
-
-              name: entry.subject.trim(),
-
-              grade: entry.score.trim()
-
-            }))
-
-            .filter((entry) => entry.name && entry.grade),
-
-          overall: activeScoreRecord.overallAverage.trim() || "—"
-
-        };
-
-        setSavedSummariesCollapsed(false);
-
-        setSavedGradeSummaries((previous) => [nextSummary, ...previous.filter((item) => item.periodKey !== periodKey)].slice(0, 8));
+        setSubjectManageModalOpen(false);
 
       }
 
@@ -862,6 +1167,14 @@ export default function OnboardingGradesPage() {
     setActiveTab(summary.tabKey);
 
     setSelectedPeriod(summary.year, summary.term);
+
+    setSavedRecordsModalOpen(false);
+
+    if (summary.tabKey === "schoolRecord" || summary.tabKey === "mockExam") {
+
+      setSubjectManageModalOpen(true);
+
+    }
 
   };
 
@@ -899,7 +1212,7 @@ export default function OnboardingGradesPage() {
 
 
 
-    const allowed = labelsForExtraInquiryPanel(extraInquiryPanelOpen);
+    const allowed = labelsForExtraInquiryPanel(extraInquiryPanelOpen, selectedYear, inquiryPickMode);
 
     if (!allowed.includes(name)) {
 
@@ -921,10 +1234,6 @@ export default function OnboardingGradesPage() {
 
     addSubject(selectedTab, selectedYear, selectedTerm, name);
 
-    setSubjectManageModalOpen(false);
-
-    setExtraInquiryPanelOpen(null);
-
     setExtraInquiryPick("");
 
   };
@@ -945,7 +1254,8 @@ export default function OnboardingGradesPage() {
 
 
 
-  const uploadTitle = selectedTab === "studentRecord" ? "생기부 / 활동 자료 업로드" : "PDF / 사진 성적 업로드";
+  const uploadButtonTitle = selectedTab === "studentRecord" ? "PDF / 사진 생기부·활동 자료 업로드" : "PDF / 사진 성적 업로드";
+  const uploadModalTitle = selectedTab === "studentRecord" ? "생기부·활동 자료 업로드" : "PDF / 사진 성적 업로드";
 
   const uploadDescription =
 
@@ -1017,7 +1327,7 @@ export default function OnboardingGradesPage() {
 
 
 
-      <div className={`mt-4 grid gap-3 ${selectedTab === "schoolRecord" || selectedTab === "mockExam" ? "grid-cols-3" : "grid-cols-2"}`}>
+      <div className="mt-4 grid grid-cols-3 gap-3">
 
         <TopFilterDropdown
           ariaLabel="학년 구분"
@@ -1026,7 +1336,11 @@ export default function OnboardingGradesPage() {
           onChange={(nextValue) => {
             const nextYear = nextValue as GradeYear;
             if (selectedTab === "mockExam") {
-              setSelectedPeriod(nextYear, buildMockTerm(selectedMockMonth));
+              const nextTermOptions = getGradeTermOptionsByTab("mockExam", nextYear);
+              const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm)
+                ? selectedTerm
+                : nextTermOptions[0].value;
+              setSelectedPeriod(nextYear, nextTerm);
               return;
             }
             const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
@@ -1071,51 +1385,71 @@ export default function OnboardingGradesPage() {
 
         {selectedTab === "mockExam" ? (
 
-          <TopFilterDropdown
-            ariaLabel="모의고사 월 선택"
-            value={selectedMockMonth}
-            options={[
-              { value: "3", label: "3월" },
-              { value: "6", label: "6월" },
-              { value: "9", label: "9월" }
-            ]}
-            onChange={(nextValue) => setSelectedPeriod(selectedYear, buildMockTerm(nextValue as "3" | "6" | "9"))}
-          />
+          <>
+
+            <div className="min-w-0 self-start">
+
+              <TopFilterDropdown
+                ariaLabel="모의고사 시기 선택"
+                value={selectedTerm}
+                options={availableTermOptions.map((item) => ({
+                  value: item.value,
+                  label:
+                    item.value === "mock-nat-11" && selectedYear === "3" ? "수능(11월)" : `${inferMockMonth(item.value)}월`
+                }))}
+                onChange={(nextValue) => setSelectedPeriod(selectedYear, nextValue as GradeTerm)}
+              />
+
+            </div>
+
+            {mockExamSeriesCaption ? (
+
+              <div className="flex min-w-0 items-center justify-center self-center">
+
+                <p
+
+                  className="rounded-full border border-navy/25 bg-[#F4F7FB] px-2.5 py-1.5 text-center text-[11px] font-semibold leading-snug text-navy"
+
+                  title={availableTermOptions.find((item) => item.value === selectedTerm)?.label}
+
+                >
+
+                  {mockExamSeriesCaption}
+
+                </p>
+
+              </div>
+
+            ) : null}
+
+          </>
 
         ) : null}
 
         {selectedTab !== "schoolRecord" && selectedTab !== "mockExam" ? (
-
-          <label className="relative z-10 block">
-
-            <select
-
-              className="w-full appearance-none rounded-full border border-line bg-white px-4 py-3 pr-10 text-sm text-ink"
-
-              aria-label="학기 구분"
-
+          <>
+            <TopFilterDropdown
+              ariaLabel="학기 구분"
               value={selectedTerm}
-
-              onChange={(event) => setSelectedPeriod(selectedYear, event.target.value as GradeTerm)}
-
-            >
-
-              {availableTermOptions.map((item) => (
-
-                <option key={item.value} value={item.value}>
-
-                  {item.label}
-
-                </option>
-
-              ))}
-
-            </select>
-
-            <SelectChevron active />
-
-          </label>
-
+              options={availableTermOptions.map((item) => ({ value: item.value, label: item.label.replace(" ", "·") }))}
+              onChange={(nextValue) => setSelectedPeriod(selectedYear, nextValue as GradeTerm)}
+            />
+            <TopFilterDropdown
+              ariaLabel="기록유형"
+              value={selectedStudentRecordType}
+              placeholder="기록유형"
+              options={[
+                { value: "", label: "선택 안함" },
+                { value: "행동특성", label: "행동특성" },
+                { value: "동아리", label: "동아리" },
+                { value: "봉사", label: "봉사" },
+                { value: "진로", label: "진로" },
+                { value: "수상", label: "수상" },
+                { value: "독서", label: "독서" }
+              ]}
+              onChange={(nextValue) => setSelectedStudentRecordType(nextValue)}
+            />
+          </>
         ) : null}
 
       </div>
@@ -1270,11 +1604,99 @@ export default function OnboardingGradesPage() {
 
 
 
-            {customSubjects.map((entry) => (
+            {socialInquirySummaryLabel ? (
+
+              <label className="space-y-2">
+
+                <span className="text-sm text-muted">{socialInquirySummaryLabel}</span>
+
+                <input
+
+                  type="text"
+
+                  readOnly
+
+                  value={socialInquirySummaryGrade}
+
+                  placeholder="자동 계산"
+
+                  className="w-full rounded-xl border border-white bg-white px-4 py-3 text-sm text-ink placeholder:text-muted"
+
+                />
+
+              </label>
+
+            ) : null}
+
+            {scienceInquirySummaryLabel ? (
+
+              <label className="space-y-2">
+
+                <span className="text-sm text-muted">{scienceInquirySummaryLabel}</span>
+
+                <input
+
+                  type="text"
+
+                  readOnly
+
+                  value={scienceInquirySummaryGrade}
+
+                  placeholder="자동 계산"
+
+                  className="w-full rounded-xl border border-white bg-white px-4 py-3 text-sm text-ink placeholder:text-muted"
+
+                />
+
+              </label>
+
+            ) : null}
+
+            {modalCustomForeignSubjects.map((entry) => (
 
               <label key={entry.id} className="relative space-y-2">
 
-                <span className="text-sm text-muted">{entry.subject}</span>
+                <span className="text-sm text-muted">{formatCustomSubjectLabel(entry.subject)}</span>
+
+                <div className="relative">
+
+                  <select
+
+                    value={entry.score}
+
+                    onChange={(event) => updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, event.target.value)}
+
+                    className={`w-full appearance-none rounded-xl border border-white bg-white px-4 py-3 pr-10 text-sm ${entry.score ? "text-ink" : "text-muted"}`}
+
+                  >
+
+                    <option value="">등급 선택</option>
+
+                    {subjectGradeOptions.map((grade) => (
+
+                      <option key={grade} value={grade}>
+
+                        {grade}
+
+                      </option>
+
+                    ))}
+
+                  </select>
+
+                  <SelectChevron active={Boolean(entry.score)} />
+
+                </div>
+
+              </label>
+
+            ))}
+
+            {modalCustomOrphanSubjects.map((entry) => (
+
+              <label key={entry.id} className="relative space-y-2">
+
+                <span className="text-sm text-muted">{formatCustomSubjectLabel(entry.subject)}</span>
 
                 <div className="relative">
 
@@ -1378,131 +1800,19 @@ export default function OnboardingGradesPage() {
 
               {savedGradeSummaries.length > 0 ? (
 
-                <div className="rounded-lg border border-navy/10 bg-white p-2.5">
+                <button
 
-                  <div className="mb-2 flex items-center justify-between">
+                  type="button"
 
-                    <p className="text-[11px] font-semibold text-muted">저장된 성적 기록</p>
+                  onClick={() => setSavedRecordsModalOpen(true)}
 
-                    <button
+                  className="w-full rounded-xl border border-white bg-white px-4 py-3 text-center text-sm font-normal text-muted"
 
-                      type="button"
+                >
 
-                      onClick={() => setSavedSummariesCollapsed((prev) => !prev)}
+                  저장된 성적 보기
 
-                      className="shrink-0 rounded-md border border-line bg-white px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-mist"
-
-                    >
-
-                      {savedSummariesCollapsed ? "펼치기" : "접기"}
-
-                    </button>
-
-                  </div>
-
-                  {!savedSummariesCollapsed ? (
-
-                    <div className="space-y-1.5">
-
-                      {savedGradeSummaries.map((summary) => (
-
-                        <div key={summary.periodKey} className="rounded-md border border-line/80 bg-[#FAFAFA] px-2 py-1.5">
-
-                          <div className="flex items-center justify-between gap-2">
-
-                            <p className="text-[11px] font-semibold leading-snug text-ink">
-
-                              <span
-
-                                className={`mr-1 inline-block rounded border px-1 py-px text-[10px] font-semibold ${
-
-                                  summary.tabKey === "mockExam"
-
-                                    ? "border-[#efc7c7] bg-[#F2B5B57A] text-black"
-
-                                    : summary.tabKey === "schoolRecord"
-
-                                      ? "border-[#bfe3cb] bg-[#E7F5EC] text-black"
-
-                                      : "border-line bg-[#EBEBEB] text-muted"
-
-                                }`}
-
-                              >
-
-                                {summary.tabLabel}
-
-                              </span>
-
-                              <span>{summary.periodCaption}</span>
-
-                            </p>
-
-                            <button
-
-                              type="button"
-
-                              onClick={() => handleEditSavedSummary(summary)}
-
-                              className="shrink-0 rounded-md border border-line bg-white px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-mist"
-
-                            >
-
-                              수정하기
-
-                            </button>
-
-                          </div>
-
-                          <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-1">
-
-                            {summary.rows.length > 0 ? (
-
-                              summary.rows.map((row, index) => (
-
-                                <span
-
-                                  key={`${summary.periodKey}-${row.name}-${index}`}
-
-                                  className="inline-flex max-w-full items-baseline gap-0.5 whitespace-nowrap rounded-md bg-[#EBEBEB] px-1.5 py-0.5 text-[10px] leading-tight"
-
-                                >
-
-                                  <span className="truncate text-muted">{row.name}</span>
-
-                                  <span className="shrink-0 tabular-nums font-semibold text-ink">{row.grade}</span>
-
-                                </span>
-
-                              ))
-
-                            ) : (
-
-                              <span className="text-[10px] text-muted">입력된 과목 등급 없음</span>
-
-                            )}
-
-                          </div>
-
-                          <div className="mt-1 flex justify-end border-t border-line/80 pt-1">
-
-                            <p className="text-[10px] font-semibold leading-tight text-navy">
-
-                              전체평균 <span className="tabular-nums">{summary.overall}</span>
-
-                            </p>
-
-                          </div>
-
-                        </div>
-
-                      ))}
-
-                    </div>
-
-                  ) : null}
-
-                </div>
+                </button>
 
               ) : null}
 
@@ -1530,7 +1840,7 @@ export default function OnboardingGradesPage() {
 
       >
 
-        + {uploadTitle}
+        + {uploadButtonTitle}
 
       </button>
 
@@ -1600,7 +1910,7 @@ export default function OnboardingGradesPage() {
 
           <UploadDropzone
 
-            title={uploadTitle}
+            title={uploadModalTitle}
 
             description={uploadDescription}
 
@@ -1622,7 +1932,132 @@ export default function OnboardingGradesPage() {
 
     ) : null}
 
-
+    {savedRecordsModalOpen ? (
+      <div
+        className="fixed inset-0 z-[81] flex items-center justify-center bg-black/45 px-4 py-6"
+        role="presentation"
+        onClick={() => setSavedRecordsModalOpen(false)}
+      >
+        <div
+          className="relative flex max-h-[88vh] w-full max-w-[340px] flex-col overflow-hidden rounded-[24px] bg-white shadow-soft"
+          role="dialog"
+          aria-modal="true"
+          aria-label="저장된 성적 보기"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full text-lg leading-none text-muted hover:bg-mist"
+            aria-label="닫기"
+            onClick={() => setSavedRecordsModalOpen(false)}
+          >
+            ×
+          </button>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-10 [-webkit-overflow-scrolling:touch]">
+            <p className="mb-1 text-base font-semibold text-ink">저장된 성적 보기</p>
+            <p className="mb-4 text-sm leading-5 text-muted">학년과 유형을 골라서 모아 볼 수 있어요.</p>
+            <p className="mb-1.5 text-[11px] font-semibold text-muted">학년</p>
+            <div className="mb-4 grid grid-cols-4 gap-2">
+              {[{ value: "all" as const, label: "전체" }, ...gradeYearOptions.map((item) => ({ value: item.value, label: item.label }))].map(
+                (item) => (
+                <button
+                  key={item.value === "all" ? "year-all" : item.value}
+                  type="button"
+                  onClick={() => setSavedRecordsFilterYear(item.value)}
+                  className={`rounded-full border px-2 py-2 text-center text-[11px] font-semibold leading-tight ${
+                    savedRecordsFilterYear === item.value ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              )
+              )}
+            </div>
+            <p className="mb-1.5 text-[11px] font-semibold text-muted">유형</p>
+            <div className="mb-4 grid grid-cols-3 gap-2">
+              {(
+                [
+                  { value: "all" as const, label: "전체" },
+                  { value: "schoolRecord" as const, label: "내신" },
+                  { value: "mockExam" as const, label: "모의고사" }
+                ] as const
+              ).map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => setSavedRecordsFilterTab(item.value)}
+                  className={`rounded-full border px-2 py-2.5 text-sm font-semibold ${
+                    savedRecordsFilterTab === item.value ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <p className="mb-2 text-[11px] text-muted">
+              {filteredSavedGradeSummaries.length}건 표시 · 전체 {savedGradeSummaries.length}건
+            </p>
+            <div className="space-y-1.5">
+              {filteredSavedGradeSummaries.length > 0 ? (
+                filteredSavedGradeSummaries.map((summary) => (
+                  <div key={summary.periodKey} className="rounded-md border border-line/80 bg-[#FAFAFA] px-2 py-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold leading-snug text-ink">
+                        <span
+                          className={`mr-1 inline-block rounded border px-1 py-px text-[10px] font-semibold ${
+                            summary.tabKey === "mockExam"
+                              ? "border-[#efc7c7] bg-[#F2B5B57A] text-black"
+                              : summary.tabKey === "schoolRecord"
+                                ? "border-[#bfe3cb] bg-[#E7F5EC] text-black"
+                                : "border-line bg-[#EBEBEB] text-muted"
+                          }`}
+                        >
+                          {summary.tabLabel}
+                        </span>
+                        <span>{summary.periodCaption}</span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleEditSavedSummary(summary)}
+                        className="shrink-0 rounded-md border border-line bg-white px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-mist"
+                      >
+                        수정하기
+                      </button>
+                    </div>
+                    <div className="mt-1 overflow-x-auto pb-1">
+                      {summary.rows.length > 0 ? (
+                        <div className="flex min-w-max items-center gap-1">
+                          {summary.rows.map((row, index) => (
+                            <span
+                              key={`${summary.periodKey}-${row.name}-${index}`}
+                              className="inline-flex max-w-[160px] items-baseline gap-0.5 whitespace-nowrap rounded-md bg-[#EBEBEB] px-1.5 py-0.5 text-[10px] leading-tight"
+                            >
+                              <span className="truncate text-muted">{row.name}</span>
+                              <span className="shrink-0 tabular-nums font-semibold text-ink">{row.grade}</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-muted">입력된 과목 등급 없음</span>
+                      )}
+                    </div>
+                    <div className="mt-1 flex justify-end border-t border-line/80 pt-1">
+                      <p className="text-[10px] font-semibold leading-tight text-navy">
+                        전체평균 <span className="tabular-nums">{summary.overall}</span>
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-md border border-dashed border-line/80 bg-white px-3 py-4 text-center text-sm text-muted">
+                  조건에 맞는 저장 기록이 없어요.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : null}
 
     {subjectManageModalOpen ? (
 
@@ -1638,7 +2073,7 @@ export default function OnboardingGradesPage() {
 
         <div
 
-          className="relative w-full max-w-[340px] rounded-[24px] bg-white px-4 pb-5 pt-10 shadow-soft"
+          className="relative flex max-h-[88vh] w-full max-w-[340px] flex-col overflow-hidden rounded-[24px] bg-white shadow-soft"
 
           role="dialog"
 
@@ -1666,6 +2101,8 @@ export default function OnboardingGradesPage() {
 
           </button>
 
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-10 [-webkit-overflow-scrolling:touch]">
+
           <p className="mb-1 text-base font-semibold text-ink">과목 추가</p>
 
           <p className="mb-3 text-sm leading-5 text-muted">추가할 과목을 선택해 주세요.</p>
@@ -1673,8 +2110,8 @@ export default function OnboardingGradesPage() {
           <div className="grid grid-cols-3 gap-2">
 
             {extraInquiryModalEntries.map(({ panel, label }) => {
-
               const isActive = extraInquiryPanelOpen === panel;
+              const yearAwareLabel = panel === "other" && selectedYear !== "1" ? "제2외국어" : label;
 
               return (
 
@@ -1700,7 +2137,7 @@ export default function OnboardingGradesPage() {
 
                 >
 
-                  {label}
+                  {yearAwareLabel}
 
                 </button>
 
@@ -1716,7 +2153,36 @@ export default function OnboardingGradesPage() {
 
               <label className="relative block space-y-1.5">
 
-                <span className="text-xs font-medium text-muted">{titleForExtraInquiryPanel(extraInquiryPanelOpen)}</span>
+                <span className="text-xs font-medium text-muted">{titleForExtraInquiryPanel(extraInquiryPanelOpen, inquiryPickMode)}</span>
+
+                {extraInquiryPanelOpen === "inquiry" ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInquiryPickMode("social");
+                        setExtraInquiryPick("");
+                      }}
+                      className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                        inquiryPickMode === "social" ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                      }`}
+                    >
+                      사회탐구
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInquiryPickMode("science");
+                        setExtraInquiryPick("");
+                      }}
+                      className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                        inquiryPickMode === "science" ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                      }`}
+                    >
+                      과학탐구
+                    </button>
+                  </div>
+                ) : null}
 
                 <div className="relative">
 
@@ -1732,7 +2198,7 @@ export default function OnboardingGradesPage() {
 
                     <option value="">과목을 선택하세요</option>
 
-                    {labelsForExtraInquiryPanel(extraInquiryPanelOpen).map((subjectLabel) => {
+                    {labelsForExtraInquiryPanel(extraInquiryPanelOpen, selectedYear, inquiryPickMode).map((subjectLabel) => {
 
                       const taken =
 
@@ -1778,43 +2244,133 @@ export default function OnboardingGradesPage() {
 
           <div className="mt-5 border-t border-line pt-4">
 
-            <p className="mb-2 text-sm font-semibold text-ink">과목 삭제</p>
+            <p className="mb-2 text-sm font-semibold text-ink">과목 정보</p>
 
             {customSubjects.length === 0 ? (
 
-              <div className="rounded-xl border border-white bg-white px-3 py-3 text-sm text-muted">삭제할 추가 과목이 아직 없어요.</div>
+              <div className="rounded-xl border border-white bg-white px-3 py-3 text-sm text-muted">추가된 과목 정보가 아직 없어요.</div>
 
             ) : (
 
-              <div className="space-y-2">
+              <>
 
-                {customSubjects.map((entry) => (
+                <div className="space-y-5">
 
-                  <div key={entry.id} className="flex items-center justify-between rounded-xl border border-white bg-white px-3 py-2.5">
+                  <ModalInquirySubjectGroupBlock
 
-                    <span className="text-sm text-ink">{entry.subject}</span>
+                    entries={modalCustomSocialSubjects}
 
-                    <button
+                    averageValue={modalSocialInquiryAverageValue}
 
-                      type="button"
+                    averageLeadingText={socialInquirySummaryLabel ? `${socialInquirySummaryLabel} ` : ""}
 
-                      onClick={() => handleDeleteSubjectById(entry.id)}
+                    selectedTab={selectedTab}
 
-                      className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-muted"
+                    selectedYear={selectedYear}
 
-                    >
+                    selectedTerm={selectedTerm}
 
-                      삭제
+                    updateSubjectScore={updateSubjectScore}
 
-                    </button>
+                    onDeleteSubject={handleDeleteSubjectById}
 
-                  </div>
+                  />
 
-                ))}
+                  <ModalInquirySubjectGroupBlock
 
-              </div>
+                    entries={modalCustomScienceSubjects}
+
+                    averageValue={modalScienceInquiryAverageValue}
+
+                    averageLeadingText={scienceInquirySummaryLabel ? `${scienceInquirySummaryLabel} ` : ""}
+
+                    selectedTab={selectedTab}
+
+                    selectedYear={selectedYear}
+
+                    selectedTerm={selectedTerm}
+
+                    updateSubjectScore={updateSubjectScore}
+
+                    onDeleteSubject={handleDeleteSubjectById}
+
+                  />
+
+                  <ModalInquirySubjectGroupBlock
+
+                    entries={modalCustomForeignSubjects}
+
+                    averageValue={modalSecondForeignAverageValue}
+
+                    averageLeadingText={secondForeignSummaryLabel ? `${secondForeignSummaryLabel} ` : ""}
+
+                    selectedTab={selectedTab}
+
+                    selectedYear={selectedYear}
+
+                    selectedTerm={selectedTerm}
+
+                    updateSubjectScore={updateSubjectScore}
+
+                    onDeleteSubject={handleDeleteSubjectById}
+
+                  />
+
+                  {modalCustomOrphanSubjects.length > 0 ? (
+
+                    <ModalInquirySubjectGroupBlock
+
+                      entries={modalCustomOrphanSubjects}
+
+                      averageValue={null}
+
+                      averageLeadingText=""
+
+                      selectedTab={selectedTab}
+
+                      selectedYear={selectedYear}
+
+                      selectedTerm={selectedTerm}
+
+                      updateSubjectScore={updateSubjectScore}
+
+                      onDeleteSubject={handleDeleteSubjectById}
+
+                    />
+
+                  ) : null}
+
+                </div>
+
+                <button
+
+                  type="button"
+
+                  disabled={gradeSavePending}
+
+                  onClick={() => void handleSaveGrades({ closeSubjectModalOnSuccess: true })}
+
+                  className={
+
+                    modalInquirySubjectsHaveGrades
+
+                      ? `${onboardingPrimaryCtaClass} mt-3`
+
+                      : "mt-3 box-border flex w-full min-w-0 items-center justify-center rounded-xl border border-line bg-white px-4 py-3 text-sm font-normal text-muted disabled:opacity-100"
+
+                  }
+
+                >
+
+                  {gradeSavePending ? "저장 중..." : "저장하기"}
+
+                </button>
+
+              </>
 
             )}
+
+          </div>
 
           </div>
 

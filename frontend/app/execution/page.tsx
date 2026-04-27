@@ -267,7 +267,7 @@ export default function ExecutionPage() {
                       </div>
                     </div>
                     <span
-                      className={`rounded-full px-3 py-2 text-xs font-extrabold ${
+                      className={`rounded-full px-3 py-2 text-xs font-semibold ${
                         item.checked ? "bg-normal text-black" : "bg-[#F5D3D1] text-black"
                       }`}
                     >
