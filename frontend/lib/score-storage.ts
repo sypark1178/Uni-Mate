@@ -7,7 +7,10 @@ import type {
   GradeYear,
   ScoreMemoryStore,
   ScoreTabKey,
+  StudentRecordAcademicYear,
   StudentRecordPeriod,
+  StudentRecordSemester,
+  StudentRecordType,
   SubjectScoreEntry,
   UploadedRecordFile
 } from "@/lib/types";
@@ -168,6 +171,38 @@ function buildKey(year: GradeYear, term: GradeTerm) {
   return `${year}-${term}`;
 }
 
+const DEFAULT_STUDENT_ACADEMIC_YEAR: StudentRecordAcademicYear = 2026;
+const DEFAULT_STUDENT_SEMESTER: StudentRecordSemester = 1;
+const DEFAULT_STUDENT_RECORD_TYPE: StudentRecordType = "세특";
+
+const STUDENT_RECORD_TYPES: StudentRecordType[] = ["세특", "동아리", "봉사", "진로", "수상", "독서", "행동특성"];
+
+function parseStudentRecordAcademicYear(value: unknown): StudentRecordAcademicYear {
+  const n = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+  if (Number.isFinite(n) && n >= 2026 && n <= 2036) {
+    return n as StudentRecordAcademicYear;
+  }
+  return DEFAULT_STUDENT_ACADEMIC_YEAR;
+}
+
+function parseStudentRecordSemester(value: unknown): StudentRecordSemester {
+  if (value === 1 || value === "1") {
+    return 1;
+  }
+  if (value === 2 || value === "2") {
+    return 2;
+  }
+  return DEFAULT_STUDENT_SEMESTER;
+}
+
+function parseStudentRecordType(value: unknown): StudentRecordType {
+  const s = typeof value === "string" ? value.trim() : "";
+  if ((STUDENT_RECORD_TYPES as readonly string[]).includes(s)) {
+    return s as StudentRecordType;
+  }
+  return DEFAULT_STUDENT_RECORD_TYPE;
+}
+
 function createSubjectId(subject: string, index: number) {
   const safeName = (subject || "custom-subject").replace(/\s+/g, "-").toLowerCase();
   return `${safeName}-${index}-${Date.now()}`;
@@ -198,6 +233,9 @@ export function createEmptyStudentRecord(year: GradeYear, term: GradeTerm): Stud
     id: buildKey(year, term),
     year,
     term,
+    academicYear: DEFAULT_STUDENT_ACADEMIC_YEAR,
+    semester: DEFAULT_STUDENT_SEMESTER,
+    recordType: DEFAULT_STUDENT_RECORD_TYPE,
     title: "",
     description: "",
     files: [],
@@ -225,6 +263,9 @@ export const defaultScoreMemoryStore: ScoreMemoryStore = {
   activeTab: "schoolRecord",
   selectedYear: "1",
   selectedTerm: "1-midterm",
+  selectedStudentAcademicYear: DEFAULT_STUDENT_ACADEMIC_YEAR,
+  selectedStudentSemester: DEFAULT_STUDENT_SEMESTER,
+  selectedStudentRecordType: DEFAULT_STUDENT_RECORD_TYPE,
   updatedAt: nowIso(),
   scoreSchemaVersion: SCORE_SCHEMA_VERSION
 };
@@ -317,23 +358,34 @@ function normalizeUpload(raw: unknown): UploadedRecordFile | null {
 }
 
 function normalizeStudentRecord(raw: unknown): StudentRecordPeriod {
-  const rawYear = typeof raw === "object" && raw && "year" in raw ? String(raw.year) : "1";
-  const rawTerm = typeof raw === "object" && raw && "term" in raw ? String(raw.term) : "1-midterm";
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const rawYear = "year" in obj ? String(obj.year) : "1";
+  const rawTerm = "term" in obj ? String(obj.term) : "1-midterm";
   const year = (gradeYearOptions.find((item) => item.value === rawYear)?.value ?? "1") as GradeYear;
   const term = (gradeTermOptions.find((item) => item.value === rawTerm)?.value ?? "1-midterm") as GradeTerm;
   const files =
-    typeof raw === "object" && raw && "files" in raw && Array.isArray(raw.files)
-      ? raw.files.map(normalizeUpload).filter((item): item is UploadedRecordFile => item !== null)
+    "files" in obj && Array.isArray(obj.files)
+      ? obj.files.map(normalizeUpload).filter((item): item is UploadedRecordFile => item !== null)
       : [];
 
+  const recordIdRaw = obj.recordId;
+  const recordId = typeof recordIdRaw === "number" && Number.isFinite(recordIdRaw) ? recordIdRaw : undefined;
+  const subjectNameRaw = obj.subjectName;
+  const subjectName = typeof subjectNameRaw === "string" && subjectNameRaw.trim() ? subjectNameRaw.trim() : undefined;
+
   return {
-    id: typeof raw === "object" && raw && "id" in raw ? String(raw.id) : buildKey(year, term),
+    id: "id" in obj ? String(obj.id) : buildKey(year, term),
+    ...(recordId !== undefined ? { recordId } : {}),
     year,
     term,
-    title: typeof raw === "object" && raw && "title" in raw ? String(raw.title ?? "") : "",
-    description: typeof raw === "object" && raw && "description" in raw ? String(raw.description ?? "") : "",
+    academicYear: parseStudentRecordAcademicYear(obj.academicYear),
+    semester: parseStudentRecordSemester(obj.semester),
+    recordType: parseStudentRecordType(obj.recordType),
+    ...(subjectName !== undefined ? { subjectName } : {}),
+    title: "title" in obj ? String(obj.title ?? "") : "",
+    description: "description" in obj ? String(obj.description ?? "") : "",
     files,
-    updatedAt: typeof raw === "object" && raw && "updatedAt" in raw ? String(raw.updatedAt) : nowIso()
+    updatedAt: "updatedAt" in obj ? String(obj.updatedAt) : nowIso()
   };
 }
 
@@ -357,6 +409,7 @@ function normalizeScoreStore(raw: unknown): ScoreMemoryStore {
   const activeTab = "activeTab" in raw ? String(raw.activeTab) : "schoolRecord";
   const selectedYear = "selectedYear" in raw ? String(raw.selectedYear) : "1";
   const selectedTerm = "selectedTerm" in raw ? String(raw.selectedTerm) : "1-midterm";
+  const rawObj = raw as Record<string, unknown>;
 
   const schemaVersionRaw =
     "scoreSchemaVersion" in raw && typeof (raw as { scoreSchemaVersion?: unknown }).scoreSchemaVersion === "number"
@@ -372,6 +425,9 @@ function normalizeScoreStore(raw: unknown): ScoreMemoryStore {
     activeTab: (scoreTabOptions.find((item) => item.key === activeTab)?.key ?? "schoolRecord") as ScoreTabKey,
     selectedYear: (gradeYearOptions.find((item) => item.value === selectedYear)?.value ?? "1") as GradeYear,
     selectedTerm: (gradeTermOptions.find((item) => item.value === selectedTerm)?.value ?? "1-midterm") as GradeTerm,
+    selectedStudentAcademicYear: parseStudentRecordAcademicYear(rawObj.selectedStudentAcademicYear),
+    selectedStudentSemester: parseStudentRecordSemester(rawObj.selectedStudentSemester),
+    selectedStudentRecordType: parseStudentRecordType(rawObj.selectedStudentRecordType),
     updatedAt: "updatedAt" in raw ? String(raw.updatedAt) : nowIso(),
     scoreSchemaVersion: schemaVersion >= SCORE_SCHEMA_VERSION ? schemaVersion : SCORE_SCHEMA_VERSION
   };
