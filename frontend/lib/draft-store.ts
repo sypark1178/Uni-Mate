@@ -70,6 +70,11 @@ export function setDraftScores(value: unknown) {
   markDraftDirty(true);
 }
 
+/** 하이드레이션 등: 세션에 성적 스냅샷만 맞추고 저장하지 않은 변경으로 취급하지 않음 */
+export function setDraftScoresSnapshot(value: unknown) {
+  writeJson(draftScoresKey, value);
+}
+
 export function clearDraftScores() {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(scopedKey(draftScoresKey));

@@ -15,26 +15,29 @@ import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import { onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
 
 import {
-
+  academicYearSelectOptions,
   getScoreRecord,
-
   getGradeTermOptionsByTab,
-
   getMockExamSeriesCaption,
-
   gradeTermOptions,
-
   gradeYearOptions,
-
   scoreTabOptions,
-
+  studentRecordTypeTabOptions,
+  studentSemesterTabOptions,
   subjectGradeOptions,
-
+  uploadMatchesStudentSelection,
   useScoreRecords
-
 } from "@/lib/score-storage";
 
-import type { GradePeriodRecord, GradeTerm, GradeYear, ScoreTabKey, SubjectScoreEntry } from "@/lib/types";
+import type {
+  GradePeriodRecord,
+  GradeTerm,
+  GradeYear,
+  ScoreTabKey,
+  StudentRecordAcademicYear,
+  StudentRecordType,
+  SubjectScoreEntry
+} from "@/lib/types";
 
 
 
@@ -664,6 +667,8 @@ export default function OnboardingGradesPage() {
 
     setSelectedPeriod,
 
+    setStudentRecordSelection,
+
     updateSubjectScore,
 
     updateOverallAverage,
@@ -693,8 +698,6 @@ export default function OnboardingGradesPage() {
   const [savedRecordsFilterYear, setSavedRecordsFilterYear] = useState<"all" | GradeYear>("all");
 
   const [savedRecordsFilterTab, setSavedRecordsFilterTab] = useState<"all" | "schoolRecord" | "mockExam">("all");
-
-  const [selectedStudentRecordType, setSelectedStudentRecordType] = useState("");
 
   const [extraInquiryPanelOpen, setExtraInquiryPanelOpen] = useState<ExtraInquiryPanel | null>("history");
 
@@ -738,7 +741,10 @@ export default function OnboardingGradesPage() {
 
   const selectedSchoolTerm = useMemo(() => splitSchoolTerm(selectedTerm), [selectedTerm]);
 
-  const availableTermOptions = useMemo(() => getGradeTermOptionsByTab(selectedTab, selectedYear), [selectedTab, selectedYear]);
+  const availableTermOptions = useMemo(
+    () => (selectedTab === "studentRecord" ? [] : getGradeTermOptionsByTab(selectedTab, selectedYear)),
+    [selectedTab, selectedYear]
+  );
 
   const mockExamSeriesCaption = useMemo(() => {
 
@@ -887,19 +893,31 @@ export default function OnboardingGradesPage() {
 
 
 
-  const currentUploads = useMemo(
-
-    () =>
-
-      store.uploads
-
-        .filter((file) => file.sourceTab === selectedTab && file.year === selectedYear && file.term === selectedTerm)
-
-        .map((file) => file.name),
-
-    [selectedTab, selectedTerm, selectedYear, store.uploads]
-
-  );
+  const currentUploads = useMemo(() => {
+    if (selectedTab === "studentRecord") {
+      return store.uploads
+        .filter((file) =>
+          uploadMatchesStudentSelection(
+            file,
+            store.selectedStudentAcademicYear,
+            store.selectedStudentSemester,
+            store.selectedStudentRecordType
+          )
+        )
+        .map((file) => file.name);
+    }
+    return store.uploads
+      .filter((file) => file.sourceTab === selectedTab && file.year === selectedYear && file.term === selectedTerm)
+      .map((file) => file.name);
+  }, [
+    selectedTab,
+    selectedTerm,
+    selectedYear,
+    store.uploads,
+    store.selectedStudentAcademicYear,
+    store.selectedStudentSemester,
+    store.selectedStudentRecordType
+  ]);
 
 
 
@@ -1320,7 +1338,7 @@ export default function OnboardingGradesPage() {
 
     selectedTab === "studentRecord"
 
-      ? "생기부, 활동증빙, 특기자료를 올리면 현재 학년/학기 기록과 함께 저장됩니다."
+      ? "생기부, 활동증빙, 특기자료를 올리면 선택한 학년도·학기·기록유형과 함께 저장됩니다."
 
       : "내신과 모의고사 성적표를 올리면 OCR 파이프라인으로 이어집니다.";
 
@@ -1388,25 +1406,57 @@ export default function OnboardingGradesPage() {
 
       <div className="mt-4 grid grid-cols-3 gap-3">
 
-        <TopFilterDropdown
-          ariaLabel="학년 구분"
-          value={selectedYear}
-          options={gradeYearOptions.map((item) => ({ value: item.value, label: item.label }))}
-          onChange={(nextValue) => {
-            const nextYear = nextValue as GradeYear;
-            if (selectedTab === "mockExam") {
-              const nextTermOptions = getGradeTermOptionsByTab("mockExam", nextYear);
-              const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm)
-                ? selectedTerm
-                : nextTermOptions[0].value;
-              setSelectedPeriod(nextYear, nextTerm);
-              return;
-            }
-            const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
-            const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
-            setSelectedPeriod(nextYear, nextTerm);
-          }}
-        />
+        {selectedTab === "studentRecord" ? (
+          <>
+            <TopFilterDropdown
+              ariaLabel="학년도"
+              value={String(store.selectedStudentAcademicYear)}
+              options={academicYearSelectOptions}
+              onChange={(nextValue) => {
+                const n = Number.parseInt(nextValue, 10);
+                if (Number.isFinite(n)) {
+                  setStudentRecordSelection({ academicYear: n as StudentRecordAcademicYear });
+                }
+              }}
+            />
+            <TopFilterDropdown
+              ariaLabel="학기 구분"
+              value={String(store.selectedStudentSemester)}
+              options={studentSemesterTabOptions}
+              onChange={(nextValue) => {
+                setStudentRecordSelection({ semester: nextValue === "2" ? 2 : 1 });
+              }}
+            />
+            <TopFilterDropdown
+              ariaLabel="기록유형"
+              value={store.selectedStudentRecordType}
+              options={studentRecordTypeTabOptions}
+              onChange={(nextValue) => {
+                setStudentRecordSelection({ recordType: nextValue as StudentRecordType });
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <TopFilterDropdown
+              ariaLabel="학년 구분"
+              value={selectedYear}
+              options={gradeYearOptions.map((item) => ({ value: item.value, label: item.label }))}
+              onChange={(nextValue) => {
+                const nextYear = nextValue as GradeYear;
+                if (selectedTab === "mockExam") {
+                  const nextTermOptions = getGradeTermOptionsByTab("mockExam", nextYear);
+                  const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm)
+                    ? selectedTerm
+                    : nextTermOptions[0].value;
+                  setSelectedPeriod(nextYear, nextTerm);
+                  return;
+                }
+                const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
+                const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
+                setSelectedPeriod(nextYear, nextTerm);
+              }}
+            />
 
         {selectedTab === "schoolRecord" ? (
 
@@ -1485,31 +1535,8 @@ export default function OnboardingGradesPage() {
 
         ) : null}
 
-        {selectedTab !== "schoolRecord" && selectedTab !== "mockExam" ? (
-          <>
-            <TopFilterDropdown
-              ariaLabel="학기 구분"
-              value={selectedTerm}
-              options={availableTermOptions.map((item) => ({ value: item.value, label: item.label.replace(" ", "·") }))}
-              onChange={(nextValue) => setSelectedPeriod(selectedYear, nextValue as GradeTerm)}
-            />
-            <TopFilterDropdown
-              ariaLabel="기록유형"
-              value={selectedStudentRecordType}
-              placeholder="기록유형"
-              options={[
-                { value: "", label: "선택 안함" },
-                { value: "행동특성", label: "행동특성" },
-                { value: "동아리", label: "동아리" },
-                { value: "봉사", label: "봉사" },
-                { value: "진로", label: "진로" },
-                { value: "수상", label: "수상" },
-                { value: "독서", label: "독서" }
-              ]}
-              onChange={(nextValue) => setSelectedStudentRecordType(nextValue)}
-            />
           </>
-        ) : null}
+        )}
 
       </div>
 
@@ -1533,7 +1560,7 @@ export default function OnboardingGradesPage() {
 
                 value={currentStudentRecord.title}
 
-                onChange={(event) => updateStudentRecordField(selectedYear, selectedTerm, "title", event.target.value)}
+                onChange={(event) => updateStudentRecordField("title", event.target.value)}
 
               />
 
@@ -1551,7 +1578,7 @@ export default function OnboardingGradesPage() {
 
                 value={currentStudentRecord.description}
 
-                onChange={(event) => updateStudentRecordField(selectedYear, selectedTerm, "description", event.target.value)}
+                onChange={(event) => updateStudentRecordField("description", event.target.value)}
 
               />
 
@@ -1559,7 +1586,7 @@ export default function OnboardingGradesPage() {
 
             <div className="rounded-2xl bg-white px-4 py-4 text-sm leading-6 text-muted">
 
-              생기부와 활동 자료는 현재 학년/학기 기록에 즉시 저장되고 목표설정과 AI 분석에도 함께 반영됩니다.
+              생기부와 활동 자료는 선택한 학년도·학기·기록유형에 즉시 저장되고 목표설정과 AI 분석에도 함께 반영됩니다.
 
             </div>
 

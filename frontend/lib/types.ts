@@ -95,6 +95,10 @@ export type UploadedRecordFile = {
   year: GradeYear;
   term: GradeTerm;
   uploadedAt: string;
+  /** 생기부 탭: TB_STUDENT_RECORD (학년도·학기·기록유형)과 동일 키로 필터 */
+  studentAcademicYear?: StudentRecordAcademicYear;
+  studentSemester?: StudentRecordSemester;
+  studentRecordType?: StudentRecordType;
 };
 
 export type StudentRecordPeriod = {

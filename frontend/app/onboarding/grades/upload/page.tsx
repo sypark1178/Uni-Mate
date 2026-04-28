@@ -6,7 +6,16 @@ import { PhoneFrame } from "@/components/phone-frame";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import { onboardingPrimaryCtaClass, onboardingSecondaryOutlineCtaClass } from "@/lib/onboarding-buttons";
-import { getGradeTermOptionsByTab, gradeTermOptions, gradeYearOptions, scoreTabOptions, useScoreRecords } from "@/lib/score-storage";
+import {
+  getGradeTermOptionsByTab,
+  gradeTermForStudentSemester,
+  gradeTermOptions,
+  gradeYearOptions,
+  schoolGradeFromAcademicYear,
+  scoreTabOptions,
+  uploadMatchesStudentSelection,
+  useScoreRecords
+} from "@/lib/score-storage";
 import type { GradeTerm, GradeYear, ScoreTabKey } from "@/lib/types";
 
 function isScoreTabKey(value: string | null): value is ScoreTabKey {
@@ -31,20 +40,50 @@ export default function GradeUploadPage() {
 
   const tab = isScoreTabKey(requestedTab) ? requestedTab : store.activeTab;
   const year = isGradeYear(requestedYear) ? requestedYear : store.selectedYear;
-  const availableTermOptions = getGradeTermOptionsByTab(tab, year);
+  const availableTermOptions = tab === "studentRecord" ? [] : getGradeTermOptionsByTab(tab, year);
   const fallbackTerm = availableTermOptions[0]?.value ?? store.selectedTerm;
   const candidateTerm = isGradeTerm(requestedTerm) ? requestedTerm : store.selectedTerm;
-  const term = availableTermOptions.some((item) => item.value === candidateTerm) ? candidateTerm : fallbackTerm;
+  const term =
+    tab === "studentRecord"
+      ? gradeTermForStudentSemester(store.selectedStudentSemester)
+      : availableTermOptions.some((item) => item.value === candidateTerm)
+        ? candidateTerm
+        : fallbackTerm;
+  const yearForStudentUpload = schoolGradeFromAcademicYear(store.selectedStudentAcademicYear);
+  const yearForUpload = tab === "studentRecord" ? yearForStudentUpload : year;
 
-  const existingFiles = useMemo(
-    () =>
-      store.uploads
-        .filter((file) => file.sourceTab === tab && file.year === year && file.term === term)
-        .map((file) => file.name),
-    [store.uploads, tab, term, year]
+  const existingFiles = useMemo(() => {
+    if (tab === "studentRecord") {
+      return store.uploads
+        .filter((file) =>
+          uploadMatchesStudentSelection(
+            file,
+            store.selectedStudentAcademicYear,
+            store.selectedStudentSemester,
+            store.selectedStudentRecordType
+          )
+        )
+        .map((file) => file.name);
+    }
+    return store.uploads
+      .filter((file) => file.sourceTab === tab && file.year === year && file.term === term)
+      .map((file) => file.name);
+  }, [
+    store.uploads,
+    tab,
+    term,
+    year,
+    store.selectedStudentAcademicYear,
+    store.selectedStudentSemester,
+    store.selectedStudentRecordType
+  ]);
+
+  const gradesHref = mergeHrefWithSearchParams(
+    tab === "studentRecord"
+      ? `/onboarding/grades?tab=studentRecord`
+      : `/onboarding/grades?tab=${tab}&year=${year}&term=${term}`,
+    searchParams
   );
-
-  const gradesHref = mergeHrefWithSearchParams(`/onboarding/grades?tab=${tab}&year=${year}&term=${term}`, searchParams);
 
   const handleBack = async () => {
     await flushStoreToServer();
@@ -57,14 +96,23 @@ export default function GradeUploadPage() {
       subtitle="OCR 파이프라인으로 진입하는 화면입니다. 선택한 파일 메타정보를 현재 학년/학기 기록과 함께 저장합니다."
     >
       <div className="mb-3 rounded-2xl bg-mist px-4 py-3 text-sm text-muted">
-        현재 대상: {scoreTabOptions.find((item) => item.key === tab)?.label} / {gradeYearOptions.find((item) => item.value === year)?.label} /{" "}
-        {availableTermOptions.find((item) => item.value === term)?.label ?? gradeTermOptions.find((item) => item.value === term)?.label}
+        {tab === "studentRecord" ? (
+          <>
+            현재 대상: {scoreTabOptions.find((item) => item.key === tab)?.label} / {store.selectedStudentAcademicYear}학년도 /{" "}
+            {store.selectedStudentSemester}학기 / {store.selectedStudentRecordType}
+          </>
+        ) : (
+          <>
+            현재 대상: {scoreTabOptions.find((item) => item.key === tab)?.label} / {gradeYearOptions.find((item) => item.value === year)?.label} /{" "}
+            {availableTermOptions.find((item) => item.value === term)?.label ?? gradeTermOptions.find((item) => item.value === term)?.label}
+          </>
+        )}
       </div>
       <UploadDropzone
         title="PDF / 사진 자료 선택"
         description="성적표, 모의고사표, 생기부 스캔본을 선택하면 현재 기록과 연결됩니다."
         initialFiles={existingFiles}
-        onFilesSelected={(files) => registerUploads(files, tab, year, term)}
+        onFilesSelected={(files) => registerUploads(files, tab, yearForUpload, term)}
       />
       <div className="mt-6 grid w-full gap-3">
         <button type="button" onClick={() => void handleBack()} className={onboardingPrimaryCtaClass}>

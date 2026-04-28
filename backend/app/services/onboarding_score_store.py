@@ -1237,6 +1237,7 @@ class OnboardingScoreStore:
             if existing_record is None and not content.strip():
                 continue
             if existing_record is not None:
+                master_rid = int(existing_record["record_id"])
                 if subject_name is None:
                     connection.execute(
                         """
@@ -1244,7 +1245,7 @@ class OnboardingScoreStore:
                         SET content_body = ?
                         WHERE record_id = ?
                         """,
-                        (content, int(existing_record["record_id"])),
+                        (content, master_rid),
                     )
                 else:
                     connection.execute(
@@ -1254,10 +1255,22 @@ class OnboardingScoreStore:
                             content_body = ?
                         WHERE record_id = ?
                         """,
-                        (subject_name, content, int(existing_record["record_id"])),
+                        (subject_name, content, master_rid),
                     )
-            else:
                 connection.execute(
+                    """
+                    DELETE FROM TB_STUDENT_RECORD
+                    WHERE student_id = ?
+                      AND record_type = ?
+                      AND academic_year = ?
+                      AND semester = ?
+                      AND record_id != ?
+                      AND NOT (record_type = 'snapshot' AND subject_name = 'onboarding-json')
+                    """,
+                    (student_id, record_type, academic_year, semester_no, master_rid),
+                )
+            else:
+                cur = connection.execute(
                     """
                     INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, academic_year, semester)
                     VALUES (?, ?, ?, ?, ?, ?)
@@ -1270,6 +1283,19 @@ class OnboardingScoreStore:
                         academic_year,
                         semester_no,
                     ),
+                )
+                master_rid = int(cur.lastrowid)
+                connection.execute(
+                    """
+                    DELETE FROM TB_STUDENT_RECORD
+                    WHERE student_id = ?
+                      AND record_type = ?
+                      AND academic_year = ?
+                      AND semester = ?
+                      AND record_id != ?
+                      AND NOT (record_type = 'snapshot' AND subject_name = 'onboarding-json')
+                    """,
+                    (student_id, record_type, academic_year, semester_no, master_rid),
                 )
 
     def _resolve_goal_admission(self, connection: sqlite3.Connection, university: str, major: str, year: int) -> int:
@@ -1566,28 +1592,42 @@ class OnboardingScoreStore:
                     files = item.get("files")
                     files_by_key[key] = files if isinstance(files, list) else []
 
-            next_student_records: list[dict[str, Any]] = []
+            groups: dict[tuple[int, int, str], list[sqlite3.Row]] = {}
             for srow in student_rows:
                 academic_year = self._safe_int(srow["academic_year"]) or 2026
                 if academic_year < 2026 or academic_year > 2036:
                     academic_year = 2026
                 semester_no = self._safe_int(srow["semester"]) or 1
-                semester = "2" if semester_no == 2 else "1"
                 record_type = str(srow["record_type"] or "세특").strip()
                 if record_type not in {"세특", "동아리", "봉사", "진로", "수상", "독서", "행동특성"}:
                     record_type = "세특"
-                content = str(srow["content_body"] or "")
+                gkey = (academic_year, semester_no, record_type)
+                groups.setdefault(gkey, []).append(srow)
+
+            next_student_records: list[dict[str, Any]] = []
+            for (academic_year, semester_no, record_type), rows in sorted(
+                groups.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2])
+            ):
+                rows_sorted = sorted(rows, key=lambda r: int(r["record_id"]))
+                semester = "2" if semester_no == 2 else "1"
+                parts = [str(r["content_body"] or "").strip() for r in rows_sorted]
+                parts = [p for p in parts if p]
+                content = "\n\n".join(parts) if len(parts) > 1 else (parts[0] if parts else "")
+                primary_id = int(rows_sorted[0]["record_id"])
+                subj_parts = [str(r["subject_name"] or "").strip() for r in rows_sorted]
+                subj_parts = [s for s in subj_parts if s]
+                subject_display = " · ".join(subj_parts) if subj_parts else ""
                 key = (str(academic_year), semester, record_type)
                 next_student_records.append(
                     {
                         "id": f"{academic_year}-{semester}-{record_type}",
-                        "recordId": int(srow["record_id"]),
+                        "recordId": primary_id,
                         "year": "1" if academic_year <= 2026 else "2" if academic_year == 2027 else "3",
                         "term": "2-final" if semester == "2" else "1-final",
                         "academicYear": academic_year,
                         "semester": semester_no,
                         "recordType": record_type,
-                        "subjectName": str(srow["subject_name"] or ""),
+                        "subjectName": subject_display,
                         "title": self._student_record_title_from_content(content),
                         "description": content,
                         "files": files_by_key.get(key, []),
