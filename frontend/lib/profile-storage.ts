@@ -115,11 +115,8 @@ async function persistProfileImageToServer(profileImageUrl: string) {
       headers: { "Content-Type": "application/json", "x-user-key": getCurrentUserKey() },
       body: JSON.stringify({ profileImageUrl })
     });
-    if (!response.ok) {
-      return false;
-    }
     const payload = (await response.json()) as { ok?: boolean };
-    return payload.ok !== false;
+    return response.ok && payload.ok !== false;
   } catch {
     return false;
   }
