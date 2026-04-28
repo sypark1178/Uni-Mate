@@ -3,18 +3,23 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev --turbo -p 3001",
     "dev:turbo": "next dev --turbo -p 3001",
     "dev:webpack": "next dev -p 3001",
+    "dev:clean": "node ./scripts/clean-next.mjs && next dev --turbo -p 3001",
     "open:study-plan": "powershell -NoProfile -Command \"Start-Process ('http://localhost:3001/strategy/study-plan?t=' + [DateTime]::UtcNow.Ticks)\"",
+    "open:grades": "powershell -NoProfile -Command \"$u='http://localhost:3001/onboarding/grades?tab=schoolRecord&year=2&term=1-final&t='+[DateTime]::UtcNow.Ticks; Start-Process $u\"",
+    "open:grades-student": "powershell -NoProfile -Command \"$u='http://localhost:3001/onboarding/grades?tab=studentRecord&year=2&term=1-final&t='+[DateTime]::UtcNow.Ticks; Start-Process $u\"",
+    "open:login-minji": "powershell -NoProfile -Command \"$u='http://localhost:3001/login?auto=kmg11&next='+[uri]::EscapeDataString('/onboarding/grades?tab=schoolRecord&year=2&term=1-final'); Start-Process $u\"",
     "build": "next build",
+    "preview": "node ./scripts/clean-next.mjs && npm run build && next start -p 3001",
     "start": "next start -p 3001",
     "lint": "next lint"
   },
   "dependencies": {
-    "@next/swc-win32-x64-msvc": "^14.2.15",
+    "@next/swc-win32-x64-msvc": "14.2.33",
     "framer-motion": "^11.18.2",
-    "next": "14.2.15",
+    "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },

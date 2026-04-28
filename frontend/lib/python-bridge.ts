@@ -1,7 +1,17 @@
 import { spawn } from "child_process";
 import path from "path";
 
-const workspaceRoot = path.resolve(process.cwd(), "..");
+/** Next는 보통 `frontend`에서 실행되지만, 루트에서 실행하는 경우도 있어 DB·CLI 경로를 맞춘다 */
+function resolveWorkspaceRoot(): string {
+  const cwd = process.cwd();
+  const base = path.basename(cwd);
+  if (base === "frontend" || base === "uni-mate-frontend") {
+    return path.resolve(cwd, "..");
+  }
+  return cwd;
+}
+
+const workspaceRoot = resolveWorkspaceRoot();
 const pythonCliPath = path.join(workspaceRoot, "backend", "app", "cli", "onboarding_scores_cli.py");
 const pythonCommand = process.env.PYTHON_BIN || "python";
 const pythonPath = process.env.PYTHONPATH ? `${workspaceRoot}${path.delimiter}${process.env.PYTHONPATH}` : workspaceRoot;

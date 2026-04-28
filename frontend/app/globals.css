@@ -43,6 +43,25 @@ textarea:focus-visible {
   -webkit-box-shadow: 0 0 0 1px #163c77 !important;
 }
 
+/* 닫힌 select는 muted여도 펼친 목록 옵션은 ink로 읽기 유지 */
+select option {
+  color: #101828;
+}
+
+/* 온보딩 select: 닫힌 박스 글자를 muted(#667085)로 통일 — :invalid·:disabled 시 브라우저 기본 연한 회색 방지 */
+select.uni-mate-onboarding-select:invalid,
+select.uni-mate-onboarding-select:disabled {
+  color: #667085 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #667085 !important;
+}
+
+select.uni-mate-onboarding-select:valid:not(:disabled) {
+  color: #101828 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #101828 !important;
+}
+
 .app-shell {
   min-height: 100vh;
 }

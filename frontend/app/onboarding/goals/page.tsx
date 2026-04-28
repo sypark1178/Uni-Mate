@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { OnboardingStep } from "@/components/onboarding-step";
 import { getMajorsByUniversity, onboardingTabs, universityOptions } from "@/lib/admission-data";
-import { compactGoalLine } from "@/lib/goal-display";
-import { onboardingFormFieldClass } from "@/lib/onboarding-buttons";
+import { onboardingFormFieldClass, onboardingSelectFieldClass } from "@/lib/onboarding-buttons";
 import { parseSeededGoals } from "@/lib/planning";
 import { useGoals } from "@/lib/use-goals";
 
@@ -66,12 +65,12 @@ export default function OnboardingGoalsPage() {
 
   const helperText = useMemo(() => {
     if (activeMode === onboardingTabs[0]) {
-      return "학교 중심 모드: 학교 우선순위를 기준으로 학과를 탐색합니다.";
+      return "학교가 중요하다면 선택해주세요.";
     }
     if (activeMode === onboardingTabs[2]) {
-      return "둘 다 모드: 학교와 학과를 함께 고려해 균형 있게 목표를 설정합니다.";
+      return "학교, 학과 둘 다 중요하다면 선택해주세요.";
     }
-    return "학과 중심 모드: 같은 학과를 여러 학교에서 비교하면서 우선순위를 정리합니다.";
+    return "학과가 중요하다면 선택해주세요.";
   }, [activeMode]);
 
   const handleUniversityChange = (index: number, university: string) => {
@@ -102,8 +101,8 @@ export default function OnboardingGoalsPage() {
   return (
     <OnboardingStep
       step="3/3"
-      title="목표 대학과 학과를 설정해 주세요"
-      subtitle="학교와 학과 우선순위를 정리하면 AI 분석과 추천 전략으로 바로 이어집니다."
+      title="목표를 설정해 주세요"
+      subtitle="우선순위를 정리하면 바로 AI 분석·추천이 진행됩니다."
       prevHref="/onboarding/grades"
       nextHref="/analysis/loading?source=goals"
       nextLabel="AI 분석 시작"
@@ -123,7 +122,7 @@ export default function OnboardingGoalsPage() {
           </button>
         ))}
       </div>
-      <div className="rounded-[22px] bg-mist px-4 py-3 text-sm text-muted">{helperText}</div>
+      <div className="-mt-1 px-1 text-xs leading-snug text-muted">{helperText}</div>
       {goalRanks.map((goalRank, index) => {
         const majors = getMajorsByUniversity(goalRank.university);
         const majorOptions = goalRank.major && !majors.includes(goalRank.major) ? [goalRank.major, ...majors] : majors;
@@ -135,14 +134,10 @@ export default function OnboardingGoalsPage() {
               focus === index + 1 ? "border-navy ring-2 ring-navy/20" : "border-line"
             }`}
           >
-            <div className="mb-3 text-sm font-semibold text-black">{index + 1}순위 목표</div>
-            <div className="mb-3 text-xs text-muted">
-              지원전략: {goalRank.strategyType?.trim() || defaultStrategyByRank(index)}
-              {goalRank.status ? ` · 상태: ${goalRank.status}` : ""}
-            </div>
+            <div className="mb-3 text-sm font-semibold text-black">{index + 1}순위 희망</div>
             <div className="space-y-3">
               <select
-                className={onboardingFormFieldClass}
+                className={onboardingSelectFieldClass}
                 value={goalRank.university}
                 onChange={(event) => handleUniversityChange(index, event.target.value)}
               >
@@ -153,11 +148,14 @@ export default function OnboardingGoalsPage() {
                 ))}
               </select>
               <select
-                className={onboardingFormFieldClass}
+                required
+                className={onboardingSelectFieldClass}
                 value={goalRank.major}
                 onChange={(event) => handleMajorChange(index, event.target.value)}
               >
-                <option value="">학과를 선택해 주세요</option>
+                <option value="" disabled>
+                  학과를 선택해 주세요
+                </option>
                 {majorOptions.map((item) => (
                   <option key={item} value={item}>
                     {item}
@@ -168,10 +166,6 @@ export default function OnboardingGoalsPage() {
           </div>
         );
       })}
-      <div className="rounded-[22px] bg-mist px-4 py-3 text-xs leading-5 text-muted">
-        현재 목표 요약:{" "}
-        {goalRanks.map((item, index) => `${index + 1}순위 ${compactGoalLine(item.university, item.major)}`).join(" / ")}
-      </div>
     </OnboardingStep>
   );
 }

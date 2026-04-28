@@ -8,6 +8,7 @@ import { safeNavigate } from "@/lib/navigation";
 import { profileStorageKey } from "@/lib/profile-storage";
 import { scoreStorageKey } from "@/lib/score-storage";
 import { onboardingFormFieldClass } from "@/lib/onboarding-buttons";
+import { readJsonResponse } from "@/lib/read-json-response";
 import { goalStorageKey } from "@/lib/planning";
 import type { GoalChoice, ScoreMemoryStore, StudentProfile } from "@/lib/types";
 
@@ -114,11 +115,11 @@ export function SignupForm({
           `/api/onboarding/guest-temp?contactType=${encodeURIComponent(guestSaveType)}&contactId=${encodeURIComponent(guestSaveId)}`,
           { method: "GET", cache: "no-store" }
         );
-        const payload = (await response.json()) as {
+        const payload = await readJsonResponse<{
           ok?: boolean;
           data?: { snapshot?: { profile?: StudentProfile; scores?: ScoreMemoryStore; goals?: GoalChoice[] } };
-        };
-        const snapshot = payload.data?.snapshot;
+        }>(response);
+        const snapshot = payload?.data?.snapshot;
         profile = profile ?? snapshot?.profile ?? null;
         scores = scores ?? snapshot?.scores ?? null;
         goals = goals ?? snapshot?.goals ?? null;

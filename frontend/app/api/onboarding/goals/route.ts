@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readRequestJson } from "@/lib/read-json-response";
 import { runPythonBridge } from "@/lib/python-bridge";
 
 export const runtime = "nodejs";
@@ -28,7 +29,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const userKey = resolveUserKey(request);
-  const payload = await request.json();
+  const payload = await readRequestJson<unknown>(request);
+  if (payload === null) {
+    return NextResponse.json({ ok: true, source: "fallback" });
+  }
   try {
     const result = await runPythonBridge("save", "goals", payload, userKey);
     return NextResponse.json(result);

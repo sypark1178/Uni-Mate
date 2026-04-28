@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readRequestJson } from "@/lib/read-json-response";
 import { runPythonBridge } from "@/lib/python-bridge";
 
 export const runtime = "nodejs";
@@ -16,7 +17,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const payload = await request.json();
+  const payload = await readRequestJson<unknown>(request);
+  if (payload === null) {
+    return NextResponse.json({ ok: false, source: "fallback", error: "요청 본문이 올바르지 않습니다." }, { status: 200 });
+  }
   try {
     const result = await runPythonBridge("save", "guest_temp", payload, "guest-temp");
     return NextResponse.json(result);

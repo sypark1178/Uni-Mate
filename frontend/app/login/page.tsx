@@ -18,6 +18,36 @@ export default function LoginPage() {
     ensureMemberSeeds();
   }, []);
 
+  /** 로컬 전용: `?auto=kmg11&next=/onboarding/grades` 처럼 열면 비밀번호 없이 시드 계정 로그인 후 이동 (브라우저 자동화 대체) */
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const host = window.location.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const auto = params.get("auto")?.trim();
+    if (!auto) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const result = await loginMemberWithServerFallback(auto, "");
+      if (cancelled || !result.ok) {
+        return;
+      }
+      clearAllDrafts();
+      const nextRaw = params.get("next")?.trim() ?? "";
+      const path = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/dashboard";
+      window.location.replace(`${window.location.origin}${path}`);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   /** 클라이언트 라우터 대신 전체 문서 이동 — Turbo·미리보기에서도 홈으로 확실히 전환 */
   const goDashboard = () => {
     window.location.replace(`${window.location.origin}/dashboard`);

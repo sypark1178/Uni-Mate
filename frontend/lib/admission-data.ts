@@ -67,6 +67,25 @@ Object.entries(seoulDistrictSchoolOverrides).forEach(([district, schools]) => {
 
 export const examYears = Array.from({ length: 11 }, (_, index) => 2026 + index);
 
+/** `examYears` 목록 안으로 수능 응시 연도를 맞춤 */
+export function clampExamYearToList(year: number): number {
+  const min = examYears[0] ?? year;
+  const max = examYears[examYears.length - 1] ?? year;
+  return Math.min(max, Math.max(min, year));
+}
+
+/**
+ * 온보딩 유형 기준 수능 응시 연도(11월 시험이 열리는 연도) 추천 — **고1·고2·고3만**.
+ * `refYear`는 보통 올해(달력 연도) — 예: 2026년 기준 고2 → 2027.
+ */
+export function suggestedTargetExamYear(gradeLabel: string, refYear: number = new Date().getFullYear()): number | null {
+  const g = gradeLabel.trim();
+  if (g === "고3") return refYear;
+  if (g === "고2") return refYear + 1;
+  if (g === "고1") return refYear + 2;
+  return null;
+}
+
 export const onboardingTabs = ["학교 중심", "학과 중심", "둘 다"] as const;
 
 export const universityMajorsMap: Record<string, string[]> = {

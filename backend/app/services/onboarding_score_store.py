@@ -9,6 +9,16 @@ from typing import Any
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "uni_mate.db"
 
+# 데모 시드 계정(login_id) -> 기존 학생명 매핑.
+# TB_USER_AUTH에 login_id가 비어 있어도 기존 TB_STUDENT_PROFILE과 다시 연결한다.
+SEEDED_LOGIN_TO_STUDENT_NAME: dict[str, str] = {
+    "kmg11": "김민지",
+    "kmj11": "김민지",
+    "gimsohui407": "김소희",
+    "sammya0902": "안새미",
+    "sypark1178": "박상윤",
+}
+
 
 def build_payload_summary(payload: dict[str, Any]) -> dict[str, int]:
     return {
@@ -17,6 +27,40 @@ def build_payload_summary(payload: dict[str, Any]) -> dict[str, int]:
         "studentRecordCount": len(payload.get("studentRecords", [])),
         "uploadCount": len(payload.get("uploads", [])),
     }
+
+
+def _payload_school_has_scores(payload: dict[str, Any]) -> bool:
+    records = payload.get("schoolRecords")
+    if not isinstance(records, list):
+        return False
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        if str(rec.get("overallAverage") or "").strip():
+            return True
+        subs = rec.get("subjects")
+        if isinstance(subs, list):
+            for s in subs:
+                if isinstance(s, dict) and str(s.get("score") or "").strip():
+                    return True
+    return False
+
+
+def _payload_mock_has_scores(payload: dict[str, Any]) -> bool:
+    records = payload.get("mockExams")
+    if not isinstance(records, list):
+        return False
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        if str(rec.get("overallAverage") or "").strip():
+            return True
+        subs = rec.get("subjects")
+        if isinstance(subs, list):
+            for s in subs:
+                if isinstance(s, dict) and str(s.get("score") or "").strip():
+                    return True
+    return False
 
 
 def _to_float(value: Any) -> float | None:
@@ -1011,12 +1055,34 @@ class OnboardingScoreStore:
             return "과탐"
         return None
 
+    @staticmethod
+    def _apply_academic_grade_to_grouped_record(grouped_entry: dict[str, Any], raw_subject: str, grade_val: int) -> None:
+        """TB_ACADEMIC_SCORE 한 행을 내신 기간 레코드 subjects에 반영. 표준 슬롯 외(한국사·탐구 세목 등)는 커스텀 과목으로 둔다."""
+        slot = OnboardingScoreStore._normalize_school_subject_name(raw_subject)
+        subjects = grouped_entry["subjects"]
+        if slot is not None:
+            for entry in subjects:
+                if str(entry.get("subject") or "") == slot:
+                    entry["score"] = str(grade_val)
+                    return
+            return
+        label = str(raw_subject or "").strip()
+        if not label:
+            return
+        for entry in subjects:
+            if entry.get("isCustom") and str(entry.get("subject") or "").strip() == label:
+                entry["score"] = str(grade_val)
+                return
+        subjects.append({"subject": label, "score": str(grade_val), "isCustom": True})
+
     def _resolve_user_id(self, connection: sqlite3.Connection, user_key: str) -> int | None:
         normalized = str(user_key or "").strip()
         if not normalized:
             return None
         lowered = normalized.lower()
-        email_candidate = lowered if "@" in lowered else f"{lowered}@local.uni-mate"
+        # 데모: kmj11 / kmg11 동일 학생 — DB·스냅샷은 kmg11 쪽 user_id로 통합 조회
+        lookup_login = "kmg11" if lowered == "kmj11" else lowered
+        email_candidate = lookup_login if "@" in lookup_login else f"{lookup_login}@local.uni-mate"
         row = connection.execute(
             """
             SELECT u.user_id
@@ -1026,9 +1092,23 @@ class OnboardingScoreStore:
                OR lower(u.email) = ?
             LIMIT 1
             """,
-            (lowered, email_candidate),
+            (lookup_login, email_candidate),
         ).fetchone()
         if row is None:
+            # login_id가 없는 시드 데이터는 학생명으로 역매핑해 기존 user_id를 재사용
+            mapped_name = SEEDED_LOGIN_TO_STUDENT_NAME.get(lowered)
+            if mapped_name:
+                seeded_row = connection.execute(
+                    """
+                    SELECT user_id
+                    FROM TB_STUDENT_PROFILE
+                    WHERE student_name = ?
+                    LIMIT 1
+                    """,
+                    (mapped_name,),
+                ).fetchone()
+                if seeded_row is not None:
+                    return int(seeded_row["user_id"])
             return None
         return int(row["user_id"])
 
@@ -1504,7 +1584,9 @@ class OnboardingScoreStore:
             payload = {"schoolRecords": [], "mockExams": [], "studentRecords": [], "uploads": []}
         else:
             payload = json.loads(row["content_body"])
-        if mock_rows:
+        # 스냅샷 JSON에 실제 점수가 있으면 그걸 우선한다. 없고 TB_*에만 있으면 테이블에서 복구한다.
+        # (과거 버그: JSON을 TB_ACADEMIC_SCORE로만 재조합해 덮어쓰면서 한국사·사탐 세목이 사라짐)
+        if mock_rows and (row is None or not _payload_mock_has_scores(payload)):
             mock_exams: list[dict[str, Any]] = []
             grouped_periods = _group_mock_period_subject_averages(list(mock_rows))
             for index, period in enumerate(grouped_periods):
@@ -1532,7 +1614,7 @@ class OnboardingScoreStore:
                 )
             payload["mockExams"] = mock_exams
 
-        if school_rows:
+        if school_rows and (row is None or not _payload_school_has_scores(payload)):
             grouped: dict[tuple[str, str], dict[str, Any]] = {}
             for index, srow in enumerate(school_rows):
                 year_val = self._safe_int(srow["school_year"])
@@ -1566,16 +1648,11 @@ class OnboardingScoreStore:
                         "overallAverage": "",
                         "updatedAt": datetime.now(timezone.utc).isoformat(),
                     }
-                subject_name = self._normalize_school_subject_name(str(srow["subject_name"] or ""))
-                if subject_name is None:
-                    continue
                 grade_val = self._safe_int(srow["grade"])
                 if grade_val is None:
                     continue
-                for entry in grouped[key]["subjects"]:
-                    if entry["subject"] == subject_name:
-                        entry["score"] = str(grade_val)
-                        break
+                raw_subject = str(srow["subject_name"] or "")
+                self._apply_academic_grade_to_grouped_record(grouped[key], raw_subject, grade_val)
             payload["schoolRecords"] = list(grouped.values())
         if student_rows:
             existing_records = payload.get("studentRecords", [])

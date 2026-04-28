@@ -12,32 +12,31 @@ import { UploadDropzone } from "@/components/upload-dropzone";
 
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 
-import { onboardingMutedTextCtaClass, onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
+import { onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
 
 import {
-  academicYearSelectOptions,
+
   getScoreRecord,
+
   getGradeTermOptionsByTab,
+
+  canonicalStudentRecordTerm,
+
   getMockExamSeriesCaption,
+
   gradeTermOptions,
+
   gradeYearOptions,
+
   scoreTabOptions,
-  studentRecordTypeTabOptions,
-  studentSemesterTabOptions,
+
   subjectGradeOptions,
-  uploadMatchesStudentSelection,
+
   useScoreRecords
+
 } from "@/lib/score-storage";
 
-import type {
-  GradePeriodRecord,
-  GradeTerm,
-  GradeYear,
-  ScoreTabKey,
-  StudentRecordAcademicYear,
-  StudentRecordType,
-  SubjectScoreEntry
-} from "@/lib/types";
+import type { GradePeriodRecord, GradeTerm, GradeYear, ScoreTabKey, SubjectScoreEntry } from "@/lib/types";
 
 
 
@@ -277,7 +276,12 @@ function splitInquiryCustomSubjects(entries: SubjectScoreEntry[]) {
   const other: SubjectScoreEntry[] = [];
   for (const entry of entries) {
     const name = entry.subject.trim();
-    if (name === "사탐" || isOneOfLabels(name, socialInquirySubjectLabels) || isOneOfLabels(name, integratedSocialSubjectLabels)) {
+    if (
+      name === "사탐" ||
+      isOneOfLabels(name, socialInquirySubjectLabels) ||
+      isOneOfLabels(name, integratedSocialSubjectLabels) ||
+      isOneOfLabels(name, historySubjectLabels)
+    ) {
       social.push(entry);
     } else if (name === "과탐" || isOneOfLabels(name, scienceInquirySubjectLabels) || isOneOfLabels(name, integratedScienceSubjectLabels)) {
       science.push(entry);
@@ -290,31 +294,47 @@ function splitInquiryCustomSubjects(entries: SubjectScoreEntry[]) {
 
 function buildSavedGradeRows(subjects: SubjectScoreEntry[]) {
   const rows: Array<{ name: string; grade: string }> = [];
+  const usedNames = new Set<string>();
+
   for (const subjectName of coreAverageSubjects) {
-    const entry = subjects.find((item) => item.subject.trim() === subjectName && !item.isCustom);
-    const grade = entry?.score.trim() ?? "";
+    const preferNonCustom = subjects.find(
+      (item) => item.subject.trim() === subjectName && !item.isCustom && String(item.score ?? "").trim()
+    );
+    const entry =
+      preferNonCustom ?? subjects.find((item) => item.subject.trim() === subjectName && String(item.score ?? "").trim());
+    const grade = entry ? String(entry.score ?? "").trim() : "";
     if (grade) {
       rows.push({ name: subjectName, grade });
+      usedNames.add(subjectName);
     }
   }
-  const customs = subjects.filter((item) => item.isCustom && item.subject.trim());
-  const { social, science, other } = splitInquiryCustomSubjects(customs);
+
+  const remaining = subjects.filter((item) => {
+    const name = item.subject.trim();
+    const grade = String(item.score ?? "").trim();
+    return Boolean(name && grade && !usedNames.has(name));
+  });
+
+  const { social, science, other } = splitInquiryCustomSubjects(remaining);
   for (const entry of social) {
-    const grade = entry.score.trim();
+    const grade = String(entry.score ?? "").trim();
     if (grade) {
       rows.push({ name: entry.subject.trim(), grade });
+      usedNames.add(entry.subject.trim());
     }
   }
   for (const entry of science) {
-    const grade = entry.score.trim();
+    const grade = String(entry.score ?? "").trim();
     if (grade) {
       rows.push({ name: entry.subject.trim(), grade });
+      usedNames.add(entry.subject.trim());
     }
   }
   for (const entry of other) {
-    const grade = entry.score.trim();
+    const grade = String(entry.score ?? "").trim();
     if (grade) {
       rows.push({ name: formatCustomSubjectLabel(entry.subject), grade });
+      usedNames.add(entry.subject.trim());
     }
   }
   return rows;
@@ -324,7 +344,7 @@ function hasSavedGradeContent(record: GradePeriodRecord) {
   if (record.overallAverage.trim()) {
     return true;
   }
-  return record.subjects.some((entry) => entry.score.trim().length > 0);
+  return record.subjects.some((entry) => String(entry.score ?? "").trim().length > 0);
 }
 
 function buildSavedSummaryFromRecord(tabKey: "schoolRecord" | "mockExam", record: GradePeriodRecord) {
@@ -667,8 +687,6 @@ export default function OnboardingGradesPage() {
 
     setSelectedPeriod,
 
-    setStudentRecordSelection,
-
     updateSubjectScore,
 
     updateOverallAverage,
@@ -683,9 +701,20 @@ export default function OnboardingGradesPage() {
 
     registerUploads,
 
-    flushStoreToServer
+    removeUploads,
+
+    flushStoreToServer,
+
+    refreshScoresFromServer
 
   } = useScoreRecords();
+
+  /** 세션·탭 동기 직후에도 서버 성적이 붙도록 짧은 간격으로 재요청 (새 창·새로고침 대응) */
+  useEffect(() => {
+    const delays = [0, 400, 1200];
+    const ids = delays.map((ms) => window.setTimeout(() => void refreshScoresFromServer(), ms));
+    return () => ids.forEach((id) => window.clearTimeout(id));
+  }, [refreshScoresFromServer]);
 
 
 
@@ -698,6 +727,9 @@ export default function OnboardingGradesPage() {
   const [savedRecordsFilterYear, setSavedRecordsFilterYear] = useState<"all" | GradeYear>("all");
 
   const [savedRecordsFilterTab, setSavedRecordsFilterTab] = useState<"all" | "schoolRecord" | "mockExam">("all");
+  const didSyncFromQueryRef = useRef(false);
+
+  const [selectedStudentRecordType, setSelectedStudentRecordType] = useState("");
 
   const [extraInquiryPanelOpen, setExtraInquiryPanelOpen] = useState<ExtraInquiryPanel | null>("history");
 
@@ -741,10 +773,7 @@ export default function OnboardingGradesPage() {
 
   const selectedSchoolTerm = useMemo(() => splitSchoolTerm(selectedTerm), [selectedTerm]);
 
-  const availableTermOptions = useMemo(
-    () => (selectedTab === "studentRecord" ? [] : getGradeTermOptionsByTab(selectedTab, selectedYear)),
-    [selectedTab, selectedYear]
-  );
+  const availableTermOptions = useMemo(() => getGradeTermOptionsByTab(selectedTab, selectedYear), [selectedTab, selectedYear]);
 
   const mockExamSeriesCaption = useMemo(() => {
 
@@ -782,6 +811,9 @@ export default function OnboardingGradesPage() {
   }, [store.schoolRecords, store.mockExams]);
 
   useEffect(() => {
+    if (didSyncFromQueryRef.current) {
+      return;
+    }
 
     const nextTab = searchParams.get("tab");
 
@@ -797,13 +829,31 @@ export default function OnboardingGradesPage() {
 
     }
 
+    const resolvedTabForUrl: ScoreTabKey = isScoreTabKey(nextTab) ? nextTab : selectedTab;
 
+    const yearFromUrl = isGradeYear(nextYear) ? nextYear : selectedYear;
 
-    if ((isGradeYear(nextYear) && nextYear !== selectedYear) || (isGradeTerm(nextTerm) && nextTerm !== selectedTerm)) {
+    const rawTermFromUrl: GradeTerm = isGradeTerm(nextTerm) ? nextTerm : selectedTerm;
 
-      setSelectedPeriod(isGradeYear(nextYear) ? nextYear : selectedYear, isGradeTerm(nextTerm) ? nextTerm : selectedTerm);
+    const termFromUrl: GradeTerm =
+
+      resolvedTabForUrl === "studentRecord" && isGradeTerm(rawTermFromUrl)
+
+        ? canonicalStudentRecordTerm(rawTermFromUrl)
+
+        : rawTermFromUrl;
+
+    const yearChanged = isGradeYear(nextYear) && nextYear !== selectedYear;
+
+    const termChanged = isGradeTerm(nextTerm) && nextTerm !== selectedTerm;
+
+    if (yearChanged || termChanged) {
+
+      setSelectedPeriod(yearFromUrl, termFromUrl);
 
     }
+
+    didSyncFromQueryRef.current = true;
 
   }, [searchParams, selectedTab, selectedTerm, selectedYear, setActiveTab, setSelectedPeriod]);
 
@@ -893,31 +943,19 @@ export default function OnboardingGradesPage() {
 
 
 
-  const currentUploads = useMemo(() => {
-    if (selectedTab === "studentRecord") {
-      return store.uploads
-        .filter((file) =>
-          uploadMatchesStudentSelection(
-            file,
-            store.selectedStudentAcademicYear,
-            store.selectedStudentSemester,
-            store.selectedStudentRecordType
-          )
-        )
-        .map((file) => file.name);
-    }
-    return store.uploads
-      .filter((file) => file.sourceTab === selectedTab && file.year === selectedYear && file.term === selectedTerm)
-      .map((file) => file.name);
-  }, [
-    selectedTab,
-    selectedTerm,
-    selectedYear,
-    store.uploads,
-    store.selectedStudentAcademicYear,
-    store.selectedStudentSemester,
-    store.selectedStudentRecordType
-  ]);
+  const currentUploads = useMemo(
+
+    () =>
+
+      store.uploads
+
+        .filter((file) => file.sourceTab === selectedTab && file.year === selectedYear && file.term === selectedTerm)
+
+        .map((file) => file.name),
+
+    [selectedTab, selectedTerm, selectedYear, store.uploads]
+
+  );
 
 
 
@@ -1165,16 +1203,6 @@ export default function OnboardingGradesPage() {
 
     await flushStoreToServer();
 
-    if (typeof window !== "undefined" && window.history.length > 1) {
-
-      router.back();
-
-      return;
-
-    }
-
-
-
     safeNavigate(router, basicHref);
 
   };
@@ -1331,16 +1359,26 @@ export default function OnboardingGradesPage() {
 
 
 
-  const uploadButtonTitle = selectedTab === "studentRecord" ? "PDF / 사진 생기부·활동 자료 업로드" : "PDF / 사진 성적 업로드";
-  const uploadModalTitle = selectedTab === "studentRecord" ? "생기부·활동 자료 업로드" : "PDF / 사진 성적 업로드";
+  const uploadButtonTitle = selectedTab === "studentRecord" ? "PDF / 사진 생기부·활동 자료 업로드" : "PDF / 사진 성적 올리기";
+  const uploadModalTitle = selectedTab === "studentRecord" ? "생기부·활동 자료 업로드" : "PDF / 사진 성적 올리기";
 
   const uploadDescription =
 
     selectedTab === "studentRecord"
 
-      ? "생기부, 활동증빙, 특기자료를 올리면 선택한 학년도·학기·기록유형과 함께 저장됩니다."
+      ? (
+          <>
+            자료를 올리면 현재 학년과 학기에 맞게
+            <br />
+            자동으로 정리되어 저장됩니다.
+          </>
+        )
 
-      : "내신과 모의고사 성적표를 올리면 OCR 파이프라인으로 이어집니다.";
+      : (
+          <>
+            성적표를 올리면 자동으로 읽어서 정리해드려요.
+          </>
+        );
 
 
 
@@ -1406,57 +1444,25 @@ export default function OnboardingGradesPage() {
 
       <div className="mt-4 grid grid-cols-3 gap-3">
 
-        {selectedTab === "studentRecord" ? (
-          <>
-            <TopFilterDropdown
-              ariaLabel="학년도"
-              value={String(store.selectedStudentAcademicYear)}
-              options={academicYearSelectOptions}
-              onChange={(nextValue) => {
-                const n = Number.parseInt(nextValue, 10);
-                if (Number.isFinite(n)) {
-                  setStudentRecordSelection({ academicYear: n as StudentRecordAcademicYear });
-                }
-              }}
-            />
-            <TopFilterDropdown
-              ariaLabel="학기 구분"
-              value={String(store.selectedStudentSemester)}
-              options={studentSemesterTabOptions}
-              onChange={(nextValue) => {
-                setStudentRecordSelection({ semester: nextValue === "2" ? 2 : 1 });
-              }}
-            />
-            <TopFilterDropdown
-              ariaLabel="기록유형"
-              value={store.selectedStudentRecordType}
-              options={studentRecordTypeTabOptions}
-              onChange={(nextValue) => {
-                setStudentRecordSelection({ recordType: nextValue as StudentRecordType });
-              }}
-            />
-          </>
-        ) : (
-          <>
-            <TopFilterDropdown
-              ariaLabel="학년 구분"
-              value={selectedYear}
-              options={gradeYearOptions.map((item) => ({ value: item.value, label: item.label }))}
-              onChange={(nextValue) => {
-                const nextYear = nextValue as GradeYear;
-                if (selectedTab === "mockExam") {
-                  const nextTermOptions = getGradeTermOptionsByTab("mockExam", nextYear);
-                  const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm)
-                    ? selectedTerm
-                    : nextTermOptions[0].value;
-                  setSelectedPeriod(nextYear, nextTerm);
-                  return;
-                }
-                const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
-                const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
-                setSelectedPeriod(nextYear, nextTerm);
-              }}
-            />
+        <TopFilterDropdown
+          ariaLabel="학년 구분"
+          value={selectedYear}
+          options={gradeYearOptions.map((item) => ({ value: item.value, label: item.label }))}
+          onChange={(nextValue) => {
+            const nextYear = nextValue as GradeYear;
+            if (selectedTab === "mockExam") {
+              const nextTermOptions = getGradeTermOptionsByTab("mockExam", nextYear);
+              const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm)
+                ? selectedTerm
+                : nextTermOptions[0].value;
+              setSelectedPeriod(nextYear, nextTerm);
+              return;
+            }
+            const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
+            const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
+            setSelectedPeriod(nextYear, nextTerm);
+          }}
+        />
 
         {selectedTab === "schoolRecord" ? (
 
@@ -1535,8 +1541,31 @@ export default function OnboardingGradesPage() {
 
         ) : null}
 
+        {selectedTab !== "schoolRecord" && selectedTab !== "mockExam" ? (
+          <>
+            <TopFilterDropdown
+              ariaLabel="학기 구분"
+              value={selectedTerm}
+              options={availableTermOptions.map((item) => ({ value: item.value, label: item.label.replace(" ", "·") }))}
+              onChange={(nextValue) => setSelectedPeriod(selectedYear, nextValue as GradeTerm)}
+            />
+            <TopFilterDropdown
+              ariaLabel="기록유형"
+              value={selectedStudentRecordType}
+              placeholder="기록유형"
+              options={[
+                { value: "", label: "선택 안함" },
+                { value: "행동특성", label: "행동특성" },
+                { value: "동아리", label: "동아리" },
+                { value: "봉사", label: "봉사" },
+                { value: "진로", label: "진로" },
+                { value: "수상", label: "수상" },
+                { value: "독서", label: "독서" }
+              ]}
+              onChange={(nextValue) => setSelectedStudentRecordType(nextValue)}
+            />
           </>
-        )}
+        ) : null}
 
       </div>
 
@@ -1554,13 +1583,13 @@ export default function OnboardingGradesPage() {
 
               <input
 
-                className="w-full rounded-xl border border-white bg-white px-4 py-3"
+                className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink placeholder:text-muted"
 
                 placeholder="예: 동아리 프로젝트 / 탐구 활동"
 
                 value={currentStudentRecord.title}
 
-                onChange={(event) => updateStudentRecordField("title", event.target.value)}
+                onChange={(event) => updateStudentRecordField(selectedYear, selectedTerm, "title", event.target.value)}
 
               />
 
@@ -1572,23 +1601,17 @@ export default function OnboardingGradesPage() {
 
               <textarea
 
-                className="min-h-[128px] w-full rounded-xl border border-white bg-white px-4 py-3"
+                className="min-h-[128px] w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink placeholder:text-muted"
 
                 placeholder="학년/학기별 활동 내용, 교내 수상, 프로젝트 메모를 입력해 주세요."
 
                 value={currentStudentRecord.description}
 
-                onChange={(event) => updateStudentRecordField("description", event.target.value)}
+                onChange={(event) => updateStudentRecordField(selectedYear, selectedTerm, "description", event.target.value)}
 
               />
 
             </label>
-
-            <div className="rounded-2xl bg-white px-4 py-4 text-sm leading-6 text-muted">
-
-              생기부와 활동 자료는 선택한 학년도·학기·기록유형에 즉시 저장되고 목표설정과 AI 분석에도 함께 반영됩니다.
-
-            </div>
 
           </div>
 
@@ -1936,23 +1959,19 @@ export default function OnboardingGradesPage() {
 
               </button>
 
-              {savedGradeSummaries.length > 0 ? (
+              <button
 
-                <button
+                type="button"
 
-                  type="button"
+                onClick={() => setSavedRecordsModalOpen(true)}
 
-                  onClick={() => setSavedRecordsModalOpen(true)}
+                className="w-full rounded-xl border border-white bg-white px-4 py-3 text-center text-sm font-normal text-muted"
 
-                  className="w-full rounded-xl border border-white bg-white px-4 py-3 text-center text-sm font-normal text-muted"
+              >
 
-                >
+                저장된 성적 보기
 
-                  저장된 성적 보기
-
-                </button>
-
-              ) : null}
+              </button>
 
             </div>
 
@@ -1992,7 +2011,15 @@ export default function OnboardingGradesPage() {
 
         </button>
 
-        <button type="button" onClick={() => void handleBack()} className={onboardingMutedTextCtaClass}>
+        <button
+
+          type="button"
+
+          onClick={() => void handleBack()}
+
+          className="block w-full bg-transparent py-1 text-center text-sm font-normal text-muted underline underline-offset-4"
+
+        >
 
           뒤로가기
 
@@ -2018,7 +2045,7 @@ export default function OnboardingGradesPage() {
 
         <div
 
-          className="relative w-full max-w-[340px] rounded-[24px] bg-white p-1 pt-3 shadow-soft"
+          className="relative w-full max-w-[340px] rounded-[24px] bg-white p-2 shadow-soft"
 
           role="dialog"
 
@@ -2052,7 +2079,8 @@ export default function OnboardingGradesPage() {
 
             description={uploadDescription}
 
-            buttonLabel="파일 선택"
+            buttonLabel="자료 올리기"
+            saveButtonLabel="저장하기"
 
             initialFiles={currentUploads}
 
@@ -2060,6 +2088,13 @@ export default function OnboardingGradesPage() {
 
               registerUploads(files, selectedTab, selectedYear, selectedTerm);
 
+            }}
+            onFilesDeleted={(fileNames) => {
+              removeUploads(selectedTab, selectedYear, selectedTerm, fileNames);
+            }}
+            onSave={async () => {
+              await flushStoreToServer();
+              setUploadModalOpen(false);
             }}
 
           />

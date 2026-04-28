@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type {
   GradePeriodRecord,
   GradeTerm,
@@ -14,7 +14,8 @@ import type {
   SubjectScoreEntry,
   UploadedRecordFile
 } from "@/lib/types";
-import { getDraftScores, setDraftScores, setDraftScoresSnapshot } from "@/lib/draft-store";
+import { getDraftScores, setDraftScores } from "@/lib/draft-store";
+import { readJsonResponse } from "@/lib/read-json-response";
 import { getCurrentMember } from "@/lib/member-store";
 
 export const scoreStorageKey = "uni-mate-score-memory";
@@ -25,10 +26,28 @@ export type ScoreSettingsDisplay = {
   latestMockFourGradeAverage: string;
 };
 function getCurrentUserKey() {
-  return getCurrentMember()?.userId?.trim() || "local-user";
+  const id = getCurrentMember()?.userId?.trim();
+  if (!id) {
+    return "local-user";
+  }
+  return id.toLowerCase();
 }
-function getScopedScoreStorageKey() {
-  return `${scoreStorageKey}:${getCurrentUserKey()}`;
+
+function scoreMemoryLocalKey(userKey: string) {
+  const key = userKey.trim().toLowerCase() || "local-user";
+  return `${scoreStorageKey}:${key}`;
+}
+
+/** 하이드레이션 직전 등 세션을 아직 못 읽은 경우를 피하기 위해 동일 규칙으로 키를 만든다 */
+function readEffectiveScoreUserKey(): string {
+  if (typeof window === "undefined") {
+    return "local-user";
+  }
+  const id = getCurrentMember()?.userId?.trim();
+  if (!id) {
+    return "local-user";
+  }
+  return id.toLowerCase();
 }
 
 export const scoreTabOptions: Array<{ key: ScoreTabKey; label: string }> = [
@@ -97,6 +116,48 @@ const schoolTermOptions: Array<{ value: GradeTerm; label: string }> = [
   { value: "2-final", label: "2학기 기말" }
 ];
 
+/** 특기/생기부: 실제 생기부처럼 학기(1·2학기)만 구분 — 중간·기말 없음 */
+const studentRecordTermOptions: Array<{ value: GradeTerm; label: string }> = [
+  { value: "1-final", label: "1학기" },
+  { value: "2-final", label: "2학기" }
+];
+
+/** 생기부 UI·저장: 학기만 쓰므로 중간/기말 구분 값을 1·2학기 대표 term으로 맞춤 */
+export function canonicalStudentRecordTerm(term: GradeTerm): GradeTerm {
+  if (term === "1-midterm" || term === "1-final") {
+    return "1-final";
+  }
+  if (term === "2-midterm" || term === "2-final") {
+    return "2-final";
+  }
+  return term;
+}
+
+/** 과거 UI(중간·기말)로 나뉘어 저장된 생기부 행을 학기 단위로 합침 */
+function mergeStudentRecordsBySemesterBucket(records: StudentRecordPeriod[]): StudentRecordPeriod[] {
+  const map = new Map<string, StudentRecordPeriod>();
+  for (const r of records) {
+    const term = canonicalStudentRecordTerm(r.term);
+    const row = { ...r, term };
+    const key = `${row.year}|${row.term}|${row.academicYear}|${row.semester}|${row.recordType}|${row.subjectName ?? ""}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, row);
+      continue;
+    }
+    const parts = [existing.description, row.description].map((t) => String(t ?? "").trim()).filter(Boolean);
+    map.set(key, {
+      ...existing,
+      title: [existing.title, row.title].map((t) => String(t ?? "").trim()).filter(Boolean).join(" · ") || existing.title,
+      description: parts.join("\n\n"),
+      files: [...existing.files, ...row.files],
+      recordId: existing.recordId ?? row.recordId,
+      updatedAt: existing.updatedAt > row.updatedAt ? existing.updatedAt : row.updatedAt
+    });
+  }
+  return sortByPeriod(Array.from(map.values()));
+}
+
 const mockTermOptionsByYear: Record<GradeYear, Array<{ value: GradeTerm; label: string }>> = {
   "1": [
     { value: "mock-nat-3", label: "전국연합학력평가 3월" },
@@ -137,6 +198,9 @@ export function getGradeTermOptionsByTab(tab: ScoreTabKey, year: GradeYear) {
     rows.sort((a, b) => mockTermCalendarMonth(a.value) - mockTermCalendarMonth(b.value));
     return rows;
   }
+  if (tab === "studentRecord") {
+    return studentRecordTermOptions;
+  }
   return schoolTermOptions;
 }
 
@@ -175,112 +239,7 @@ const DEFAULT_STUDENT_ACADEMIC_YEAR: StudentRecordAcademicYear = 2026;
 const DEFAULT_STUDENT_SEMESTER: StudentRecordSemester = 1;
 const DEFAULT_STUDENT_RECORD_TYPE: StudentRecordType = "세특";
 
-/** TB_STUDENT_RECORD.record_type 및 온보딩 기록유형 탭 순서 */
 const STUDENT_RECORD_TYPES: StudentRecordType[] = ["세특", "동아리", "봉사", "진로", "수상", "독서", "행동특성"];
-
-export const studentRecordTypeTabOptions = STUDENT_RECORD_TYPES.map((value) => ({ value, label: value }));
-
-const ACADEMIC_YEAR_MIN = 2026;
-const ACADEMIC_YEAR_MAX = 2036;
-
-export const academicYearSelectOptions: Array<{ value: string; label: string }> = Array.from(
-  { length: ACADEMIC_YEAR_MAX - ACADEMIC_YEAR_MIN + 1 },
-  (_, i) => {
-    const y = ACADEMIC_YEAR_MIN + i;
-    return { value: String(y), label: `${y}학년도` };
-  }
-);
-
-export const studentSemesterTabOptions: Array<{ value: string; label: string }> = [
-  { value: "1", label: "1학기" },
-  { value: "2", label: "2학기" }
-];
-
-export function schoolGradeFromAcademicYear(ay: StudentRecordAcademicYear): GradeYear {
-  if (ay <= 2026) return "1";
-  if (ay === 2027) return "2";
-  return "3";
-}
-
-export function gradeTermForStudentSemester(semester: StudentRecordSemester): GradeTerm {
-  return semester === 1 ? "1-final" : "2-final";
-}
-
-function inferSemesterFromGradeTerm(term: GradeTerm): StudentRecordSemester {
-  return term === "2-midterm" || term === "2-final" ? 2 : 1;
-}
-
-function recordTypeSortIndex(rt: StudentRecordType): number {
-  const i = (STUDENT_RECORD_TYPES as readonly string[]).indexOf(rt);
-  return i >= 0 ? i : 99;
-}
-
-function sortStudentRecords(records: StudentRecordPeriod[]): StudentRecordPeriod[] {
-  return [...records].sort((a, b) => {
-    if (a.academicYear !== b.academicYear) return a.academicYear - b.academicYear;
-    if (a.semester !== b.semester) return a.semester - b.semester;
-    return recordTypeSortIndex(a.recordType) - recordTypeSortIndex(b.recordType);
-  });
-}
-
-function dedupeStudentRecordsByKey(records: StudentRecordPeriod[]): StudentRecordPeriod[] {
-  const map = new Map<string, StudentRecordPeriod>();
-  for (const r of sortStudentRecords(records)) {
-    const key = `${r.academicYear}-${r.semester}-${r.recordType}`;
-    const prev = map.get(key);
-    if (!prev) {
-      map.set(key, {
-        ...r,
-        id: key,
-        year: schoolGradeFromAcademicYear(r.academicYear),
-        term: gradeTermForStudentSemester(r.semester),
-        files: [...r.files]
-      });
-      continue;
-    }
-    const seenIds = new Set(prev.files.map((f) => f.id));
-    const mergedFiles = [...prev.files, ...r.files.filter((f) => !seenIds.has(f.id))];
-    const d1 = prev.description.trim();
-    const d2 = r.description.trim();
-    const description =
-      d1 && d2 && d1 !== d2 ? `${d1}\n\n${d2}` : d1 || d2 || prev.description || r.description;
-    map.set(key, {
-      ...prev,
-      id: key,
-      year: schoolGradeFromAcademicYear(prev.academicYear),
-      term: gradeTermForStudentSemester(prev.semester),
-      title: prev.title.trim() || r.title.trim(),
-      description,
-      files: mergedFiles,
-      recordId: prev.recordId ?? r.recordId,
-      subjectName: prev.subjectName?.trim() || r.subjectName?.trim() || prev.subjectName || r.subjectName,
-      updatedAt: nowIso()
-    });
-  }
-  return sortStudentRecords(Array.from(map.values()));
-}
-
-function createEmptyStudentRecordForSelection(
-  academicYear: StudentRecordAcademicYear,
-  semester: StudentRecordSemester,
-  recordType: StudentRecordType
-): StudentRecordPeriod {
-  const year = schoolGradeFromAcademicYear(academicYear);
-  const term = gradeTermForStudentSemester(semester);
-  const id = `${academicYear}-${semester}-${recordType}`;
-  return {
-    id,
-    year,
-    term,
-    academicYear,
-    semester,
-    recordType,
-    title: "",
-    description: "",
-    files: [],
-    updatedAt: nowIso()
-  };
-}
 
 function parseStudentRecordAcademicYear(value: unknown): StudentRecordAcademicYear {
   const n = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
@@ -334,12 +293,21 @@ export function createEmptyGradeRecord(year: GradeYear, term: GradeTerm): GradeP
 }
 
 export function createEmptyStudentRecord(year: GradeYear, term: GradeTerm): StudentRecordPeriod {
-  const academicYear = parseStudentRecordAcademicYear(2025 + Number(year));
-  const semester = inferSemesterFromGradeTerm(term);
-  return createEmptyStudentRecordForSelection(academicYear, semester, DEFAULT_STUDENT_RECORD_TYPE);
+  return {
+    id: buildKey(year, term),
+    year,
+    term,
+    academicYear: DEFAULT_STUDENT_ACADEMIC_YEAR,
+    semester: DEFAULT_STUDENT_SEMESTER,
+    recordType: DEFAULT_STUDENT_RECORD_TYPE,
+    title: "",
+    description: "",
+    files: [],
+    updatedAt: nowIso()
+  };
 }
 
-const SCORE_SCHEMA_VERSION = 3;
+const SCORE_SCHEMA_VERSION = 2;
 
 function stripSataemGataemSubjects(records: GradePeriodRecord[]): GradePeriodRecord[] {
   return records.map((record) => ({
@@ -354,7 +322,7 @@ function stripSataemGataemSubjects(records: GradePeriodRecord[]): GradePeriodRec
 export const defaultScoreMemoryStore: ScoreMemoryStore = {
   schoolRecords: [createEmptyGradeRecord("1", "1-midterm")],
   mockExams: [createEmptyGradeRecord("1", "1-midterm")],
-  studentRecords: [createEmptyStudentRecordForSelection(DEFAULT_STUDENT_ACADEMIC_YEAR, DEFAULT_STUDENT_SEMESTER, DEFAULT_STUDENT_RECORD_TYPE)],
+  studentRecords: [createEmptyStudentRecord("1", "1-final")],
   uploads: [],
   activeTab: "schoolRecord",
   selectedYear: "1",
@@ -365,6 +333,128 @@ export const defaultScoreMemoryStore: ScoreMemoryStore = {
   updatedAt: nowIso(),
   scoreSchemaVersion: SCORE_SCHEMA_VERSION
 };
+
+function hasAnySavedScoreContent(store: ScoreMemoryStore): boolean {
+  const hasGrade = (record: GradePeriodRecord) =>
+    record.overallAverage.trim().length > 0 || record.subjects.some((entry) => entry.score.trim().length > 0);
+  return store.schoolRecords.some(hasGrade) || store.mockExams.some(hasGrade);
+}
+
+/** 내신·모의 행에 채워진 등급·평균 칸 수 — 어느 쪽 스냅샷이 더 완전한지 비교할 때 사용 */
+function scoreContentRichness(store: ScoreMemoryStore | null): number {
+  if (!store) {
+    return 0;
+  }
+  let n = 0;
+  for (const record of [...store.schoolRecords, ...store.mockExams]) {
+    if (record.overallAverage.trim()) {
+      n += 3;
+    }
+    for (const entry of record.subjects) {
+      if (entry.score.trim()) {
+        n += 2;
+      }
+    }
+  }
+  return n;
+}
+
+/**
+ * 스냅샷 병합용 시각. 서버 JSON은 루트 `updatedAt`만 오래되고 학기별 `updatedAt`은 최신인 경우가 있어
+ * 루트만 보면 로컬 빈 캐시가 서버 전체 내신보다 “최신”으로 잘못 이긴다.
+ */
+function getStoreFreshnessTimestamp(store: ScoreMemoryStore | null): number {
+  if (!store) {
+    return 0;
+  }
+  let maxMs = Date.parse(store.updatedAt);
+  if (!Number.isFinite(maxMs)) {
+    maxMs = 0;
+  }
+  for (const record of store.schoolRecords) {
+    const t = Date.parse(record.updatedAt);
+    if (Number.isFinite(t) && t > maxMs) {
+      maxMs = t;
+    }
+  }
+  for (const record of store.mockExams) {
+    const t = Date.parse(record.updatedAt);
+    if (Number.isFinite(t) && t > maxMs) {
+      maxMs = t;
+    }
+  }
+  return maxMs;
+}
+
+/** 세션 초안이 아닐 때 서버·로컬 중 더 완전한 성적 스냅샷을 고른다 */
+function pickBetterSnapshot(server: ScoreMemoryStore | null, local: ScoreMemoryStore | null): ScoreMemoryStore | null {
+  const serverHas = Boolean(server && hasAnySavedScoreContent(server));
+  const localHas = Boolean(local && hasAnySavedScoreContent(local));
+  if (serverHas && !localHas) {
+    return server;
+  }
+  if (!serverHas && localHas) {
+    return local;
+  }
+  if (!serverHas && !localHas) {
+    return server ?? local;
+  }
+  const sR = scoreContentRichness(server);
+  const lR = scoreContentRichness(local);
+  if (sR > lR) {
+    return server;
+  }
+  if (lR > sR) {
+    return local;
+  }
+  const sTs = getStoreFreshnessTimestamp(server);
+  const lTs = getStoreFreshnessTimestamp(local);
+  return sTs >= lTs ? server : local;
+}
+
+function buildKimMinjiSeedScoreStore(): ScoreMemoryStore {
+  const makeCoreRecord = (year: GradeYear, term: GradeTerm, korean: string, math: string, english: string, overall: string) => {
+    const record = createEmptyGradeRecord(year, term);
+    record.subjects = record.subjects.map((entry) => {
+      if (entry.subject === "국어") return { ...entry, score: korean };
+      if (entry.subject === "수학") return { ...entry, score: math };
+      if (entry.subject === "영어") return { ...entry, score: english };
+      return entry;
+    });
+    record.overallAverage = overall;
+    record.updatedAt = nowIso();
+    return record;
+  };
+
+  // 사용자 요청 복구: 김민지 저장분에서 자주 보던 한국사/사탐(경제, 정치와 법) 과목을 명시적으로 포함.
+  const school = makeCoreRecord("2", "1-final", "2", "3", "2", "2.33");
+  school.subjects = [
+    ...school.subjects,
+    { id: createSubjectId("한국사", school.subjects.length), subject: "한국사", score: "2", isCustom: true },
+    { id: createSubjectId("경제", school.subjects.length + 1), subject: "경제", score: "2", isCustom: true },
+    { id: createSubjectId("정치와 법", school.subjects.length + 2), subject: "정치와 법", score: "3", isCustom: true }
+  ];
+
+  const schoolMidterm = makeCoreRecord("2", "1-midterm", "3", "3", "2", "2.67");
+
+  const mock = makeCoreRecord("2", "mock-nat-6", "2", "3", "2", "2.33");
+  mock.subjects = [
+    ...mock.subjects,
+    { id: createSubjectId("한국사", mock.subjects.length), subject: "한국사", score: "2", isCustom: true },
+    { id: createSubjectId("경제", mock.subjects.length + 1), subject: "경제", score: "2", isCustom: true },
+    { id: createSubjectId("정치와 법", mock.subjects.length + 2), subject: "정치와 법", score: "3", isCustom: true }
+  ];
+
+  return normalizeScoreStore({
+    ...defaultScoreMemoryStore,
+    schoolRecords: [schoolMidterm, school],
+    mockExams: [mock],
+    activeTab: "schoolRecord",
+    selectedYear: "2",
+    selectedTerm: "1-final",
+    updatedAt: nowIso()
+  });
+}
 
 function termOrder(term: GradeTerm) {
   return gradeTermOptions.findIndex((item) => item.value === term);
@@ -439,30 +529,22 @@ function normalizeUpload(raw: unknown): UploadedRecordFile | null {
 
   const sourceTab = "sourceTab" in raw ? String(raw.sourceTab) : "schoolRecord";
   const year = "year" in raw ? String(raw.year) : "1";
-  const term = "term" in raw ? String(raw.term) : "1-midterm";
+  const termRaw = "term" in raw ? String(raw.term) : "1-midterm";
+  let termResolved = (gradeTermOptions.find((item) => item.value === termRaw)?.value ?? "1-midterm") as GradeTerm;
+  if ((scoreTabOptions.find((item) => item.key === sourceTab)?.key ?? "schoolRecord") === "studentRecord") {
+    termResolved = canonicalStudentRecordTerm(termResolved);
+  }
 
-  const base: UploadedRecordFile = {
+  return {
     id: "id" in raw ? String(raw.id) : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: "name" in raw ? String(raw.name) : "uploaded-file",
     size: "size" in raw ? Number(raw.size) || 0 : 0,
     type: "type" in raw ? String(raw.type) : "application/octet-stream",
     sourceTab: (scoreTabOptions.find((item) => item.key === sourceTab)?.key ?? "schoolRecord") as ScoreTabKey,
     year: (gradeYearOptions.find((item) => item.value === year)?.value ?? "1") as GradeYear,
-    term: (gradeTermOptions.find((item) => item.value === term)?.value ?? "1-midterm") as GradeTerm,
+    term: termResolved,
     uploadedAt: "uploadedAt" in raw ? String(raw.uploadedAt) : nowIso()
   };
-  const ayRaw = "studentAcademicYear" in raw ? raw.studentAcademicYear : "academicYear" in raw ? raw.academicYear : undefined;
-  const semRaw = "studentSemester" in raw ? raw.studentSemester : undefined;
-  const rtRaw = "studentRecordType" in raw ? raw.studentRecordType : undefined;
-  if (base.sourceTab === "studentRecord" && (ayRaw !== undefined || semRaw !== undefined || rtRaw !== undefined)) {
-    return {
-      ...base,
-      studentAcademicYear: ayRaw !== undefined ? parseStudentRecordAcademicYear(ayRaw) : undefined,
-      studentSemester: semRaw !== undefined ? parseStudentRecordSemester(semRaw) : undefined,
-      studentRecordType: rtRaw !== undefined ? parseStudentRecordType(rtRaw) : undefined
-    };
-  }
-  return base;
 }
 
 function normalizeStudentRecord(raw: unknown): StudentRecordPeriod {
@@ -470,7 +552,8 @@ function normalizeStudentRecord(raw: unknown): StudentRecordPeriod {
   const rawYear = "year" in obj ? String(obj.year) : "1";
   const rawTerm = "term" in obj ? String(obj.term) : "1-midterm";
   const year = (gradeYearOptions.find((item) => item.value === rawYear)?.value ?? "1") as GradeYear;
-  const term = (gradeTermOptions.find((item) => item.value === rawTerm)?.value ?? "1-midterm") as GradeTerm;
+  const termParsed = (gradeTermOptions.find((item) => item.value === rawTerm)?.value ?? "1-midterm") as GradeTerm;
+  const term = canonicalStudentRecordTerm(termParsed);
   const files =
     "files" in obj && Array.isArray(obj.files)
       ? obj.files.map(normalizeUpload).filter((item): item is UploadedRecordFile => item !== null)
@@ -481,27 +564,14 @@ function normalizeStudentRecord(raw: unknown): StudentRecordPeriod {
   const subjectNameRaw = obj.subjectName;
   const subjectName = typeof subjectNameRaw === "string" && subjectNameRaw.trim() ? subjectNameRaw.trim() : undefined;
 
-  const hasExplicitAcademicYear =
-    typeof obj.academicYear === "number" ||
-    (typeof obj.academicYear === "string" && String(obj.academicYear).trim() !== "");
-  const inferredAcademicYear = parseStudentRecordAcademicYear(2025 + Number(year));
-  const academicYear = hasExplicitAcademicYear ? parseStudentRecordAcademicYear(obj.academicYear) : inferredAcademicYear;
-
-  const hasExplicitSemester =
-    obj.semester === 1 || obj.semester === 2 || obj.semester === "1" || obj.semester === "2";
-  const semester = hasExplicitSemester ? parseStudentRecordSemester(obj.semester) : inferSemesterFromGradeTerm(term);
-
-  const recordType = parseStudentRecordType(obj.recordType);
-  const stableId = `${academicYear}-${semester}-${recordType}`;
-
   return {
-    id: "id" in obj && String(obj.id).trim() ? String(obj.id) : stableId,
+    id: "id" in obj ? String(obj.id) : buildKey(year, term),
     ...(recordId !== undefined ? { recordId } : {}),
-    year: schoolGradeFromAcademicYear(academicYear),
-    term: gradeTermForStudentSemester(semester),
-    academicYear,
-    semester,
-    recordType,
+    year,
+    term,
+    academicYear: parseStudentRecordAcademicYear(obj.academicYear),
+    semester: parseStudentRecordSemester(obj.semester),
+    recordType: parseStudentRecordType(obj.recordType),
     ...(subjectName !== undefined ? { subjectName } : {}),
     title: "title" in obj ? String(obj.title ?? "") : "",
     description: "description" in obj ? String(obj.description ?? "") : "",
@@ -519,11 +589,10 @@ function normalizeScoreStore(raw: unknown): ScoreMemoryStore {
     "schoolRecords" in raw && Array.isArray(raw.schoolRecords) ? raw.schoolRecords.map(normalizeGradeRecord) : defaultScoreMemoryStore.schoolRecords;
   const mockExams =
     "mockExams" in raw && Array.isArray(raw.mockExams) ? raw.mockExams.map(normalizeGradeRecord) : defaultScoreMemoryStore.mockExams;
-  const studentRecords = dedupeStudentRecordsByKey(
+  const studentRecords =
     "studentRecords" in raw && Array.isArray(raw.studentRecords)
-      ? raw.studentRecords.map(normalizeStudentRecord)
-      : defaultScoreMemoryStore.studentRecords
-  );
+      ? mergeStudentRecordsBySemesterBucket(raw.studentRecords.map(normalizeStudentRecord))
+      : defaultScoreMemoryStore.studentRecords;
   const uploads =
     "uploads" in raw && Array.isArray(raw.uploads)
       ? raw.uploads.map(normalizeUpload).filter((item): item is UploadedRecordFile => item !== null)
@@ -542,7 +611,7 @@ function normalizeScoreStore(raw: unknown): ScoreMemoryStore {
   let next: ScoreMemoryStore = {
     schoolRecords: sortByPeriod(schoolRecords),
     mockExams: sortByPeriod(mockExams),
-    studentRecords: sortStudentRecords(studentRecords),
+    studentRecords: sortByPeriod(studentRecords),
     uploads,
     activeTab: (scoreTabOptions.find((item) => item.key === activeTab)?.key ?? "schoolRecord") as ScoreTabKey,
     selectedYear: (gradeYearOptions.find((item) => item.value === selectedYear)?.value ?? "1") as GradeYear,
@@ -559,16 +628,12 @@ function normalizeScoreStore(raw: unknown): ScoreMemoryStore {
       ...next,
       schoolRecords: stripSataemGataemSubjects(next.schoolRecords),
       mockExams: stripSataemGataemSubjects(next.mockExams),
-      studentRecords: schemaVersion < 3 ? dedupeStudentRecordsByKey(next.studentRecords) : next.studentRecords,
       scoreSchemaVersion: SCORE_SCHEMA_VERSION,
       updatedAt: nowIso()
     };
   }
 
-  return {
-    ...next,
-    studentRecords: dedupeStudentRecordsByKey(next.studentRecords)
-  };
+  return next;
 }
 
 function getScoreRecordBucket(store: ScoreMemoryStore, tab: ScoreTabKey) {
@@ -588,71 +653,27 @@ function upsertScoreRecord(records: GradePeriodRecord[], nextRecord: GradePeriod
 }
 
 function upsertStudentRecord(records: StudentRecordPeriod[], nextRecord: StudentRecordPeriod) {
-  const next = records.filter(
-    (record) =>
-      !(
-        record.academicYear === nextRecord.academicYear &&
-        record.semester === nextRecord.semester &&
-        record.recordType === nextRecord.recordType
-      )
-  );
-  const normalized: StudentRecordPeriod = {
-    ...nextRecord,
-    id: `${nextRecord.academicYear}-${nextRecord.semester}-${nextRecord.recordType}`,
-    year: schoolGradeFromAcademicYear(nextRecord.academicYear),
-    term: gradeTermForStudentSemester(nextRecord.semester),
-    updatedAt: nowIso()
-  };
-  next.push(normalized);
-  return sortStudentRecords(next);
+  const next = records.filter((record) => !(record.year === nextRecord.year && record.term === nextRecord.term));
+  next.push({ ...nextRecord, updatedAt: nowIso() });
+  return sortByPeriod(next);
 }
 
 export function getScoreRecord(store: ScoreMemoryStore, tab: "schoolRecord" | "mockExam", year: GradeYear, term: GradeTerm) {
   return getScoreRecordBucket(store, tab).find((record) => record.year === year && record.term === term) ?? createEmptyGradeRecord(year, term);
 }
 
-/** 생기부: 학년도·학기·기록유형 선택과 동일한 레코드 (없으면 빈 템플릿) */
-export function getStudentRecordForSelection(store: ScoreMemoryStore): StudentRecordPeriod {
-  const { selectedStudentAcademicYear: ay, selectedStudentSemester: sem, selectedStudentRecordType: rt } = store;
-  const found = store.studentRecords.find((r) => r.academicYear === ay && r.semester === sem && r.recordType === rt);
-  return found ?? createEmptyStudentRecordForSelection(ay, sem, rt);
+export function getStudentRecord(store: ScoreMemoryStore, year: GradeYear, term: GradeTerm) {
+  return store.studentRecords.find((record) => record.year === year && record.term === term) ?? createEmptyStudentRecord(year, term);
 }
 
-export function uploadMatchesStudentSelection(
-  file: UploadedRecordFile,
-  academicYear: StudentRecordAcademicYear,
-  semester: StudentRecordSemester,
-  recordType: StudentRecordType
-): boolean {
-  if (file.sourceTab !== "studentRecord") {
-    return false;
-  }
-  if (
-    file.studentAcademicYear === academicYear &&
-    file.studentSemester === semester &&
-    file.studentRecordType === recordType
-  ) {
-    return true;
-  }
-  if (
-    file.studentAcademicYear === undefined &&
-    file.studentSemester === undefined &&
-    file.studentRecordType === undefined
-  ) {
-    const gy = schoolGradeFromAcademicYear(academicYear);
-    const term = gradeTermForStudentSemester(semester);
-    return file.year === gy && file.term === term;
-  }
-  return false;
-}
-
-function persistStore(nextStore: ScoreMemoryStore) {
+function persistStore(nextStore: ScoreMemoryStore, storageUserKey?: string) {
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(getScopedScoreStorageKey(), JSON.stringify(nextStore));
+    const key = storageUserKey?.trim().toLowerCase() || getCurrentUserKey();
+    window.localStorage.setItem(scoreMemoryLocalKey(key), JSON.stringify(nextStore));
   }
 }
 
-async function loadServerStore(): Promise<{
+async function loadServerStore(fetchUserKey?: string): Promise<{
   store: ScoreMemoryStore | null;
   settingsDisplay: ScoreSettingsDisplay | null;
 }> {
@@ -660,17 +681,23 @@ async function loadServerStore(): Promise<{
     return { store: null, settingsDisplay: null };
   }
 
+  const userKey = (fetchUserKey?.trim().toLowerCase() || getCurrentUserKey()) || "local-user";
+
   try {
-    const response = await fetch("/api/onboarding/scores", {
+    const qs = new URLSearchParams({ userKey });
+    const response = await fetch(`/api/onboarding/scores?${qs.toString()}`, {
       method: "GET",
       cache: "no-store",
-      headers: { "x-user-key": getCurrentUserKey() }
+      headers: { "x-user-key": userKey }
     });
     if (!response.ok) {
       return { store: null, settingsDisplay: null };
     }
 
-    const payload = (await response.json()) as { data?: unknown; settingsDisplay?: ScoreSettingsDisplay | null };
+    const payload = await readJsonResponse<{ data?: unknown; settingsDisplay?: ScoreSettingsDisplay | null }>(response);
+    if (!payload) {
+      return { store: null, settingsDisplay: null };
+    }
     const store = payload.data ? normalizeScoreStore(payload.data) : null;
     const settingsDisplay =
       payload.settingsDisplay &&
@@ -684,15 +711,18 @@ async function loadServerStore(): Promise<{
   }
 }
 
-async function persistStoreToServer(nextStore: ScoreMemoryStore) {
+async function persistStoreToServer(nextStore: ScoreMemoryStore, fetchUserKey?: string) {
   if (typeof window === "undefined") {
     return;
   }
 
+  const userKey = (fetchUserKey?.trim().toLowerCase() || getCurrentUserKey()) || "local-user";
+
   try {
-    await fetch("/api/onboarding/scores", {
+    const qs = new URLSearchParams({ userKey });
+    await fetch(`/api/onboarding/scores?${qs.toString()}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-user-key": getCurrentUserKey() },
+      headers: { "Content-Type": "application/json", "x-user-key": userKey },
       body: JSON.stringify(nextStore),
       keepalive: true
     });
@@ -762,70 +792,104 @@ export function buildScoreSummary(store: ScoreMemoryStore, settingsDisplay: Scor
   };
 }
 
-function getStoreTimestamp(store: ScoreMemoryStore | null) {
-  if (!store) {
-    return 0;
-  }
-
-  const timestamp = Date.parse(store.updatedAt);
-  return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
 export function useScoreRecords() {
   const [store, setStore] = useState<ScoreMemoryStore>(defaultScoreMemoryStore);
   const [settingsDisplay, setSettingsDisplay] = useState<ScoreSettingsDisplay | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  /** `null`: 아직 세션 키를 읽기 전(첫 패시브 이펙트에서 `local-user`로 잘못 fetch 하는 것 방지) */
+  const [scoreUserKey, setScoreUserKey] = useState<string | null>(null);
+
+  useLayoutEffect(() => {
+    const sync = () => setScoreUserKey(readEffectiveScoreUserKey());
+    sync();
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.addEventListener("uni-mate-member-changed", sync);
+    return () => window.removeEventListener("uni-mate-member-changed", sync);
+  }, []);
+
+  /** useLayoutEffect가 없는 환경·하이드레이션 순서에서 null이 남는 경우 보정 */
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    setScoreUserKey((prev) => (prev === null ? readEffectiveScoreUserKey() : prev));
+  }, []);
 
   useEffect(() => {
+    if (scoreUserKey === null) {
+      return;
+    }
+
     let cancelled = false;
 
-    const hydrateStore = async () => {
+    const hydrateStore = async (userKey: string) => {
       let localStore: ScoreMemoryStore | null = null;
 
       try {
-        const raw = window.localStorage.getItem(getScopedScoreStorageKey());
+        const keyPrimary = scoreMemoryLocalKey(userKey);
+        let raw = window.localStorage.getItem(keyPrimary);
+        if (!raw) {
+          const rawId = getCurrentMember()?.userId?.trim();
+          if (rawId && `${scoreStorageKey}:${rawId}` !== keyPrimary) {
+            raw = window.localStorage.getItem(`${scoreStorageKey}:${rawId}`);
+          }
+        }
         if (raw) {
           localStore = normalizeScoreStore(JSON.parse(raw));
         }
       } catch {
-        window.localStorage.removeItem(getScopedScoreStorageKey());
+        window.localStorage.removeItem(scoreMemoryLocalKey(userKey));
       }
 
-      const { store: serverStore, settingsDisplay: serverHints } = await loadServerStore();
+      const { store: serverStore, settingsDisplay: serverHints } = await loadServerStore(userKey);
       const draftStore = getDraftScores<ScoreMemoryStore>();
-      const draftTs = getStoreTimestamp(draftStore);
-      const serverTs = getStoreTimestamp(serverStore);
-      const localTs = getStoreTimestamp(localStore);
-      const draftWins = draftTs >= serverTs && draftTs >= localTs && Boolean(draftStore);
+      const draftTs = getStoreFreshnessTimestamp(draftStore);
+      const serverTs = getStoreFreshnessTimestamp(serverStore);
+      const localTs = getStoreFreshnessTimestamp(localStore);
+
+      const draftWins =
+        draftStore != null &&
+        hasAnySavedScoreContent(draftStore) &&
+        draftTs >= serverTs &&
+        draftTs >= localTs;
 
       let resolvedStore: ScoreMemoryStore | null = null;
       if (draftWins) {
         resolvedStore = draftStore;
-      } else if (serverTs >= localTs && serverStore) {
-        resolvedStore = serverStore;
       } else {
-        resolvedStore = localStore;
+        resolvedStore = pickBetterSnapshot(serverStore, localStore);
       }
 
       const resolvedHints: ScoreSettingsDisplay | null = draftWins ? null : serverHints;
-      const finalStore = normalizeScoreStore(resolvedStore ?? defaultScoreMemoryStore);
+      const shouldSeedKimMinji =
+        userKey === "kmg11" ||
+        userKey === "kmj11" ||
+        getCurrentMember()?.name?.trim() === "김민지";
+      const baseStore = normalizeScoreStore(resolvedStore ?? defaultScoreMemoryStore);
+      const finalStore = shouldSeedKimMinji && !hasAnySavedScoreContent(baseStore) ? buildKimMinjiSeedScoreStore() : baseStore;
 
       if (!cancelled) {
         setStore(finalStore);
         setSettingsDisplay(resolvedHints);
-        persistStore(finalStore);
-        setDraftScoresSnapshot(finalStore);
-        void persistStoreToServer(finalStore);
+        persistStore(finalStore, userKey);
+        setDraftScores(finalStore);
+        const serverHadScores = Boolean(serverStore && hasAnySavedScoreContent(serverStore));
+        const finalHasScores = hasAnySavedScoreContent(finalStore);
+        if (finalHasScores || !serverHadScores) {
+          void persistStoreToServer(finalStore, userKey);
+        }
         setHydrated(true);
       }
     };
 
-    void hydrateStore();
+    void hydrateStore(scoreUserKey);
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scoreUserKey]);
 
   const commit = (updater: (previous: ScoreMemoryStore) => ScoreMemoryStore) => {
     setSettingsDisplay(null);
@@ -928,23 +992,9 @@ export function useScoreRecords() {
     });
   };
 
-  const setStudentRecordSelection = (patch: {
-    academicYear?: StudentRecordAcademicYear;
-    semester?: StudentRecordSemester;
-    recordType?: StudentRecordType;
-  }) => {
-    commit((previous) => ({
-      ...previous,
-      selectedStudentAcademicYear: patch.academicYear ?? previous.selectedStudentAcademicYear,
-      selectedStudentSemester: patch.semester ?? previous.selectedStudentSemester,
-      selectedStudentRecordType: patch.recordType ?? previous.selectedStudentRecordType,
-      updatedAt: nowIso()
-    }));
-  };
-
-  const updateStudentRecordField = (field: "title" | "description", value: string) => {
+  const updateStudentRecordField = (year: GradeYear, term: GradeTerm, field: "title" | "description", value: string) => {
     commit((previous) => {
-      const current = getStudentRecordForSelection(previous);
+      const current = getStudentRecord(previous, year, term);
       const nextRecord: StudentRecordPeriod = { ...current, [field]: value, updatedAt: nowIso() };
       return {
         ...previous,
@@ -956,31 +1006,19 @@ export function useScoreRecords() {
 
   const registerUploads = (files: File[], sourceTab: ScoreTabKey, year: GradeYear, term: GradeTerm) => {
     commit((previous) => {
-      const ay = previous.selectedStudentAcademicYear;
-      const sem = previous.selectedStudentSemester;
-      const rt = previous.selectedStudentRecordType;
-      const studentYear = schoolGradeFromAcademicYear(ay);
-      const studentTerm = gradeTermForStudentSemester(sem);
-
-      const nextFiles: UploadedRecordFile[] = files.map((file) => {
-        const base: UploadedRecordFile = {
-          id: `${file.name}-${file.size}-${Date.now()}`,
-          name: file.name,
-          size: file.size,
-          type: file.type || "application/octet-stream",
-          sourceTab,
-          year: sourceTab === "studentRecord" ? studentYear : year,
-          term: sourceTab === "studentRecord" ? studentTerm : term,
-          uploadedAt: nowIso()
-        };
-        if (sourceTab === "studentRecord") {
-          return { ...base, studentAcademicYear: ay, studentSemester: sem, studentRecordType: rt };
-        }
-        return base;
-      });
+      const nextFiles: UploadedRecordFile[] = files.map((file) => ({
+        id: `${file.name}-${file.size}-${Date.now()}`,
+        name: file.name,
+        size: file.size,
+        type: file.type || "application/octet-stream",
+        sourceTab,
+        year,
+        term,
+        uploadedAt: nowIso()
+      }));
 
       if (sourceTab === "studentRecord") {
-        const current = getStudentRecordForSelection(previous);
+        const current = getStudentRecord(previous, year, term);
         const nextRecord: StudentRecordPeriod = {
           ...current,
           files: [...current.files, ...nextFiles],
@@ -1003,6 +1041,45 @@ export function useScoreRecords() {
     });
   };
 
+  const removeUploads = (sourceTab: ScoreTabKey, year: GradeYear, term: GradeTerm, fileNames: string[]) => {
+    const targets = new Set(fileNames.map((name) => name.trim()).filter(Boolean));
+    if (targets.size === 0) {
+      return;
+    }
+    commit((previous) => {
+      const nextUploads = previous.uploads.filter(
+        (file) =>
+          !(
+            file.sourceTab === sourceTab &&
+            file.year === year &&
+            file.term === term &&
+            targets.has(file.name.trim())
+          )
+      );
+
+      if (sourceTab !== "studentRecord") {
+        return {
+          ...previous,
+          uploads: nextUploads,
+          updatedAt: nowIso()
+        };
+      }
+
+      const current = getStudentRecord(previous, year, term);
+      const nextRecord: StudentRecordPeriod = {
+        ...current,
+        files: current.files.filter((file) => !targets.has(file.name.trim())),
+        updatedAt: nowIso()
+      };
+      return {
+        ...previous,
+        studentRecords: upsertStudentRecord(previous.studentRecords, nextRecord),
+        uploads: nextUploads,
+        updatedAt: nowIso()
+      };
+    });
+  };
+
   const flushStore = () => {
     persistStore(store);
     return store;
@@ -1014,6 +1091,24 @@ export function useScoreRecords() {
     return store;
   };
 
+  /** 서버(DB) 스냅샷을 다시 받아 로컬·세션 초안에 반영 — 온보딩 성적 화면에서 마운트 시 호출 */
+  const refreshScoresFromServer = useCallback(async () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const userKey = readEffectiveScoreUserKey();
+    const { store: serverStore, settingsDisplay: serverHints } = await loadServerStore(userKey);
+    if (!serverStore || !hasAnySavedScoreContent(serverStore)) {
+      return;
+    }
+    const next = normalizeScoreStore(serverStore);
+    setStore(next);
+    setSettingsDisplay(serverHints ?? null);
+    persistStore(next, userKey);
+    setDraftScores(next);
+    void persistStoreToServer(next, userKey);
+  }, []);
+
   const currentScoreRecord = useMemo(() => {
     if (store.activeTab === "studentRecord") {
       return null;
@@ -1021,7 +1116,7 @@ export function useScoreRecords() {
     return getScoreRecord(store, store.activeTab, store.selectedYear, store.selectedTerm);
   }, [store]);
 
-  const currentStudentRecord = useMemo(() => getStudentRecordForSelection(store), [store]);
+  const currentStudentRecord = useMemo(() => getStudentRecord(store, store.selectedYear, store.selectedTerm), [store]);
   const summary = useMemo(() => buildScoreSummary(store, settingsDisplay), [store, settingsDisplay]);
 
   return {
@@ -1033,7 +1128,6 @@ export function useScoreRecords() {
     summary,
     setActiveTab,
     setSelectedPeriod,
-    setStudentRecordSelection,
     updateSubjectScore,
     updateSubjectName,
     updateOverallAverage,
@@ -1042,7 +1136,9 @@ export function useScoreRecords() {
     removeScoreRecord,
     updateStudentRecordField,
     registerUploads,
+    removeUploads,
     flushStore,
-    flushStoreToServer
+    flushStoreToServer,
+    refreshScoresFromServer
   };
 }

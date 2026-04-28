@@ -1,6 +1,13 @@
-/** 라인 박스 안 입력·선택(이름/유형/지역 등) — 값·플레이스홀더 모두 동일 회색(`muted`) */
-export const onboardingFormFieldClass =
-  "w-full rounded-xl border border-line px-4 py-3 text-muted placeholder:text-muted";
+const onboardingFieldShell = "w-full rounded-xl border border-line px-4 py-3";
+
+/** 인풋: 입력 텍스트는 ink, 플레이스홀더만 디자인 토큰 `muted`(#667085)와 동일 */
+export const onboardingFormFieldClass = `${onboardingFieldShell} text-ink placeholder:text-muted`;
+
+/**
+ * 셀렉트: `required` + 빈 값용 `<option value="" disabled>`일 때 닫힌 상태도 `muted`와 동일 톤.
+ * 선택 후에는 `text-ink` (signup·goals 등 다른 페이지와 같은 기준).
+ */
+export const onboardingSelectFieldClass = `${onboardingFieldShell} uni-mate-onboarding-select text-ink invalid:text-muted`;
 
 /** 온보딩 전역 primary CTA — 1px 테두리로 border-line 입력·보조 버튼과 동일한 박스 모델 */
 export const onboardingPrimaryCtaClass =

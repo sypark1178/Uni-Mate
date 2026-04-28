@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readRequestJson } from "@/lib/read-json-response";
 import { runPythonBridge } from "@/lib/python-bridge";
 
 export const runtime = "nodejs";
@@ -18,7 +19,10 @@ function resolveUserKey(request: Request) {
 
 export async function POST(request: Request) {
   const userKey = resolveUserKey(request);
-  const payload = (await request.json()) as { profileImageUrl?: string };
+  const payload = await readRequestJson<{ profileImageUrl?: string }>(request);
+  if (payload === null) {
+    return NextResponse.json({ ok: false, source: "fallback", error: "요청 본문이 올바르지 않습니다." }, { status: 200 });
+  }
   try {
     const result = await runPythonBridge(
       "save",

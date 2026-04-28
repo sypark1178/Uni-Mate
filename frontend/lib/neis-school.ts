@@ -1,3 +1,5 @@
+import { readJsonResponse } from "@/lib/read-json-response";
+
 type NeisSchoolRow = {
   LCTN_SC_NM?: string;
   SCHUL_NM?: string;
@@ -76,10 +78,14 @@ async function fetchSchoolRowsPage(args: {
   if (!response.ok) {
     throw new Error(`NEIS request failed: ${response.status}`);
   }
-  const payload = (await response.json()) as {
+  const payload = await readJsonResponse<{
     schoolInfo?: Array<{ head?: Array<{ list_total_count?: number }>; row?: NeisSchoolRow[] }>;
     RESULT?: { CODE?: string; MESSAGE?: string };
-  };
+  }>(response);
+
+  if (!payload) {
+    return { rows: [], totalCount: 0 };
+  }
 
   if (payload.RESULT?.CODE && payload.RESULT.CODE !== "INFO-000") {
     throw new Error(payload.RESULT.MESSAGE || payload.RESULT.CODE);

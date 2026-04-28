@@ -2,11 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
-import {
-  onboardingMutedTextCtaClass,
-  onboardingPrimaryCtaClass,
-  onboardingSecondaryOutlineCtaClass
-} from "@/lib/onboarding-buttons";
+import { onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
 import { safeNavigate } from "@/lib/navigation";
 
 type OnboardingStepProps = {
@@ -19,9 +15,8 @@ type OnboardingStepProps = {
   prevLabel?: string;
   nextHref: string;
   nextLabel: string;
-  helperLink?: { href: string; label: string };
-  /** primary 다음에 표시하는 텍스트형 보조 액션(예: 「홈으로」). 2단계「뒤로가기」와 동일 스타일 */
-  mutedNavAfterPrimary?: { href: string; label: string };
+  /** plainHref: 현재 URL 쿼리를 붙이지 않고 href 그대로 이동(예: /login) */
+  helperLink?: { href: string; label: string; plainHref?: boolean };
   onNext?: () => Promise<void> | void;
 };
 
@@ -53,27 +48,29 @@ export function OnboardingStep({
   subtitleClassName,
   children,
   prevHref,
-  prevLabel = "이전으로",
+  prevLabel = "뒤로가기",
   nextHref,
   nextLabel,
   helperLink,
-  mutedNavAfterPrimary,
   onNext
 }: OnboardingStepProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resolvedPrevHref = prevHref ? mergeSearchParams(prevHref, searchParams) : undefined;
   const resolvedNextHref = mergeSearchParams(nextHref, searchParams);
-  const resolvedHelperHref = helperLink ? mergeSearchParams(helperLink.href, searchParams) : undefined;
+  const resolvedHelperHref = helperLink
+    ? helperLink.plainHref
+      ? helperLink.href
+      : mergeSearchParams(helperLink.href, searchParams)
+    : undefined;
 
   const handleBack = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
     if (resolvedPrevHref) {
       safeNavigate(router, resolvedPrevHref);
+      return;
+    }
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
     }
   };
 
@@ -106,27 +103,22 @@ export function OnboardingStep({
         <button type="button" onClick={() => void handleNext()} className={onboardingPrimaryCtaClass}>
           {nextLabel}
         </button>
-        {mutedNavAfterPrimary ? (
-          <button
-            type="button"
-            onClick={() => safeNavigate(router, mutedNavAfterPrimary.href)}
-            className={onboardingMutedTextCtaClass}
-          >
-            {mutedNavAfterPrimary.label}
-          </button>
-        ) : null}
-        {resolvedPrevHref ? (
-          <button type="button" onClick={handleBack} className={onboardingSecondaryOutlineCtaClass}>
-            {prevLabel}
-          </button>
-        ) : null}
         {helperLink && resolvedHelperHref ? (
           <button
             type="button"
             onClick={() => safeNavigate(router, resolvedHelperHref)}
-            className="block w-full text-center text-sm text-muted underline underline-offset-4"
+            className="block w-full bg-transparent py-1 text-center text-sm font-normal text-muted underline underline-offset-4"
           >
             {helperLink.label}
+          </button>
+        ) : null}
+        {resolvedPrevHref ? (
+          <button
+            type="button"
+            onClick={handleBack}
+            className="block w-full bg-transparent py-1 text-center text-sm font-normal text-muted underline underline-offset-4"
+          >
+            {prevLabel}
           </button>
         ) : null}
       </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { readJsonResponse } from "@/lib/read-json-response";
+
 export type MemberRecord = {
   id: string;
   userId: string;
@@ -13,6 +15,8 @@ export type MemberRecord = {
 
 const memberStorageKey = "uni-mate-members";
 const currentMemberStorageKey = "uni-mate-current-member";
+/** 새 창·다른 탭에서도 동일 로그인으로 성적 API(`x-user-key`)를 맞추기 위한 동기 키 (로그아웃 시 삭제) */
+const currentMemberTabSyncKey = "uni-mate-current-member-tab-sync";
 
 function clearLegacyCurrentMember() {
   if (typeof window === "undefined") {
@@ -26,7 +30,18 @@ function writeCurrentMember(member: MemberRecord) {
     return;
   }
   clearLegacyCurrentMember();
-  window.sessionStorage.setItem(currentMemberStorageKey, JSON.stringify(member));
+  const serialized = JSON.stringify(member);
+  window.sessionStorage.setItem(currentMemberStorageKey, serialized);
+  try {
+    window.localStorage.setItem(currentMemberTabSyncKey, serialized);
+  } catch {
+    /* 사설 모드·용량 등 */
+  }
+  try {
+    window.dispatchEvent(new CustomEvent("uni-mate-member-changed", { detail: { userId: member.userId } }));
+  } catch {
+    /* ignore */
+  }
 }
 
 /** 로그인 입력: 공백·호환 문자 정리 (복사 붙여넣기 대비) */
@@ -265,13 +280,15 @@ export async function loginMemberWithServerFallback(loginValue: string, password
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ loginId: normalizedLogin, password: passwordValue })
     });
-    const payload = (await response.json()) as {
+    const payload = await readJsonResponse<{
       ok?: boolean;
       error?: string;
       data?: { userId: string; name: string; email: string; role?: string };
-    };
+    }>(response);
 
-    if (response.ok && payload.ok && payload.data) {
+    if (!payload) {
+      serverError = "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
+    } else if (response.ok && payload.ok && payload.data) {
       const d = payload.data;
       const member: MemberRecord = {
         id: `db-${d.userId}`,
@@ -286,15 +303,18 @@ export async function loginMemberWithServerFallback(loginValue: string, password
       upsertMemberInStore(member);
       writeCurrentMember(member);
       return { ok: true as const, member };
+    } else {
+      serverError = payload.error || "등록된 회원을 찾지 못했습니다.";
     }
 
-    serverError = payload.error || "등록된 회원을 찾지 못했습니다.";
-    const serverLikelyDown = !response.ok && response.status >= 500;
-    if (!serverLikelyDown && serverError !== "등록된 회원을 찾지 못했습니다.") {
-      return { ok: false as const, error: serverError };
-    }
-    if (serverLikelyDown && !serverError.trim()) {
-      serverError = "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
+    if (payload) {
+      const serverLikelyDown = !response.ok && response.status >= 500;
+      if (!serverLikelyDown && serverError !== "등록된 회원을 찾지 못했습니다.") {
+        return { ok: false as const, error: serverError };
+      }
+      if (serverLikelyDown && !serverError.trim()) {
+        serverError = "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
+      }
     }
   } catch {
     serverError = "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
@@ -321,15 +341,18 @@ export async function loginGuestBySavedContact(email: string) {
   try {
     const query = new URLSearchParams({ contactType: "email", contactId });
     const response = await fetch(`/api/onboarding/guest-temp?${query.toString()}`, { method: "GET", cache: "no-store" });
-    const payload = (await response.json()) as {
+    const payload = await readJsonResponse<{
       ok?: boolean;
       data?: {
         snapshot?: { profile?: unknown; scores?: unknown; goals?: unknown };
       } | null;
       expired?: boolean;
-    };
-    if (!response.ok || !payload.ok || !payload.data?.snapshot) {
-      return { ok: false as const, error: payload.expired ? "임시 저장이 만료되었습니다." : "임시 저장 내역이 없습니다." };
+    }>(response);
+    if (!payload || !response.ok || !payload.ok || !payload.data?.snapshot) {
+      return {
+        ok: false as const,
+        error: payload?.expired ? "임시 저장이 만료되었습니다." : "임시 저장 내역이 없습니다."
+      };
     }
 
     const guestMember: MemberRecord = {
@@ -355,8 +378,12 @@ export function getCurrentMember() {
 
   try {
     clearLegacyCurrentMember();
-    const raw = window.sessionStorage.getItem(currentMemberStorageKey);
-    return raw ? normalizeMember(JSON.parse(raw)) : null;
+    const rawSession = window.sessionStorage.getItem(currentMemberStorageKey);
+    if (rawSession) {
+      return normalizeMember(JSON.parse(rawSession));
+    }
+    const rawSync = window.localStorage.getItem(currentMemberTabSyncKey);
+    return rawSync ? normalizeMember(JSON.parse(rawSync)) : null;
   } catch {
     return null;
   }
@@ -368,6 +395,11 @@ export function logoutMember() {
   }
   clearLegacyCurrentMember();
   window.sessionStorage.removeItem(currentMemberStorageKey);
+  try {
+    window.localStorage.removeItem(currentMemberTabSyncKey);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function setCurrentMember(member: MemberRecord) {

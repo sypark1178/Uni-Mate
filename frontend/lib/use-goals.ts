@@ -6,6 +6,7 @@ import { defaultGoals, goalStorageKey } from "@/lib/planning";
 import { normalizeUniversityName } from "@/lib/admission-data";
 import { clearDraftGoals, getDraftGoals, isDraftDirty, setDraftGoals } from "@/lib/draft-store";
 import { getCurrentMember } from "@/lib/member-store";
+import { readJsonResponse } from "@/lib/read-json-response";
 
 function normalizeStoredGoals(goals: GoalChoice[]): GoalChoice[] {
   return goals.map((goal) => ({
@@ -43,8 +44,8 @@ async function loadGoalsFromServer(userKey?: string) {
       headers: { "x-user-key": userKey || getCurrentUserKey() }
     });
     if (!response.ok) return null;
-    const payload = (await response.json()) as { data?: GoalChoice[] };
-    if (!Array.isArray(payload.data) || payload.data.length === 0) return null;
+    const payload = await readJsonResponse<{ data?: GoalChoice[] }>(response);
+    if (!payload || !Array.isArray(payload.data) || payload.data.length === 0) return null;
     return normalizeStoredGoals(payload.data.slice(0, 3));
   } catch {
     return null;

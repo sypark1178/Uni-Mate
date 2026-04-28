@@ -22,6 +22,7 @@ import { useStudentProfile } from "@/lib/profile-storage";
 import { useScoreRecords } from "@/lib/score-storage";
 import { useGoals } from "@/lib/use-goals";
 import { getCurrentMember } from "@/lib/member-store";
+import { readJsonResponse } from "@/lib/read-json-response";
 
 function getCategoryTone(category: "도전" | "적정" | "안정") {
   if (category === "도전") return "bg-danger";
@@ -147,8 +148,8 @@ export default function DashboardPage() {
       try {
         const response = await fetch("/api/analysis/result", { method: "GET", cache: "no-store" });
         if (response.ok) {
-          const payload = (await response.json()) as { data?: { completedAt?: string; source?: string } | null };
-          if (!cancelled && payload.data?.completedAt) {
+          const payload = await readJsonResponse<{ data?: { completedAt?: string; source?: string } | null }>(response);
+          if (!cancelled && payload?.data?.completedAt) {
             setAnalysisNotice(`최근 AI 분석 완료: ${payload.data.source ?? "unknown"} 기준 결과가 반영되었습니다.`);
             return;
           }
@@ -219,9 +220,9 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      const result = (await response.json()) as { ok?: boolean; expiresAt?: string; error?: string };
-      if (!response.ok || !result.ok) {
-        throw new Error(result.error || "임시 저장에 실패했습니다.");
+      const result = await readJsonResponse<{ ok?: boolean; expiresAt?: string; error?: string }>(response);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || "임시 저장에 실패했습니다.");
       }
       setShowSaveModal(false);
       setSaveNotice(`비회원 임시 저장 완료 (24시간 보관, 만료: ${new Date(result.expiresAt ?? "").toLocaleString("ko-KR")})`);
@@ -289,22 +290,6 @@ export default function DashboardPage() {
                 {!profileHydrated ? (
                   <p className="px-1 text-sm leading-snug text-muted">최근 작업 정보를 불러오는 중입니다...</p>
                 ) : null}
-                {profileHydrated && analysisNotice ? (
-                  <section className="rounded-[18px] border border-[#b8d4ff] bg-[#f1f6ff] px-4 py-3 text-sm text-navy">
-                    {analysisNotice}
-                  </section>
-                ) : null}
-                {profileHydrated && saveNotice ? (
-                  <section className="rounded-[18px] border border-[#C4DFA8] bg-safe px-4 py-3 text-sm text-[#166534]">
-                    {saveNotice}
-                  </section>
-                ) : null}
-                {profileHydrated && !isEmpty && hasUnsavedChanges ? (
-                  <section className="rounded-[18px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-xs text-[#92400e]">
-                    DB 원본 대비 변경사항이 있습니다. `저장` 버튼이 활성화되었으며, 종료 전 저장 여부를 확인해 주세요.
-                  </section>
-                ) : null}
-
                 <section className="overflow-hidden rounded-[20px] bg-navy text-white ring-1 ring-white/15">
                   <div className="px-3 py-3">
                     <div className="text-sm font-bold leading-tight">📊 AI 전략 요약</div>

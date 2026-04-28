@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { StudentProfile } from "@/lib/types";
 import { examYears } from "@/lib/admission-data";
+import { readJsonResponse } from "@/lib/read-json-response";
 import { getDraftProfile, setDraftProfile } from "@/lib/draft-store";
 import { getCurrentMember } from "@/lib/member-store";
 
@@ -84,7 +85,8 @@ async function loadProfileFromServer(userKey?: string) {
       headers: { "x-user-key": userKey || getCurrentUserKey() }
     });
     if (!response.ok) return null;
-    const payload = (await response.json()) as { data?: unknown };
+    const payload = await readJsonResponse<{ data?: unknown }>(response);
+    if (!payload) return null;
     return payload.data ? normalizeProfile(payload.data) : null;
   } catch {
     return null;
@@ -100,7 +102,7 @@ async function persistProfileToServer(nextProfile: StudentProfile) {
       body: JSON.stringify(nextProfile)
     });
     if (!response.ok) {
-      throw new Error("프로필 저장에 실패했습니다.");
+      return;
     }
   } catch {
     // Keep local profile when backend bridge is unavailable.
@@ -115,8 +117,8 @@ async function persistProfileImageToServer(profileImageUrl: string) {
       headers: { "Content-Type": "application/json", "x-user-key": getCurrentUserKey() },
       body: JSON.stringify({ profileImageUrl })
     });
-    const payload = (await response.json()) as { ok?: boolean };
-    return response.ok && payload.ok !== false;
+    const payload = await readJsonResponse<{ ok?: boolean }>(response);
+    return Boolean(response.ok && payload && payload.ok !== false);
   } catch {
     return false;
   }

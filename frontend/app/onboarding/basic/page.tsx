@@ -3,12 +3,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { OnboardingStep } from "@/components/onboarding-step";
-import { examYears, regionDistrictSchoolMap } from "@/lib/admission-data";
+import {
+  clampExamYearToList,
+  examYears,
+  regionDistrictSchoolMap,
+  suggestedTargetExamYear
+} from "@/lib/admission-data";
 import { demoSeededProfile } from "@/lib/mock-data";
-import { onboardingFormFieldClass } from "@/lib/onboarding-buttons";
+import { onboardingFormFieldClass, onboardingSelectFieldClass } from "@/lib/onboarding-buttons";
+import { readJsonResponse } from "@/lib/read-json-response";
 import { useStudentProfile } from "@/lib/profile-storage";
 
 const gradeOptions = ["초등학생", "중학생", "고1", "고2", "고3", "N수생", "학부모", "교육관계자"];
+
+function isAutoExamYearGrade(gradeLabel: string): boolean {
+  const normalized = gradeLabel.trim();
+  return normalized === "고1" || normalized === "고2" || normalized === "고3";
+}
 
 const regionAliasMap: Record<string, string> = {
   서울: "서울특별시",
@@ -47,6 +58,8 @@ export default function OnboardingBasicPage() {
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
   const demoAppliedRef = useRef(false);
+  /** 유형 자동 연도: 최초 로드(빈 연도)와 유형 변경 시에만 덮어씀 — 저장된 연도는 유지 */
+  const prevGradeForAutoYear = useRef<string | null>(null);
   const regions = useMemo(
     () => Object.keys(regionDistrictSchoolMap).sort((left, right) => left.localeCompare(right, "ko-KR")),
     []
@@ -103,11 +116,10 @@ export default function OnboardingBasicPage() {
           cache: "no-store",
           signal: controller.signal
         });
-        const payload = (await response.json()) as {
-          ok?: boolean;
-          data?: { districts?: string[]; schools?: string[] };
-        };
-        if (cancelled || !payload.ok || !payload.data) return;
+        const payload = await readJsonResponse<{ ok?: boolean; data?: { districts?: string[]; schools?: string[] } }>(
+          response
+        );
+        if (cancelled || !payload || !payload.ok || !payload.data) return;
         if (!selectedDistrict) {
           const nextSchools = (payload.data.schools ?? []).sort((left, right) => left.localeCompare(right, "ko-KR"));
           setRemoteSchools(nextSchools);
@@ -148,11 +160,8 @@ export default function OnboardingBasicPage() {
           cache: "no-store",
           signal: controller.signal
         });
-        const payload = (await response.json()) as {
-          ok?: boolean;
-          data?: { schools?: string[] };
-        };
-        if (cancelled || !payload.ok || !payload.data) return;
+        const payload = await readJsonResponse<{ ok?: boolean; data?: { schools?: string[] } }>(response);
+        if (cancelled || !payload || !payload.ok || !payload.data) return;
         setRemoteSchools((payload.data.schools ?? []).sort((left, right) => left.localeCompare(right, "ko-KR")));
       } catch {
         if (!cancelled) setRemoteSchools([]);
@@ -182,10 +191,55 @@ export default function OnboardingBasicPage() {
     router.replace(next);
   }, [hydrated, returnTo, router, searchParams, setStudentProfile]);
 
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    if (!isAutoExamYearGrade(selectedGrade)) {
+      if (studentProfile.targetYear !== 0) {
+        updateField("targetYear", 0);
+      }
+      prevGradeForAutoYear.current = selectedGrade;
+      return;
+    }
+
+    const suggested = suggestedTargetExamYear(selectedGrade);
+    const prev = prevGradeForAutoYear.current;
+
+    if (suggested !== null) {
+      const clamped = clampExamYearToList(suggested);
+      const initialized = prev !== null && prev !== "";
+      const gradeChanged = initialized && prev !== selectedGrade;
+      const initialUnset =
+        !initialized &&
+        Boolean(selectedGrade) &&
+        (!examYears.includes(studentProfile.targetYear) || studentProfile.targetYear === 0);
+
+      if (gradeChanged || initialUnset) {
+        updateField("targetYear", clamped);
+      }
+    }
+
+    prevGradeForAutoYear.current = selectedGrade;
+  }, [hydrated, selectedGrade, studentProfile.targetYear, updateField]);
+
   const handleRegionChange = (value: string) => {
     updateField("region", value);
     updateField("district", "");
     updateField("schoolName", "");
+  };
+
+  const handleGradeChange = (value: string) => {
+    updateField("gradeLabel", value);
+    if (!isAutoExamYearGrade(value)) {
+      updateField("targetYear", 0);
+      return;
+    }
+    const suggested = suggestedTargetExamYear(value);
+    if (suggested !== null) {
+      updateField("targetYear", clampExamYearToList(suggested));
+    }
   };
 
   const handleDistrictChange = (value: string) => {
@@ -201,6 +255,7 @@ export default function OnboardingBasicPage() {
       subtitleClassName="text-xs leading-5 whitespace-nowrap"
       prevHref={returnTo ?? undefined}
       prevLabel={returnTo ? "호출한 메뉴로 돌아가기" : undefined}
+      helperLink={{ href: "/login", label: "뒤로가기", plainHref: true }}
       nextHref="/onboarding/grades"
       nextLabel="2단계 성적 입력 →"
       mutedNavAfterPrimary={{ href: "/", label: "처음으로" }}
@@ -212,11 +267,12 @@ export default function OnboardingBasicPage() {
         onChange={(event) => updateField("name", event.target.value)}
       />
       <select
-        className={onboardingFormFieldClass}
+        required
+        className={onboardingSelectFieldClass}
         value={selectedGrade}
-        onChange={(event) => updateField("gradeLabel", event.target.value)}
+        onChange={(event) => handleGradeChange(event.target.value)}
       >
-        <option value="" disabled hidden>
+        <option value="" disabled>
           유형
         </option>
         {gradeOptions.map((label) => (
@@ -225,8 +281,13 @@ export default function OnboardingBasicPage() {
           </option>
         ))}
       </select>
-      <select className={onboardingFormFieldClass} value={selectedRegion} onChange={(event) => handleRegionChange(event.target.value)}>
-        <option value="" disabled hidden>
+      <select
+        required
+        className={onboardingSelectFieldClass}
+        value={selectedRegion}
+        onChange={(event) => handleRegionChange(event.target.value)}
+      >
+        <option value="" disabled>
           지역
         </option>
         {regions.map((region) => (
@@ -239,7 +300,8 @@ export default function OnboardingBasicPage() {
         지역인재 등 전형 지원 가능 여부를 판단하는 데 사용됩니다.
       </div>
       <select
-        className={onboardingFormFieldClass}
+        required={Boolean(selectedRegion)}
+        className={onboardingSelectFieldClass}
         value={selectedDistrict}
         disabled={!selectedRegion}
         onChange={(event) => handleDistrictChange(event.target.value)}
@@ -254,7 +316,8 @@ export default function OnboardingBasicPage() {
         ))}
       </select>
       <select
-        className={onboardingFormFieldClass}
+        required={Boolean(selectedRegion && selectedGrade)}
+        className={onboardingSelectFieldClass}
         value={selectedSchool}
         disabled={!selectedRegion || !selectedGrade}
         onChange={(event) => updateField("schoolName", event.target.value)}
@@ -277,7 +340,8 @@ export default function OnboardingBasicPage() {
         학교 알리미 데이터를 활용해 내신을 학교별로 알맞게 보정합니다.
       </div>
       <select
-        className={onboardingFormFieldClass}
+        required
+        className={onboardingSelectFieldClass}
         value={selectedYear}
         onChange={(event) => updateField("targetYear", Number(event.target.value))}
       >
