@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PhoneFrame } from "@/components/phone-frame";
-import { ensureMemberSeeds, loginGuestBySavedContact, loginMemberWithServerFallback } from "@/lib/member-store";
+import { ensureMemberSeeds, loginGuestBySavedContact, loginMemberWithServerFallback, normalizeLoginInput } from "@/lib/member-store";
 import { clearAllDrafts } from "@/lib/draft-store";
 import { profileStorageKey } from "@/lib/profile-storage";
 import { scoreStorageKey } from "@/lib/score-storage";
@@ -24,7 +24,7 @@ export default function LoginPage() {
   };
 
   const handleLogin = async () => {
-    const normalizedLogin = loginValue.trim().toLowerCase();
+    const normalizedLogin = normalizeLoginInput(loginValue);
     const result = await loginMemberWithServerFallback(normalizedLogin, password);
     if (result.ok) {
       setErrorMessage("");

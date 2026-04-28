@@ -12,7 +12,7 @@ import { UploadDropzone } from "@/components/upload-dropzone";
 
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 
-import { onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
+import { onboardingMutedTextCtaClass, onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
 
 import {
   academicYearSelectOptions,
@@ -1992,7 +1992,7 @@ export default function OnboardingGradesPage() {
 
         </button>
 
-        <button type="button" onClick={() => void handleBack()} className="block w-full text-center text-sm text-muted">
+        <button type="button" onClick={() => void handleBack()} className={onboardingMutedTextCtaClass}>
 
           뒤로가기
 

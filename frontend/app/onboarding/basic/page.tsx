@@ -203,6 +203,7 @@ export default function OnboardingBasicPage() {
       prevLabel={returnTo ? "호출한 메뉴로 돌아가기" : undefined}
       nextHref="/onboarding/grades"
       nextLabel="2단계 성적 입력 →"
+      mutedNavAfterPrimary={{ href: "/", label: "처음으로" }}
     >
       <input
         className={onboardingFormFieldClass}

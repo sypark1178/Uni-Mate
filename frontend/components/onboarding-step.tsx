@@ -2,7 +2,11 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
-import { onboardingPrimaryCtaClass, onboardingSecondaryOutlineCtaClass } from "@/lib/onboarding-buttons";
+import {
+  onboardingMutedTextCtaClass,
+  onboardingPrimaryCtaClass,
+  onboardingSecondaryOutlineCtaClass
+} from "@/lib/onboarding-buttons";
 import { safeNavigate } from "@/lib/navigation";
 
 type OnboardingStepProps = {
@@ -16,6 +20,8 @@ type OnboardingStepProps = {
   nextHref: string;
   nextLabel: string;
   helperLink?: { href: string; label: string };
+  /** primary 다음에 표시하는 텍스트형 보조 액션(예: 「홈으로」). 2단계「뒤로가기」와 동일 스타일 */
+  mutedNavAfterPrimary?: { href: string; label: string };
   onNext?: () => Promise<void> | void;
 };
 
@@ -51,6 +57,7 @@ export function OnboardingStep({
   nextHref,
   nextLabel,
   helperLink,
+  mutedNavAfterPrimary,
   onNext
 }: OnboardingStepProps) {
   const router = useRouter();
@@ -99,6 +106,15 @@ export function OnboardingStep({
         <button type="button" onClick={() => void handleNext()} className={onboardingPrimaryCtaClass}>
           {nextLabel}
         </button>
+        {mutedNavAfterPrimary ? (
+          <button
+            type="button"
+            onClick={() => safeNavigate(router, mutedNavAfterPrimary.href)}
+            className={onboardingMutedTextCtaClass}
+          >
+            {mutedNavAfterPrimary.label}
+          </button>
+        ) : null}
         {resolvedPrevHref ? (
           <button type="button" onClick={handleBack} className={onboardingSecondaryOutlineCtaClass}>
             {prevLabel}

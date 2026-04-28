@@ -9,3 +9,6 @@ export const onboardingPrimaryCtaClass =
 /** 보조 버튼(테두리형) — primary와 동일한 수평 폭·패딩 기준 */
 export const onboardingSecondaryOutlineCtaClass =
   "box-border flex w-full min-w-0 items-center justify-center rounded-xl border border-line bg-white px-4 py-3 text-sm font-semibold text-muted";
+
+/** 하단 텍스트형 보조 CTA(2단계 성적 입력의「뒤로가기」 등) */
+export const onboardingMutedTextCtaClass = "block w-full text-center text-sm text-muted";
