@@ -674,6 +674,7 @@ export default function OnboardingGradesPage() {
   const router = useRouter();
 
   const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo");
 
   const {
 
@@ -2024,6 +2025,15 @@ export default function OnboardingGradesPage() {
           뒤로가기
 
         </button>
+        {returnTo && returnTo.startsWith("/") ? (
+          <button
+            type="button"
+            onClick={() => safeNavigate(router, returnTo)}
+            className="block w-full bg-transparent py-1 text-center text-sm font-normal text-muted underline underline-offset-4"
+          >
+            호출한 메뉴로 돌아가기
+          </button>
+        ) : null}
 
       </div>
 

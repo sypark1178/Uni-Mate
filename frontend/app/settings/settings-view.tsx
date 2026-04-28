@@ -52,9 +52,9 @@ export function SettingsView() {
 
   const settingsReturnHref = moveTo("/settings");
   const basicEditHref = moveTo(`/onboarding/basic?returnTo=${encodeURIComponent(settingsReturnHref)}`);
-  const gradesHref = moveTo("/onboarding/grades");
+  const gradesHref = moveTo(`/onboarding/grades?returnTo=${encodeURIComponent(settingsReturnHref)}`);
   const privacyHref = moveTo("/settings/privacy");
-  const goalsFullHref = moveTo("/onboarding/goals");
+  const goalsFullHref = moveTo(`/onboarding/goals?returnTo=${encodeURIComponent(settingsReturnHref)}`);
 
   const chips = useMemo(() => {
     const parts = [studentProfile.gradeLabel].filter((item) => Boolean(item && String(item).trim()));
@@ -250,7 +250,7 @@ export function SettingsView() {
                     </div>
                   </div>
                   <Link
-                    href={moveTo(`/onboarding/goals?focus=${index + 1}`)}
+                    href={moveTo(`/onboarding/goals?focus=${index + 1}&returnTo=${encodeURIComponent(settingsReturnHref)}`)}
                     prefetch
                     className={editButtonClass}
                   >

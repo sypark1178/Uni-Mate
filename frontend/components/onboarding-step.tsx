@@ -17,6 +17,7 @@ type OnboardingStepProps = {
   nextLabel: string;
   /** plainHref: 현재 URL 쿼리를 붙이지 않고 href 그대로 이동(예: /login) */
   helperLink?: { href: string; label: string; plainHref?: boolean };
+  postPrevLink?: { href: string; label: string; plainHref?: boolean };
   onNext?: () => Promise<void> | void;
 };
 
@@ -52,6 +53,7 @@ export function OnboardingStep({
   nextHref,
   nextLabel,
   helperLink,
+  postPrevLink,
   onNext
 }: OnboardingStepProps) {
   const router = useRouter();
@@ -62,6 +64,11 @@ export function OnboardingStep({
     ? helperLink.plainHref
       ? helperLink.href
       : mergeSearchParams(helperLink.href, searchParams)
+    : undefined;
+  const resolvedPostPrevHref = postPrevLink
+    ? postPrevLink.plainHref
+      ? postPrevLink.href
+      : mergeSearchParams(postPrevLink.href, searchParams)
     : undefined;
 
   const handleBack = () => {
@@ -119,6 +126,15 @@ export function OnboardingStep({
             className="block w-full bg-transparent py-1 text-center text-sm font-normal text-muted underline underline-offset-4"
           >
             {prevLabel}
+          </button>
+        ) : null}
+        {postPrevLink && resolvedPostPrevHref ? (
+          <button
+            type="button"
+            onClick={() => safeNavigate(router, resolvedPostPrevHref)}
+            className="block w-full bg-transparent py-1 text-center text-sm font-normal text-muted underline underline-offset-4"
+          >
+            {postPrevLink.label}
           </button>
         ) : null}
       </div>

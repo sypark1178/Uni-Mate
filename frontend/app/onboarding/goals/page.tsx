@@ -42,6 +42,7 @@ function defaultStrategyByRank(rankIndex: number): string {
 export default function OnboardingGoalsPage() {
   const searchParams = useSearchParams();
   const focus = Number(searchParams.get("focus") ?? "1");
+  const returnTo = searchParams.get("returnTo");
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
   const hasSeededGoals = seededGoals.length > 0;
   const { goals, updateGoals, hydrated, flushGoalsToServer } = useGoals(seededGoals);
@@ -104,6 +105,11 @@ export default function OnboardingGoalsPage() {
       title="목표를 설정해 주세요"
       subtitle="우선순위를 정리하면 바로 AI 분석·추천이 진행됩니다."
       prevHref="/onboarding/grades"
+      postPrevLink={
+        returnTo && returnTo.startsWith("/")
+          ? { href: returnTo, label: "호출한 메뉴로 돌아가기", plainHref: true }
+          : undefined
+      }
       nextHref="/analysis/loading?source=goals"
       nextLabel="AI 분석 시작"
       onNext={handleNext}
