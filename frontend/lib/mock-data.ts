@@ -1,11 +1,11 @@
 import type { ChecklistItem, Recommendation, SimulationInput, StudentProfile } from "@/lib/types";
 
 export const profile: StudentProfile = {
-  name: "학생",
+  name: "김민지",
   gradeLabel: "고2",
-  region: "서울",
-  district: "강남구",
-  schoolName: "대치고등학교",
+  region: "제주특별자치도",
+  district: "서귀포시",
+  schoolName: "서귀포시고등학교",
   track: "인문",
   targetYear: 2027,
   profileImageUrl: "",

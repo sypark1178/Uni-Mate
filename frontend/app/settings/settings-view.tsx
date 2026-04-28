@@ -176,7 +176,7 @@ export function SettingsView() {
                   <div className="text-xl font-medium">{isHydrated ? studentProfile.name : "불러오는 중..."}</div>
                   <div className="mt-1 text-sm text-muted">
                     {isHydrated
-                      ? `${studentProfile.region || "서울"} / ${studentProfile.district || "강남구"} / ${shortenSchoolName(studentProfile.schoolName || "대치고등학교")}`
+                      ? `${studentProfile.region || "제주특별자치도"} / ${studentProfile.district || "서귀포시"} / ${shortenSchoolName(studentProfile.schoolName || "서귀포시고등학교")}`
                       : "기본정보를 불러오는 중입니다."}
                   </div>
                 </div>
