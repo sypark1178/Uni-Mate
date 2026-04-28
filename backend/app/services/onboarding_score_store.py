@@ -241,7 +241,8 @@ def _compute_latest_mock_average(connection: sqlite3.Connection, student_id: int
 def compute_settings_display_from_tables(connection: sqlite3.Connection, student_id: int) -> dict[str, str]:
     """설정 화면용 점수:
     - 내신: TB_ACADEMIC_SCORE의 과목별 이수단위 가중 평균을 학과군별 반영 과목으로 재평균
-    - 모의: 시험년도 > 시험월도 최신 그룹에서 국/영/수 + inquiry_type에 따른 탐구(사탐/과탐) 평균
+    - 모의: (학생ID, 시험년도, 시험월)별로 국·영·수·사회탐구·과학탐구·언어영역(제2외국어군) 평균을 구한 뒤,
+      시험년도·시험월 기준 가장 최근 시점의 전체 평균(소수 둘째 자리)
     """
     weighted_by_subject: dict[str, dict[str, float]] = {
         "국어": {"gradeTotal": 0.0, "creditTotal": 0.0},
