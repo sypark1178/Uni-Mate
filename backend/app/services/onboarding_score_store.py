@@ -282,6 +282,90 @@ def _compute_latest_mock_average(connection: sqlite3.Connection, student_id: int
     return "-" if overall is None else f"{overall:.2f}"
 
 
+def _compute_latest_mock_average_from_snapshot(mock_exams: list[dict[str, Any]]) -> str:
+    parsed_rows: list[dict[str, Any]] = []
+    for record in mock_exams:
+        if not isinstance(record, dict):
+            continue
+        term = str(record.get("term") or "").strip()
+        year_raw = str(record.get("year") or "").strip()
+        if not term or not year_raw.isdigit():
+            continue
+        month = 0
+        if term.startswith("mock-nat-"):
+            month = int(term.split("-")[-1] or 0)
+        elif term.startswith("mock-csat-"):
+            month = int(term.split("-")[-1] or 0)
+        if month <= 0:
+            continue
+        parsed_rows.append(
+            {
+                "school_year": int(year_raw),
+                "exam_year": int(year_raw),
+                "exam_month": month,
+                "korean_grade": None,
+                "english_grade": None,
+                "math_grade": None,
+                "social_grade": None,
+                "life_and_ethics": None,
+                "ethics_and_thought": None,
+                "korean_geography": None,
+                "world_geography": None,
+                "east_asian_history": None,
+                "world_history": None,
+                "economics": None,
+                "politics_and_law": None,
+                "society_and_culture": None,
+                "science_grade": None,
+                "physics_1": None,
+                "chemistry_1": None,
+                "earth_science_1": None,
+                "life_science_1": None,
+                "physics_2": None,
+                "chemistry_2": None,
+                "earth_science_2": None,
+                "life_science_2": None,
+                "language2_grade": None,
+                "german_1": None,
+                "french_1": None,
+                "spanish_1": None,
+                "chinese_1": None,
+                "japanese_1": None,
+                "russian_1": None,
+                "vietnamese_1": None,
+                "arabic_1": None,
+                "classical_chinese_1": None,
+            }
+        )
+        subjects = record.get("subjects")
+        if isinstance(subjects, list):
+            for item in subjects:
+                if not isinstance(item, dict):
+                    continue
+                subject = str(item.get("subject") or "").strip()
+                score = _to_float(item.get("score"))
+                if score is None:
+                    continue
+                if subject == "국어":
+                    parsed_rows[-1]["korean_grade"] = score
+                elif subject == "영어":
+                    parsed_rows[-1]["english_grade"] = score
+                elif subject == "수학":
+                    parsed_rows[-1]["math_grade"] = score
+                elif subject in {"사회탐구", "사탐"}:
+                    parsed_rows[-1]["social_grade"] = score
+                elif subject in {"과학탐구", "과탐"}:
+                    parsed_rows[-1]["science_grade"] = score
+                elif subject in {"언어영역", "제2외국어"}:
+                    parsed_rows[-1]["language2_grade"] = score
+    grouped = _group_mock_period_subject_averages(parsed_rows) if parsed_rows else []
+    if not grouped:
+        return "-"
+    latest = grouped[-1]
+    overall = latest.get("overall")
+    return "-" if overall is None else f"{overall:.2f}"
+
+
 def compute_settings_display_from_tables(connection: sqlite3.Connection, student_id: int) -> dict[str, str]:
     """설정 화면용 점수:
     - 내신: TB_ACADEMIC_SCORE의 과목별 이수단위 가중 평균을 학과군별 반영 과목으로 재평균
@@ -1182,7 +1266,6 @@ class OnboardingScoreStore:
 
     def _upsert_score_payload(self, connection: sqlite3.Connection, student_id: int, payload: dict[str, Any]) -> None:
         connection.execute("DELETE FROM TB_ACADEMIC_SCORE WHERE student_id = ?", (student_id,))
-        connection.execute("DELETE FROM TB_CSAT_SCORE WHERE student_id = ?", (student_id,))
 
         school_records = payload.get("schoolRecords", [])
         for record in school_records:
@@ -1218,6 +1301,7 @@ class OnboardingScoreStore:
             # 내신 평균은 TB_ACADEMIC_SCORE 매핑 범위를 벗어나므로 TB_CSAT_SCORE에 별도 저장하지 않음.
 
         mock_records = payload.get("mockExams", [])
+        parsed_mock_rows: list[tuple[Any, ...]] = []
         for record in mock_records:
             year, _ = self._infer_period(record)
             term = str(record.get("term") or "")
@@ -1237,7 +1321,26 @@ class OnboardingScoreStore:
             if all(value is None for value in [korean_grade, math_grade, english_grade, social_grade, science_grade, language2_grade, total]):
                 continue
             inquiry_type = "과학탐구" if science_grade is not None else "사회탐구"
-            connection.execute(
+            parsed_mock_rows.append(
+                (
+                    student_id,
+                    year,
+                    year,
+                    self._mock_exam_type_from_term(term),
+                    self._safe_int(term.split("-")[-1]),
+                    korean_grade,
+                    math_grade,
+                    english_grade,
+                    science_grade,
+                    inquiry_type,
+                    social_grade,
+                    language2_grade,
+                    total,
+                )
+            )
+        if parsed_mock_rows:
+            connection.execute("DELETE FROM TB_CSAT_SCORE WHERE student_id = ?", (student_id,))
+            connection.executemany(
                 """
                 INSERT INTO TB_CSAT_SCORE (
                     student_id,
@@ -1256,21 +1359,7 @@ class OnboardingScoreStore:
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    student_id,
-                    year,
-                    year,
-                        self._mock_exam_type_from_term(term),
-                        self._safe_int(term.split("-")[-1]),
-                    korean_grade,
-                    math_grade,
-                    english_grade,
-                        science_grade,
-                    inquiry_type,
-                        social_grade,
-                    language2_grade,
-                    total,
-                ),
+                parsed_mock_rows,
             )
 
         student_records = payload.get("studentRecords", [])
@@ -1713,6 +1802,12 @@ class OnboardingScoreStore:
                 )
             payload["studentRecords"] = next_student_records
         summary = build_payload_summary(payload)
+        if isinstance(settings_display, dict):
+            latest_mock = str(settings_display.get("latestMockFourGradeAverage") or "-").strip()
+            if latest_mock == "-":
+                settings_display["latestMockFourGradeAverage"] = _compute_latest_mock_average_from_snapshot(
+                    payload.get("mockExams", []) if isinstance(payload, dict) else []
+                )
         return {
             "ok": True,
             "source": "sqlite",

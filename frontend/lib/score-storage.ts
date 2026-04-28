@@ -779,19 +779,31 @@ function computeAverage(records: GradePeriodRecord[], latestOnly = false) {
 }
 
 export function buildScoreSummary(store: ScoreMemoryStore, settingsDisplay: ScoreSettingsDisplay | null = null) {
+  const backendSchoolAverage = settingsDisplay?.schoolGradeAverage?.trim();
+  const schoolAverageFromBackend = backendSchoolAverage && backendSchoolAverage !== "-" ? backendSchoolAverage : null;
+  const backendMockAverage = settingsDisplay?.latestMockFourGradeAverage?.trim();
+  const mockAverageFromBackend = backendMockAverage && backendMockAverage !== "-" ? backendMockAverage : null;
   return {
-    schoolAverage: computeAverage(store.schoolRecords),
-    // 온보딩 외 화면은 최신 시험연월 모의고사 1회차를 기준으로 사용
-    mockAverage: computeAverage(store.mockExams, true),
+    schoolAverage: schoolAverageFromBackend ?? computeAverage(store.schoolRecords),
+    // 온보딩 외 화면은 백엔드(TB_CSAT_SCORE 집계) 값을 우선 사용
+    mockAverage: mockAverageFromBackend ?? computeAverage(store.mockExams, true),
     /** 설정 화면 전용: TB_ACADEMIC_SCORE 등급(grade) 평균(소수 2자리), 없으면 null → 화면에서 schoolAverage로 대체 */
-    settingsSchoolFromDb: settingsDisplay?.schoolGradeAverage ?? null,
-    /** 설정 화면 전용: TB_CSAT_SCORE 최신 4과목 등급 평균(소수 2자리), 없으면 null */
-    settingsMockFromDb: settingsDisplay?.latestMockFourGradeAverage ?? null,
+    settingsSchoolFromDb: schoolAverageFromBackend,
+    /** 설정 화면 전용: TB_CSAT_SCORE 최신 시험연월 집계 평균(소수 2자리), 없으면 null */
+    settingsMockFromDb: mockAverageFromBackend,
     studentRecordCount: store.studentRecords.filter((record) => record.title || record.description || record.files.length > 0).length,
     uploadCount: store.uploads.length
   };
 }
 
+function hasMeaningfulMockExams(records: GradePeriodRecord[]) {
+  return records.some((record) => {
+    if (record.overallAverage.trim()) {
+      return true;
+    }
+    return record.subjects.some((entry) => entry.score.trim());
+  });
+}
 export function useScoreRecords() {
   const [store, setStore] = useState<ScoreMemoryStore>(defaultScoreMemoryStore);
   const [settingsDisplay, setSettingsDisplay] = useState<ScoreSettingsDisplay | null>(null);
@@ -868,7 +880,24 @@ export function useScoreRecords() {
         userKey === "kmj11" ||
         getCurrentMember()?.name?.trim() === "김민지";
       const baseStore = normalizeScoreStore(resolvedStore ?? defaultScoreMemoryStore);
-      const finalStore = shouldSeedKimMinji && !hasAnySavedScoreContent(baseStore) ? buildKimMinjiSeedScoreStore() : baseStore;
+      let finalStore = shouldSeedKimMinji && !hasAnySavedScoreContent(baseStore) ? buildKimMinjiSeedScoreStore() : baseStore;
+
+      // 서버 스냅샷 모의고사가 비어 있으면(기존 데이터 소실/초기화 케이스), 로컬·드래프트의 유효 모의고사 값을 우선 보존한다.
+      if (
+        serverStore &&
+        !hasMeaningfulMockExams(serverStore.mockExams) &&
+        ((localStore && hasMeaningfulMockExams(localStore.mockExams)) ||
+          (draftStore && hasMeaningfulMockExams(draftStore.mockExams)))
+      ) {
+        const fallbackMockSource = draftStore && hasMeaningfulMockExams(draftStore.mockExams) ? draftStore : localStore;
+        if (fallbackMockSource) {
+          finalStore = normalizeScoreStore({
+            ...finalStore,
+            mockExams: fallbackMockSource.mockExams,
+            updatedAt: nowIso()
+          });
+        }
+      }
 
       if (!cancelled) {
         setStore(finalStore);
