@@ -25,6 +25,8 @@
   - grade_policy_note: TEXT
   - support_notes: TEXT
   - source_doc: TEXT
+  - best_grade: REAL
+  - worst_grade: REAL
 
 ### TB_ADMISSION_TYPE
   - admission_id: INTEGER PK

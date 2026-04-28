@@ -3,7 +3,7 @@ columns: score_id, student_id, school_year, semester, exam_period, subject_name,
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_ACADEMIC_SCORE.csv
 
 ## TB_ADMISSION_CUTOFF  rows=620
-columns: cutoff_id, admission_id, cutoff_year, cutoff_50, cutoff_70, cutoff_80, competition_ratio, avg_grade, three_grade_possible, record_importance, grade_policy_note, support_notes, source_doc
+columns: cutoff_id, admission_id, cutoff_year, cutoff_50, cutoff_70, cutoff_80, competition_ratio, avg_grade, three_grade_possible, record_importance, grade_policy_note, support_notes, source_doc, best_grade, worst_grade
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_ADMISSION_CUTOFF.csv
 
 ## TB_ADMISSION_TYPE  rows=620

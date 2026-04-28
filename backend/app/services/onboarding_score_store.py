@@ -751,6 +751,8 @@ class OnboardingScoreStore:
                 "grade_policy_note": "TEXT",
                 "support_notes": "TEXT",
                 "source_doc": "TEXT",
+                "best_grade": "REAL",
+                "worst_grade": "REAL",
             },
         )
         self._ensure_columns(

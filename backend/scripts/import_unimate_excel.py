@@ -240,11 +240,15 @@ def main(argv: list[str] | None = None) -> int:
 
         ac = sheet("ADMISSION_CUTOFF")
         for _, r in ac.iterrows():
+            best_grade = _num(r.get("best_grade"))
+            if best_grade is None:
+                best_grade = _num(r.get("best_grage"))
+            worst_grade = _num(r.get("worst_grade"))
             conn.execute(
                 """
                 INSERT INTO TB_ADMISSION_CUTOFF
-                (cutoff_id, admission_id, cutoff_year, cutoff_50, cutoff_70, cutoff_80, competition_ratio)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (cutoff_id, admission_id, cutoff_year, cutoff_50, cutoff_70, cutoff_80, competition_ratio, best_grade, worst_grade)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     int(r["cutoff_id"]),
@@ -254,6 +258,8 @@ def main(argv: list[str] | None = None) -> int:
                     _num(r.get("cutoff_70")),
                     _num(r.get("cutoff_80")),
                     _num(r.get("competition_ratio")),
+                    best_grade,
+                    worst_grade,
                 ),
             )
 
