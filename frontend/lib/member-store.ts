@@ -289,8 +289,12 @@ export async function loginMemberWithServerFallback(loginValue: string, password
     }
 
     serverError = payload.error || "등록된 회원을 찾지 못했습니다.";
-    if (serverError !== "등록된 회원을 찾지 못했습니다.") {
+    const serverLikelyDown = !response.ok && response.status >= 500;
+    if (!serverLikelyDown && serverError !== "등록된 회원을 찾지 못했습니다.") {
       return { ok: false as const, error: serverError };
+    }
+    if (serverLikelyDown && !serverError.trim()) {
+      serverError = "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
     }
   } catch {
     serverError = "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";

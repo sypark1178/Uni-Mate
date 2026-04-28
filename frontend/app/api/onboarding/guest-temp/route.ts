@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     const result = await runPythonBridge("get", "guest_temp", { contactType, contactId }, "guest-temp");
     return NextResponse.json(result);
   } catch {
-    return NextResponse.json({ ok: false, source: "fallback", error: "임시 저장 조회에 실패했습니다." }, { status: 500 });
+    return NextResponse.json({ ok: false, source: "fallback", error: "임시 저장 조회에 실패했습니다." }, { status: 200 });
   }
 }
 
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const result = await runPythonBridge("save", "guest_temp", payload, "guest-temp");
     return NextResponse.json(result);
   } catch {
-    return NextResponse.json({ ok: false, source: "fallback", error: "임시 저장에 실패했습니다." }, { status: 500 });
+    return NextResponse.json({ ok: false, source: "fallback", error: "임시 저장에 실패했습니다." }, { status: 200 });
   }
 }
 
