@@ -7,6 +7,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams } from "@/lib/navigation";
 import { compactGoalLine, goalRankNumberToneClass } from "@/lib/goal-display";
+import { examYears } from "@/lib/admission-data";
 import { buildGoalAnalyses, goalStorageKey, parseSeededGoals } from "@/lib/planning";
 import { profileStorageKey, useStudentProfile } from "@/lib/profile-storage";
 import { scoreStorageKey, useScoreRecords } from "@/lib/score-storage";
@@ -55,10 +56,13 @@ export function SettingsView() {
   const privacyHref = moveTo("/settings/privacy");
   const goalsFullHref = moveTo("/onboarding/goals");
 
-  const chips = useMemo(
-    () => [studentProfile.gradeLabel, `${String(studentProfile.targetYear).slice(2)}학년도 입시`],
-    [studentProfile.gradeLabel, studentProfile.targetYear]
-  );
+  const chips = useMemo(() => {
+    const parts = [studentProfile.gradeLabel].filter((item) => Boolean(item && String(item).trim()));
+    if (examYears.includes(studentProfile.targetYear)) {
+      parts.push(`${String(studentProfile.targetYear).slice(2)}학년도 입시`);
+    }
+    return parts;
+  }, [studentProfile.gradeLabel, studentProfile.targetYear]);
   const isHydrated = goalsHydrated && scoresHydrated && profileHydrated;
 
   const toggle = (key: keyof typeof toggles) => {
@@ -176,7 +180,14 @@ export function SettingsView() {
                   <div className="text-xl font-medium">{isHydrated ? studentProfile.name : "불러오는 중..."}</div>
                   <div className="mt-1 text-sm text-muted">
                     {isHydrated
-                      ? `${studentProfile.region || "제주특별자치도"} / ${studentProfile.district || "서귀포시"} / ${shortenSchoolName(studentProfile.schoolName || "서귀포시고등학교")}`
+                      ? (() => {
+                          const parts = [
+                            studentProfile.region,
+                            studentProfile.district,
+                            studentProfile.schoolName ? shortenSchoolName(studentProfile.schoolName) : ""
+                          ].filter((item) => Boolean(item && String(item).trim()));
+                          return parts.length > 0 ? parts.join(" / ") : "미입력";
+                        })()
                       : "기본정보를 불러오는 중입니다."}
                   </div>
                 </div>

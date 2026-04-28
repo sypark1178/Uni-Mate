@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { OnboardingStep } from "@/components/onboarding-step";
 import { examYears, regionDistrictSchoolMap } from "@/lib/admission-data";
-import { profile as demoProfile } from "@/lib/mock-data";
+import { demoSeededProfile } from "@/lib/mock-data";
 import { useStudentProfile } from "@/lib/profile-storage";
 
 const gradeOptions = ["초등학생", "중학생", "고1", "고2", "고3", "N수생", "학부모", "교육관계자"];
@@ -173,7 +173,7 @@ export default function OnboardingBasicPage() {
       return;
     }
     demoAppliedRef.current = true;
-    setStudentProfile(demoProfile);
+    setStudentProfile(demoSeededProfile);
     const next =
       returnTo && returnTo.startsWith("/")
         ? `/onboarding/basic?returnTo=${encodeURIComponent(returnTo)}`

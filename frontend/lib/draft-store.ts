@@ -89,9 +89,9 @@ export function isDraftDirty() {
   return window.sessionStorage.getItem(scopedKey(draftDirtyKey)) === "1";
 }
 
+/** 프로필·목표 초안만 비움. 성적(2단계) 세션 초안은 건드리지 않음 — 입력 성적 보존. */
 export function clearAllDrafts() {
   clearDraftProfile();
   clearDraftGoals();
-  clearDraftScores();
   markDraftDirty(false);
 }

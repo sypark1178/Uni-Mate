@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { StudentProfile } from "@/lib/types";
-import { profile as defaultProfile } from "@/lib/mock-data";
+import { examYears } from "@/lib/admission-data";
 import { getDraftProfile, setDraftProfile } from "@/lib/draft-store";
 import { getCurrentMember } from "@/lib/member-store";
 
@@ -27,13 +27,16 @@ function withLoggedInMemberName(profile: StudentProfile): StudentProfile {
 function normalizeProfile(raw: unknown): StudentProfile {
   if (!raw || typeof raw !== "object") {
     return {
-      ...defaultProfile,
       name: "",
       gradeLabel: "",
       region: "",
       district: "",
       schoolName: "",
-      hasRequiredInfo: false
+      track: "미정",
+      targetYear: 0,
+      profileImageUrl: "",
+      hasRequiredInfo: false,
+      hasScores: false
     };
   }
 
@@ -43,11 +46,10 @@ function normalizeProfile(raw: unknown): StudentProfile {
   const schoolName = typeof candidate.schoolName === "string" ? candidate.schoolName : "";
   const name = typeof candidate.name === "string" ? candidate.name : "";
   const gradeLabel = typeof candidate.gradeLabel === "string" ? candidate.gradeLabel : "";
-  const track = typeof candidate.track === "string" ? candidate.track : defaultProfile.track;
-  const targetYear =
-    typeof candidate.targetYear === "number" && Number.isFinite(candidate.targetYear)
-      ? candidate.targetYear
-      : defaultProfile.targetYear;
+  const trackRaw = typeof candidate.track === "string" ? candidate.track.trim() : "";
+  const track = trackRaw || "미정";
+  const targetYearRaw = typeof candidate.targetYear === "number" && Number.isFinite(candidate.targetYear) ? candidate.targetYear : 0;
+  const targetYear = examYears.includes(targetYearRaw) ? targetYearRaw : 0;
 
   return {
     name,
@@ -59,7 +61,7 @@ function normalizeProfile(raw: unknown): StudentProfile {
     targetYear,
     profileImageUrl: typeof candidate.profileImageUrl === "string" ? candidate.profileImageUrl : "",
     hasRequiredInfo: [name, gradeLabel, region, district, schoolName].every((item) => Boolean(item && String(item).trim())),
-    hasScores: typeof candidate.hasScores === "boolean" ? candidate.hasScores : defaultProfile.hasScores
+    hasScores: typeof candidate.hasScores === "boolean" ? candidate.hasScores : false
   };
 }
 
@@ -135,11 +137,11 @@ export function useStudentProfile() {
         }
       } catch {
         window.localStorage.removeItem(getScopedProfileStorageKey());
-        localProfile = defaultProfile;
+        localProfile = normalizeProfile({});
       }
       const serverProfile = await loadProfileFromServer();
       const draftProfile = getDraftProfile<StudentProfile>();
-      const resolved = withLoggedInMemberName(draftProfile ?? serverProfile ?? localProfile ?? defaultProfile);
+      const resolved = withLoggedInMemberName(draftProfile ?? serverProfile ?? localProfile ?? normalizeProfile({}));
       if (!cancelled) {
         persistProfile(resolved);
         setStudentProfile(resolved);

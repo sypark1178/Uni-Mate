@@ -1,6 +1,21 @@
 import type { ChecklistItem, Recommendation, SimulationInput, StudentProfile } from "@/lib/types";
 
+/** 온보딩 1단계 기본값: 비어 있음(성적 스토어와 무관). */
 export const profile: StudentProfile = {
+  name: "",
+  gradeLabel: "",
+  region: "",
+  district: "",
+  schoolName: "",
+  track: "미정",
+  targetYear: 0,
+  profileImageUrl: "",
+  hasRequiredInfo: false,
+  hasScores: false
+};
+
+/** `/onboarding/basic?demo=1` 로컬 미리보기용(김민지·서귀포). 일반 시작 경로에서는 사용하지 않음. */
+export const demoSeededProfile: StudentProfile = {
   name: "김민지",
   gradeLabel: "고2",
   region: "제주특별자치도",
@@ -10,7 +25,7 @@ export const profile: StudentProfile = {
   targetYear: 2027,
   profileImageUrl: "",
   hasRequiredInfo: true,
-  hasScores: true
+  hasScores: false
 };
 
 export const emptyProfile: StudentProfile = {
