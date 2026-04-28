@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { OnboardingStep } from "@/components/onboarding-step";
 import { examYears, regionDistrictSchoolMap } from "@/lib/admission-data";
+import { profile as demoProfile } from "@/lib/mock-data";
 import { useStudentProfile } from "@/lib/profile-storage";
 
 const gradeOptions = ["초등학생", "중학생", "고1", "고2", "고3", "N수생", "학부모", "교육관계자"];
@@ -41,13 +42,15 @@ function getSchoolKeywordByGrade(gradeLabel: string): "초등학교" | "중학�
 }
 
 export default function OnboardingBasicPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
+  const demoAppliedRef = useRef(false);
   const regions = useMemo(
     () => Object.keys(regionDistrictSchoolMap).sort((left, right) => left.localeCompare(right, "ko-KR")),
     []
   );
-  const { studentProfile, updateField } = useStudentProfile();
+  const { studentProfile, updateField, hydrated, setStudentProfile } = useStudentProfile();
 
   const selectedGrade = studentProfile.gradeLabel || "";
   const selectedRegion = studentProfile.region || "";
@@ -162,6 +165,22 @@ export default function OnboardingBasicPage() {
     };
   }, [selectedDistrict, selectedGrade, selectedRegion]);
 
+  useEffect(() => {
+    if (!hydrated || demoAppliedRef.current) {
+      return;
+    }
+    if (searchParams.get("demo") !== "1") {
+      return;
+    }
+    demoAppliedRef.current = true;
+    setStudentProfile(demoProfile);
+    const next =
+      returnTo && returnTo.startsWith("/")
+        ? `/onboarding/basic?returnTo=${encodeURIComponent(returnTo)}`
+        : "/onboarding/basic";
+    router.replace(next);
+  }, [hydrated, returnTo, router, searchParams, setStudentProfile]);
+
   const handleRegionChange = (value: string) => {
     updateField("region", value);
     updateField("district", "");
@@ -241,8 +260,8 @@ export default function OnboardingBasicPage() {
         <option value="" disabled>
           {!selectedGrade ? "먼저 유형을 선택하세요" : selectedRegion ? "학교 선택" : "먼저 지역을 선택하세요"}
         </option>
-        {selectedSchool ? (
-          <option value={selectedSchool} hidden>
+        {selectedSchool && !schoolsForUi.includes(selectedSchool) ? (
+          <option key="__current-school" value={selectedSchool} hidden>
             {selectedSchool}
           </option>
         ) : null}
