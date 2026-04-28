@@ -36,6 +36,8 @@ export const scoreTabOptions: Array<{ key: ScoreTabKey; label: string }> = [
 
 /** 내신·모의고사 과목 등급 (1~9등급) */
 export const subjectGradeOptions = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
+const passFailScoreOptions = ["PASS", "NON PASS"] as const;
+const passFailSubjectNames = ["진로와 직업", "논술"] as const;
 
 function isSubjectGradeValue(value: string): boolean {
   if ((subjectGradeOptions as readonly string[]).includes(value)) {
@@ -43,6 +45,24 @@ function isSubjectGradeValue(value: string): boolean {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 1 && parsed <= 9;
+}
+
+function isPassFailScoreValue(value: string): boolean {
+  return (passFailScoreOptions as readonly string[]).includes(value);
+}
+
+function isPassFailSubject(subject: string): boolean {
+  return (passFailSubjectNames as readonly string[]).includes(subject.trim());
+}
+
+function isAllowedSubjectScore(value: string, subject: string): boolean {
+  if (isSubjectGradeValue(value)) {
+    return true;
+  }
+  if (isPassFailSubject(subject)) {
+    return isPassFailScoreValue(value);
+  }
+  return false;
 }
 
 export const gradeYearOptions: Array<{ value: GradeYear; label: string }> = [
@@ -246,7 +266,7 @@ function normalizeSubjectEntries(raw: unknown): SubjectScoreEntry[] {
   return filteredRaw.map((item, index) => {
     const subject = typeof item === "object" && item && "subject" in item ? String(item.subject ?? "") : defaultSubjectNames[index] ?? "";
     const rawScore = typeof item === "object" && item && "score" in item ? String(item.score ?? "") : "";
-    const score = isSubjectGradeValue(rawScore) ? rawScore : "";
+    const score = isAllowedSubjectScore(rawScore, subject) ? rawScore : "";
     const id = typeof item === "object" && item && "id" in item ? String(item.id) : createSubjectId(subject, index);
     const isCustom =
       typeof item === "object" && item && "isCustom" in item ? Boolean(item.isCustom) : index >= defaultSubjectNames.length;
@@ -586,6 +606,7 @@ export function useScoreRecords() {
       const nextStore = normalizeScoreStore(updater(previous));
       persistStore(nextStore);
       setDraftScores(nextStore);
+      void persistStoreToServer(nextStore);
       return nextStore;
     });
   };
@@ -599,9 +620,10 @@ export function useScoreRecords() {
   };
 
   const updateSubjectScore = (tab: "schoolRecord" | "mockExam", year: GradeYear, term: GradeTerm, entryId: string, value: string) => {
-    const normalizedValue = isSubjectGradeValue(value) ? value : "";
     commit((previous) => {
       const current = getScoreRecord(previous, tab, year, term);
+      const targetSubject = current.subjects.find((entry) => entry.id === entryId)?.subject ?? "";
+      const normalizedValue = isAllowedSubjectScore(value, targetSubject) ? value : "";
       const nextRecord: GradePeriodRecord = {
         ...current,
         subjects: current.subjects.map((entry) => (entry.id === entryId ? { ...entry, score: normalizedValue } : entry)),
@@ -669,6 +691,13 @@ export function useScoreRecords() {
         updatedAt: nowIso()
       };
       return updateScoreRecordBucket(previous, tab, upsertScoreRecord(getScoreRecordBucket(previous, tab), nextRecord));
+    });
+  };
+
+  const removeScoreRecord = (tab: "schoolRecord" | "mockExam", year: GradeYear, term: GradeTerm) => {
+    commit((previous) => {
+      const nextRecords = getScoreRecordBucket(previous, tab).filter((record) => !(record.year === year && record.term === term));
+      return updateScoreRecordBucket(previous, tab, nextRecords.length > 0 ? nextRecords : [createEmptyGradeRecord("1", "1-midterm")]);
     });
   };
 
@@ -756,6 +785,7 @@ export function useScoreRecords() {
     updateOverallAverage,
     addSubject,
     removeSubject,
+    removeScoreRecord,
     updateStudentRecordField,
     registerUploads,
     flushStore,

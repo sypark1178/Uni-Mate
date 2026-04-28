@@ -43,6 +43,8 @@ const fixedScoreLabels = ["국어", "수학", "영어"] as const;
 const fixedHeadCount = Math.max(0, fixedScoreLabels.length - 1);
 
 const coreAverageSubjects = ["국어", "수학", "영어"] as const;
+const passFailSubjectLabels = ["진로와 직업", "논술"] as const;
+const passFailScoreOptions = ["PASS", "NON PASS"] as const;
 
 /** 모달 상단: 한국사 / 탐구 / 기타 */
 const extraInquiryModalEntries = [
@@ -124,7 +126,8 @@ const secondForeignSubjectLabels = [
 
   "베트남어Ⅰ",
 
-  "아랍어Ⅰ"
+  "아랍어Ⅰ",
+  "한문Ⅰ"
 
 ] as const;
 
@@ -135,8 +138,28 @@ const firstYearOtherSubjectLabels = ["한문Ⅰ", "정보"] as const;
 
 type ExtraInquiryPanel = "history" | "inquiry" | "other";
 type InquiryPickMode = "social" | "science";
+type OtherPickMode = "foreign" | "elective";
 
-function labelsForExtraInquiryPanel(panel: ExtraInquiryPanel, year: GradeYear, inquiryPickMode: InquiryPickMode): readonly string[] {
+const electiveSubjectLabels = [
+  "정보",
+  "진로와 직업",
+  "환경",
+  "보건",
+  "기술과 가정",
+  "실용경제",
+  "철학",
+  "심리학",
+  "논술",
+  "인공지능 기초",
+  "창의융합"
+] as const;
+
+function labelsForExtraInquiryPanel(
+  panel: ExtraInquiryPanel,
+  year: GradeYear,
+  inquiryPickMode: InquiryPickMode,
+  otherPickMode: OtherPickMode
+): readonly string[] {
   if (panel === "history") {
     return historySubjectLabels;
   }
@@ -146,19 +169,18 @@ function labelsForExtraInquiryPanel(panel: ExtraInquiryPanel, year: GradeYear, i
     }
     return year === "1" ? integratedScienceSubjectLabels : scienceInquirySubjectLabels;
   }
-  return year === "1" ? firstYearOtherSubjectLabels : otherSubjectLabels;
-}
-
-function titleForExtraInquiryPanel(panel: ExtraInquiryPanel, inquiryPickMode: InquiryPickMode): string {
-  if (panel === "history") return "한국사 과목";
-  if (panel === "inquiry") {
-    return inquiryPickMode === "social" ? "사회탐구 과목" : "과학탐구 과목";
+  if (otherPickMode === "foreign") {
+    return secondForeignSubjectLabels;
   }
-  return "기타(제2외국어·한문·정보)";
+  return electiveSubjectLabels;
 }
 
 function isOneOfLabels(value: string, labels: readonly string[]): boolean {
   return labels.some((label) => label === value);
+}
+
+function isPassFailSubject(subject: string) {
+  return isOneOfLabels(subject.trim(), passFailSubjectLabels);
 }
 
 
@@ -569,7 +591,7 @@ function ModalInquirySubjectGroupBlock({
         <div key={entry.id} className="flex items-center gap-2 rounded-xl border border-white bg-white px-3 py-2.5">
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{entry.subject.trim()}</span>
 
-          <div className="relative min-w-[4.75rem] max-w-[6.5rem] shrink-0">
+          <div className="relative w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] shrink-0">
             <select
               value={entry.score}
               onChange={(event) => {
@@ -578,15 +600,28 @@ function ModalInquirySubjectGroupBlock({
                 }
                 updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, event.target.value);
               }}
-              aria-label={`${entry.subject.trim()} 내신 등급`}
-              className={`w-full cursor-pointer appearance-none border-0 border-b-2 border-navy/30 bg-transparent py-1 pl-0 pr-6 text-sm font-semibold transition-colors focus:border-navy focus:outline-none ${entry.score ? "text-ink" : "text-muted"}`}
+              aria-label={`${entry.subject.trim()} 성적`}
+              className={`w-full cursor-pointer appearance-none border-0 border-b-2 border-navy/30 bg-transparent py-1 pl-0 pr-6 text-sm font-semibold leading-none transition-colors focus:border-navy focus:outline-none ${entry.score ? "text-ink" : "text-muted"}`}
             >
-              <option value="">등급</option>
-              {subjectGradeOptions.map((grade) => (
-                <option key={grade} value={grade}>
-                  {grade}등급
-                </option>
-              ))}
+              {isPassFailSubject(entry.subject) ? (
+                <>
+                  <option value="">선택</option>
+                  {passFailScoreOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <option value="">등급</option>
+                  {subjectGradeOptions.map((grade) => (
+                    <option key={grade} value={grade}>
+                      {grade}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
             <SelectChevron active={Boolean(entry.score)} variant="flush" />
           </div>
@@ -601,7 +636,7 @@ function ModalInquirySubjectGroupBlock({
         </div>
       ))}
 
-      {averageValue ? (
+      {averageValue && entries.length > 1 ? (
         <div className="mt-2 border-t border-line/80 pt-2">
           <p className="text-center text-sm font-semibold leading-tight text-navy">
             {averageLeadingText}
@@ -639,6 +674,8 @@ export default function OnboardingGradesPage() {
 
     removeSubject,
 
+    removeScoreRecord,
+
     updateStudentRecordField,
 
     registerUploads,
@@ -665,6 +702,7 @@ export default function OnboardingGradesPage() {
 
   const [extraInquiryPick, setExtraInquiryPick] = useState("");
   const [inquiryPickMode, setInquiryPickMode] = useState<InquiryPickMode>("social");
+  const [otherPickMode, setOtherPickMode] = useState<OtherPickMode>("foreign");
 
   const [gradeSavePending, setGradeSavePending] = useState(false);
 
@@ -795,6 +833,7 @@ export default function OnboardingGradesPage() {
 
     setExtraInquiryPick("");
     setInquiryPickMode("social");
+    setOtherPickMode("foreign");
 
   }, [selectedTab, selectedYear, selectedTerm]);
 
@@ -808,6 +847,7 @@ export default function OnboardingGradesPage() {
 
       setExtraInquiryPick("");
       setInquiryPickMode("social");
+      setOtherPickMode("foreign");
 
     }
 
@@ -1024,9 +1064,12 @@ export default function OnboardingGradesPage() {
 
     const v = modalSocialInquiryAverageValue;
 
-    return v ? `${v}등급` : "";
+    if (!v) {
+      return "";
+    }
+    return selectedYear === "1" ? v : `${v}등급`;
 
-  }, [modalSocialInquiryAverageValue]);
+  }, [modalSocialInquiryAverageValue, selectedYear]);
 
   const scienceInquirySummaryLabel = useMemo(
 
@@ -1048,9 +1091,12 @@ export default function OnboardingGradesPage() {
 
     const v = modalScienceInquiryAverageValue;
 
-    return v ? `${v}등급` : "";
+    if (!v) {
+      return "";
+    }
+    return selectedYear === "1" ? v : `${v}등급`;
 
-  }, [modalScienceInquiryAverageValue]);
+  }, [modalScienceInquiryAverageValue, selectedYear]);
 
   const secondForeignSummaryLabel = useMemo(
 
@@ -1178,6 +1224,21 @@ export default function OnboardingGradesPage() {
 
   };
 
+  const handleDeleteSavedSummary = (summary: {
+    tabKey: ScoreTabKey;
+    year: GradeYear;
+    term: GradeTerm;
+  }) => {
+    if (summary.tabKey !== "schoolRecord" && summary.tabKey !== "mockExam") {
+      return;
+    }
+    const ok = window.confirm("이 저장 기록을 삭제할까요?");
+    if (!ok) {
+      return;
+    }
+    removeScoreRecord(summary.tabKey, summary.year, summary.term);
+  };
+
 
 
   const handleConfirmExtraInquirySubject = () => {
@@ -1200,7 +1261,7 @@ export default function OnboardingGradesPage() {
 
 
 
-    const name = extraInquiryPick.trim();
+    const name = extraInquiryPanelOpen === "history" ? "한국사" : extraInquiryPick.trim();
 
     if (!name) {
 
@@ -1212,7 +1273,7 @@ export default function OnboardingGradesPage() {
 
 
 
-    const allowed = labelsForExtraInquiryPanel(extraInquiryPanelOpen, selectedYear, inquiryPickMode);
+    const allowed = labelsForExtraInquiryPanel(extraInquiryPanelOpen, selectedYear, inquiryPickMode, otherPickMode);
 
     if (!allowed.includes(name)) {
 
@@ -1534,17 +1595,30 @@ export default function OnboardingGradesPage() {
 
                   >
 
-                    <option value="">등급 선택</option>
+                    {isPassFailSubject(label) ? (
+                      <>
+                        <option value="">선택</option>
+                        {passFailScoreOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <option value="">등급 선택</option>
 
-                    {subjectGradeOptions.map((grade) => (
+                        {subjectGradeOptions.map((grade) => (
 
-                      <option key={grade} value={grade}>
+                          <option key={grade} value={grade}>
 
-                        {grade}
+                            {grade}
 
-                      </option>
+                          </option>
 
-                    ))}
+                        ))}
+                      </>
+                    )}
 
                   </select>
 
@@ -1580,17 +1654,30 @@ export default function OnboardingGradesPage() {
 
                   >
 
-                    <option value="">등급 선택</option>
+                    {isPassFailSubject(label) ? (
+                      <>
+                        <option value="">선택</option>
+                        {passFailScoreOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <option value="">등급 선택</option>
 
-                    {subjectGradeOptions.map((grade) => (
+                        {subjectGradeOptions.map((grade) => (
 
-                      <option key={grade} value={grade}>
+                          <option key={grade} value={grade}>
 
-                        {grade}
+                            {grade}
 
-                      </option>
+                          </option>
 
-                    ))}
+                        ))}
+                      </>
+                    )}
 
                   </select>
 
@@ -1670,17 +1757,30 @@ export default function OnboardingGradesPage() {
 
                   >
 
-                    <option value="">등급 선택</option>
+                    {isPassFailSubject(entry.subject) ? (
+                      <>
+                        <option value="">선택</option>
+                        {passFailScoreOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <option value="">등급 선택</option>
 
-                    {subjectGradeOptions.map((grade) => (
+                        {subjectGradeOptions.map((grade) => (
 
-                      <option key={grade} value={grade}>
+                          <option key={grade} value={grade}>
 
-                        {grade}
+                            {grade}
 
-                      </option>
+                          </option>
 
-                    ))}
+                        ))}
+                      </>
+                    )}
 
                   </select>
 
@@ -1710,17 +1810,30 @@ export default function OnboardingGradesPage() {
 
                   >
 
-                    <option value="">등급 선택</option>
+                    {isPassFailSubject(entry.subject) ? (
+                      <>
+                        <option value="">선택</option>
+                        {passFailScoreOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <option value="">등급 선택</option>
 
-                    {subjectGradeOptions.map((grade) => (
+                        {subjectGradeOptions.map((grade) => (
 
-                      <option key={grade} value={grade}>
+                          <option key={grade} value={grade}>
 
-                        {grade}
+                            {grade}
 
-                      </option>
+                          </option>
 
-                    ))}
+                        ))}
+                      </>
+                    )}
 
                   </select>
 
@@ -2016,13 +2129,22 @@ export default function OnboardingGradesPage() {
                         </span>
                         <span>{summary.periodCaption}</span>
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => handleEditSavedSummary(summary)}
-                        className="shrink-0 rounded-md border border-line bg-white px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-mist"
-                      >
-                        수정하기
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleEditSavedSummary(summary)}
+                          className="shrink-0 rounded-md border border-line bg-white px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-mist"
+                        >
+                          수정하기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSavedSummary(summary)}
+                          className="shrink-0 rounded-md border border-line bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#C83737] hover:bg-[#FFF4F4]"
+                        >
+                          삭제
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-1 overflow-x-auto pb-1">
                       {summary.rows.length > 0 ? (
@@ -2111,7 +2233,6 @@ export default function OnboardingGradesPage() {
 
             {extraInquiryModalEntries.map(({ panel, label }) => {
               const isActive = extraInquiryPanelOpen === panel;
-              const yearAwareLabel = panel === "other" && selectedYear !== "1" ? "제2외국어" : label;
 
               return (
 
@@ -2137,7 +2258,7 @@ export default function OnboardingGradesPage() {
 
                 >
 
-                  {yearAwareLabel}
+                  {label}
 
                 </button>
 
@@ -2152,9 +2273,6 @@ export default function OnboardingGradesPage() {
             <div className="mt-2 space-y-2 rounded-xl border border-line bg-[#EBEBEB] p-3">
 
               <label className="relative block space-y-1.5">
-
-                <span className="text-xs font-medium text-muted">{titleForExtraInquiryPanel(extraInquiryPanelOpen, inquiryPickMode)}</span>
-
                 {extraInquiryPanelOpen === "inquiry" ? (
                   <div className="grid grid-cols-2 gap-2">
                     <button
@@ -2184,43 +2302,59 @@ export default function OnboardingGradesPage() {
                   </div>
                 ) : null}
 
-                <div className="relative">
+                {extraInquiryPanelOpen === "other" ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtherPickMode("foreign");
+                        setExtraInquiryPick("");
+                      }}
+                      className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                        otherPickMode === "foreign" ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                      }`}
+                    >
+                      제2외국어
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtherPickMode("elective");
+                        setExtraInquiryPick("");
+                      }}
+                      className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                        otherPickMode === "elective" ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                      }`}
+                    >
+                      선택과목
+                    </button>
+                  </div>
+                ) : null}
 
-                  <select
+                {extraInquiryPanelOpen === "history" ? (
+                  <div className="rounded-xl border border-white bg-white px-3 py-2.5 text-sm text-ink">한국사</div>
+                ) : (
+                  <div className="relative">
+                    <select
+                      className={`w-full appearance-none rounded-xl border border-white bg-white px-3 py-2.5 pr-9 text-sm ${extraInquiryPick ? "text-ink" : "text-muted"}`}
+                      value={extraInquiryPick}
+                      onChange={(event) => setExtraInquiryPick(event.target.value)}
+                    >
+                      <option value="">과목을 선택하세요</option>
+                      {labelsForExtraInquiryPanel(extraInquiryPanelOpen, selectedYear, inquiryPickMode, otherPickMode).map((subjectLabel) => {
+                        const taken =
+                          activeScoreRecord?.subjects.some((entry) => entry.subject.trim() === subjectLabel) ?? false;
 
-                    className={`w-full appearance-none rounded-xl border border-white bg-white px-3 py-2.5 pr-9 text-sm ${extraInquiryPick ? "text-ink" : "text-muted"}`}
-
-                    value={extraInquiryPick}
-
-                    onChange={(event) => setExtraInquiryPick(event.target.value)}
-
-                  >
-
-                    <option value="">과목을 선택하세요</option>
-
-                    {labelsForExtraInquiryPanel(extraInquiryPanelOpen, selectedYear, inquiryPickMode).map((subjectLabel) => {
-
-                      const taken =
-
-                        activeScoreRecord?.subjects.some((entry) => entry.subject.trim() === subjectLabel) ?? false;
-
-                      return (
-
-                        <option key={subjectLabel} value={subjectLabel} disabled={taken}>
-
-                          {taken ? `${subjectLabel} (추가됨)` : subjectLabel}
-
-                        </option>
-
-                      );
-
-                    })}
-
-                  </select>
-
-                  <SelectChevron active={Boolean(extraInquiryPick)} />
-
-                </div>
+                        return (
+                          <option key={subjectLabel} value={subjectLabel} disabled={taken}>
+                            {taken ? `${subjectLabel} (추가됨)` : subjectLabel}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <SelectChevron active={Boolean(extraInquiryPick)} />
+                  </div>
+                )}
 
               </label>
 
