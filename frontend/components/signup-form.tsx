@@ -7,6 +7,7 @@ import { registerMember, setCurrentMember } from "@/lib/member-store";
 import { safeNavigate } from "@/lib/navigation";
 import { profileStorageKey } from "@/lib/profile-storage";
 import { scoreStorageKey } from "@/lib/score-storage";
+import { onboardingFormFieldClass } from "@/lib/onboarding-buttons";
 import { goalStorageKey } from "@/lib/planning";
 import type { GoalChoice, ScoreMemoryStore, StudentProfile } from "@/lib/types";
 
@@ -151,7 +152,7 @@ export function SignupForm({
         <section>
           <div className="mb-2 text-sm font-bold text-ink">아이디</div>
           <input
-            className="w-full rounded-xl border border-line px-4 py-3"
+            className={onboardingFormFieldClass}
             placeholder="아이디를 입력해 주세요"
             value={form.userId}
             onChange={(event) => updateField("userId", event.target.value)}
@@ -159,7 +160,7 @@ export function SignupForm({
           <div className="mb-2 mt-4 text-sm font-bold text-ink">비밀번호</div>
           <input
             type="password"
-            className="w-full rounded-xl border border-line px-4 py-3"
+            className={onboardingFormFieldClass}
             placeholder="비밀번호를 입력해 주세요"
             value={form.password}
             onChange={(event) => updateField("password", event.target.value)}
@@ -170,45 +171,45 @@ export function SignupForm({
           <div className="mb-3 text-sm font-bold text-ink">기본 정보</div>
           <div className="space-y-3">
             <input
-              className="w-full rounded-xl border border-line px-4 py-3"
+              className={onboardingFormFieldClass}
               placeholder="이름"
               value={form.name}
               onChange={(event) => updateField("name", event.target.value)}
             />
             <input
-              className="w-full rounded-xl border border-line px-4 py-3"
+              className={onboardingFormFieldClass}
               placeholder="학교"
               value={form.school}
               onChange={(event) => updateField("school", event.target.value)}
             />
             <div className="grid grid-cols-2 gap-3">
               <input
-                className="w-full rounded-xl border border-line px-4 py-3"
+                className={onboardingFormFieldClass}
                 placeholder="학년"
                 value={form.grade}
                 onChange={(event) => updateField("grade", event.target.value)}
               />
               <input
-                className="w-full rounded-xl border border-line px-4 py-3"
+                className={onboardingFormFieldClass}
                 placeholder="입시 연도"
                 value={form.examYear}
                 onChange={(event) => updateField("examYear", event.target.value)}
               />
             </div>
             <input
-              className="w-full rounded-xl border border-line px-4 py-3"
+              className={onboardingFormFieldClass}
               placeholder="시/군/구"
               value={form.district}
               onChange={(event) => updateField("district", event.target.value)}
             />
             <input
-              className="w-full rounded-xl border border-line px-4 py-3"
+              className={onboardingFormFieldClass}
               placeholder="이메일"
               value={form.email}
               onChange={(event) => updateField("email", event.target.value)}
             />
             <input
-              className="w-full rounded-xl border border-line px-4 py-3"
+              className={onboardingFormFieldClass}
               placeholder="전화번호"
               value={form.phone}
               onChange={(event) => updateField("phone", event.target.value)}

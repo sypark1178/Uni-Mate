@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { OnboardingStep } from "@/components/onboarding-step";
 import { examYears, regionDistrictSchoolMap } from "@/lib/admission-data";
 import { demoSeededProfile } from "@/lib/mock-data";
+import { onboardingFormFieldClass } from "@/lib/onboarding-buttons";
 import { useStudentProfile } from "@/lib/profile-storage";
 
 const gradeOptions = ["초등학생", "중학생", "고1", "고2", "고3", "N수생", "학부모", "교육관계자"];
@@ -204,13 +205,13 @@ export default function OnboardingBasicPage() {
       nextLabel="2단계 성적 입력 →"
     >
       <input
-        className="w-full rounded-xl border border-line px-4 py-3 placeholder:text-muted"
+        className={onboardingFormFieldClass}
         placeholder="이름"
         value={studentProfile.name}
         onChange={(event) => updateField("name", event.target.value)}
       />
       <select
-        className={`w-full rounded-xl border border-line px-4 py-3 ${selectedGrade ? "text-ink" : "text-muted"}`}
+        className={onboardingFormFieldClass}
         value={selectedGrade}
         onChange={(event) => updateField("gradeLabel", event.target.value)}
       >
@@ -223,7 +224,7 @@ export default function OnboardingBasicPage() {
           </option>
         ))}
       </select>
-      <select className={`w-full rounded-xl border border-line px-4 py-3 ${selectedRegion ? "text-ink" : "text-muted"}`} value={selectedRegion} onChange={(event) => handleRegionChange(event.target.value)}>
+      <select className={onboardingFormFieldClass} value={selectedRegion} onChange={(event) => handleRegionChange(event.target.value)}>
         <option value="" disabled hidden>
           지역
         </option>
@@ -237,7 +238,7 @@ export default function OnboardingBasicPage() {
         지역인재 등 전형 지원 가능 여부를 판단하는 데 사용됩니다.
       </div>
       <select
-        className={`w-full rounded-xl border border-line px-4 py-3 ${selectedDistrict ? "text-ink" : "text-muted"}`}
+        className={onboardingFormFieldClass}
         value={selectedDistrict}
         disabled={!selectedRegion}
         onChange={(event) => handleDistrictChange(event.target.value)}
@@ -252,7 +253,7 @@ export default function OnboardingBasicPage() {
         ))}
       </select>
       <select
-        className={`w-full rounded-xl border border-line px-4 py-3 ${selectedSchool ? "text-ink" : "text-muted"}`}
+        className={onboardingFormFieldClass}
         value={selectedSchool}
         disabled={!selectedRegion || !selectedGrade}
         onChange={(event) => updateField("schoolName", event.target.value)}
@@ -275,7 +276,7 @@ export default function OnboardingBasicPage() {
         학교 알리미 데이터를 활용해 내신을 학교별로 알맞게 보정합니다.
       </div>
       <select
-        className={`w-full rounded-xl border border-line px-4 py-3 ${selectedYear ? "text-ink" : "text-muted"}`}
+        className={onboardingFormFieldClass}
         value={selectedYear}
         onChange={(event) => updateField("targetYear", Number(event.target.value))}
       >

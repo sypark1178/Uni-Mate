@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { OnboardingStep } from "@/components/onboarding-step";
 import { getMajorsByUniversity, onboardingTabs, universityOptions } from "@/lib/admission-data";
 import { compactGoalLine } from "@/lib/goal-display";
+import { onboardingFormFieldClass } from "@/lib/onboarding-buttons";
 import { parseSeededGoals } from "@/lib/planning";
 import { useGoals } from "@/lib/use-goals";
 
@@ -141,7 +142,7 @@ export default function OnboardingGoalsPage() {
             </div>
             <div className="space-y-3">
               <select
-                className="w-full rounded-xl border border-line px-4 py-3"
+                className={onboardingFormFieldClass}
                 value={goalRank.university}
                 onChange={(event) => handleUniversityChange(index, event.target.value)}
               >
@@ -152,7 +153,7 @@ export default function OnboardingGoalsPage() {
                 ))}
               </select>
               <select
-                className="w-full rounded-xl border border-line px-4 py-3"
+                className={onboardingFormFieldClass}
                 value={goalRank.major}
                 onChange={(event) => handleMajorChange(index, event.target.value)}
               >

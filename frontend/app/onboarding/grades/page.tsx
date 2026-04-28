@@ -444,14 +444,14 @@ function buildFixedSubjectSlots(subjects: SubjectScoreEntry[]) {
 
 
 
-function SelectChevron({ active, variant = "inset" }: { active: boolean; variant?: "inset" | "flush" }) {
+function SelectChevron({ variant = "inset" }: { variant?: "inset" | "flush" }) {
 
   const positionClass = variant === "flush" ? "right-0" : "right-4";
 
   return (
 
     <span
-      className={`pointer-events-none absolute ${positionClass} top-1/2 -translate-y-1/2 ${active ? "text-ink" : "text-muted"}`}
+      className={`pointer-events-none absolute ${positionClass} top-1/2 -translate-y-1/2 text-muted`}
       aria-hidden="true"
     >
 
@@ -522,13 +522,11 @@ function TopFilterDropdown({
           aria-label={ariaLabel}
           aria-expanded={open}
           onClick={() => setOpen((prev) => !prev)}
-          className={`relative z-0 w-full whitespace-nowrap rounded-full border bg-white px-3 py-3 pr-10 text-left text-sm font-normal ${
-            value ? "text-ink" : "text-muted"
-          } ${open ? "border-navy" : "border-line"}`}
+          className={`relative z-0 w-full whitespace-nowrap rounded-full border bg-white px-3 py-3 pr-10 text-left text-sm font-normal text-muted ${open ? "border-navy" : "border-line"}`}
         >
           {selectedLabel}
         </button>
-        <SelectChevron active />
+        <SelectChevron />
       </div>
       {open ? (
         <div className="absolute left-0 right-0 top-full z-30 mt-0 overflow-hidden rounded-none border border-[#707070] bg-white shadow-none">
@@ -543,7 +541,7 @@ function TopFilterDropdown({
                   setOpen(false);
                 }}
                 className={`flex h-10 w-full items-center px-4 text-left text-sm font-normal leading-none ${
-                  selected ? "bg-[#2A69C7] text-white" : "bg-white text-ink hover:bg-mist"
+                  selected ? "bg-[#2A69C7] text-white" : "bg-white text-muted hover:bg-mist"
                 }`}
               >
                 {option.label}
@@ -589,7 +587,7 @@ function ModalInquirySubjectGroupBlock({
     <div className="space-y-2">
       {entries.map((entry) => (
         <div key={entry.id} className="flex items-center gap-2 rounded-xl border border-white bg-white px-3 py-2.5">
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{entry.subject.trim()}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-muted">{entry.subject.trim()}</span>
 
           <div className="relative w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] shrink-0">
             <select
@@ -601,7 +599,7 @@ function ModalInquirySubjectGroupBlock({
                 updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, event.target.value);
               }}
               aria-label={`${entry.subject.trim()} 성적`}
-              className={`w-full cursor-pointer appearance-none border-0 border-b-2 border-navy/30 bg-transparent py-1 pl-0 pr-6 text-sm font-semibold leading-none transition-colors focus:border-navy focus:outline-none ${entry.score ? "text-ink" : "text-muted"}`}
+              className="w-full cursor-pointer appearance-none border-0 border-b-2 border-navy/30 bg-transparent py-1 pl-0 pr-6 text-sm font-semibold leading-none text-muted transition-colors focus:border-navy focus:outline-none"
             >
               {isPassFailSubject(entry.subject) ? (
                 <>
@@ -623,7 +621,7 @@ function ModalInquirySubjectGroupBlock({
                 </>
               )}
             </select>
-            <SelectChevron active={Boolean(entry.score)} variant="flush" />
+            <SelectChevron variant="flush" />
           </div>
 
           <button
@@ -1591,7 +1589,7 @@ export default function OnboardingGradesPage() {
 
                     }}
 
-                    className={`w-full appearance-none rounded-xl border border-white bg-white px-4 py-3 pr-10 text-sm ${entry?.score ? "text-ink" : "text-muted"}`}
+                    className="w-full appearance-none rounded-xl border border-white bg-white px-4 py-3 pr-10 text-sm text-muted"
 
                   >
 
@@ -1622,7 +1620,7 @@ export default function OnboardingGradesPage() {
 
                   </select>
 
-                  <SelectChevron active={Boolean(entry?.score)} />
+                  <SelectChevron />
 
                 </div>
 
@@ -1650,7 +1648,7 @@ export default function OnboardingGradesPage() {
 
                     }}
 
-                    className={`w-full appearance-none rounded-xl border border-white bg-white px-4 py-3 pr-10 text-sm ${entry?.score ? "text-ink" : "text-muted"}`}
+                    className="w-full appearance-none rounded-xl border border-white bg-white px-4 py-3 pr-10 text-sm text-muted"
 
                   >
 
@@ -1681,7 +1679,7 @@ export default function OnboardingGradesPage() {
 
                   </select>
 
-                  <SelectChevron active={Boolean(entry?.score)} />
+                  <SelectChevron />
 
                 </div>
 
@@ -1707,7 +1705,7 @@ export default function OnboardingGradesPage() {
 
                   placeholder="자동 계산"
 
-                  className="w-full rounded-xl border border-white bg-white px-4 py-3 text-sm text-ink placeholder:text-muted"
+                  className="w-full rounded-xl border border-white bg-white px-4 py-3 text-sm text-muted placeholder:text-muted"
 
                 />
 
@@ -1731,7 +1729,7 @@ export default function OnboardingGradesPage() {
 
                   placeholder="자동 계산"
 
-                  className="w-full rounded-xl border border-white bg-white px-4 py-3 text-sm text-ink placeholder:text-muted"
+                  className="w-full rounded-xl border border-white bg-white px-4 py-3 text-sm text-muted placeholder:text-muted"
 
                 />
 
@@ -1753,7 +1751,7 @@ export default function OnboardingGradesPage() {
 
                     onChange={(event) => updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, event.target.value)}
 
-                    className={`w-full appearance-none rounded-xl border border-white bg-white px-4 py-3 pr-10 text-sm ${entry.score ? "text-ink" : "text-muted"}`}
+                    className="w-full appearance-none rounded-xl border border-white bg-white px-4 py-3 pr-10 text-sm text-muted"
 
                   >
 
@@ -1784,7 +1782,7 @@ export default function OnboardingGradesPage() {
 
                   </select>
 
-                  <SelectChevron active={Boolean(entry.score)} />
+                  <SelectChevron />
 
                 </div>
 
@@ -1806,7 +1804,7 @@ export default function OnboardingGradesPage() {
 
                     onChange={(event) => updateSubjectScore(selectedTab, selectedYear, selectedTerm, entry.id, event.target.value)}
 
-                    className={`w-full appearance-none rounded-xl border border-white bg-white px-4 py-3 pr-10 text-sm ${entry.score ? "text-ink" : "text-muted"}`}
+                    className="w-full appearance-none rounded-xl border border-white bg-white px-4 py-3 pr-10 text-sm text-muted"
 
                   >
 
@@ -1837,7 +1835,7 @@ export default function OnboardingGradesPage() {
 
                   </select>
 
-                  <SelectChevron active={Boolean(entry.score)} />
+                  <SelectChevron />
 
                 </div>
 
@@ -1863,7 +1861,7 @@ export default function OnboardingGradesPage() {
 
                 placeholder="자동 계산"
 
-                className="w-full rounded-xl border border-white bg-white px-4 py-3 text-sm text-ink placeholder:text-muted"
+                className="w-full rounded-xl border border-white bg-white px-4 py-3 text-sm text-muted placeholder:text-muted"
 
               />
 
@@ -1949,7 +1947,7 @@ export default function OnboardingGradesPage() {
 
         onClick={() => setUploadModalOpen(true)}
 
-        className="mt-3 box-border flex w-full min-w-0 items-center justify-center rounded-xl border border-line bg-white px-4 py-3 text-sm font-medium text-ink"
+        className="mt-3 box-border flex w-full min-w-0 items-center justify-center rounded-xl border border-line bg-white px-4 py-3 text-sm font-medium text-muted"
 
       >
 
@@ -2078,7 +2076,7 @@ export default function OnboardingGradesPage() {
                   type="button"
                   onClick={() => setSavedRecordsFilterYear(item.value)}
                   className={`rounded-full border px-2 py-2 text-center text-[11px] font-semibold leading-tight ${
-                    savedRecordsFilterYear === item.value ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                    savedRecordsFilterYear === item.value ? "border-navy bg-navy text-white" : "border-line bg-white text-muted"
                   }`}
                 >
                   {item.label}
@@ -2100,7 +2098,7 @@ export default function OnboardingGradesPage() {
                   type="button"
                   onClick={() => setSavedRecordsFilterTab(item.value)}
                   className={`rounded-full border px-2 py-2.5 text-sm font-semibold ${
-                    savedRecordsFilterTab === item.value ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                    savedRecordsFilterTab === item.value ? "border-navy bg-navy text-white" : "border-line bg-white text-muted"
                   }`}
                 >
                   {item.label}
@@ -2115,7 +2113,7 @@ export default function OnboardingGradesPage() {
                 filteredSavedGradeSummaries.map((summary) => (
                   <div key={summary.periodKey} className="rounded-md border border-line/80 bg-[#FAFAFA] px-2 py-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-[11px] font-semibold leading-snug text-ink">
+                      <p className="text-[11px] font-semibold leading-snug text-muted">
                         <span
                           className={`mr-1 inline-block rounded border px-1 py-px text-[10px] font-semibold ${
                             summary.tabKey === "mockExam"
@@ -2155,7 +2153,7 @@ export default function OnboardingGradesPage() {
                               className="inline-flex max-w-[160px] items-baseline gap-0.5 whitespace-nowrap rounded-md bg-[#EBEBEB] px-1.5 py-0.5 text-[10px] leading-tight"
                             >
                               <span className="truncate text-muted">{row.name}</span>
-                              <span className="shrink-0 tabular-nums font-semibold text-ink">{row.grade}</span>
+                              <span className="shrink-0 tabular-nums font-semibold text-muted">{row.grade}</span>
                             </span>
                           ))}
                         </div>
@@ -2252,7 +2250,7 @@ export default function OnboardingGradesPage() {
 
                   className={`rounded-xl border px-2 py-3 text-center text-sm font-semibold ${
 
-                    isActive ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                    isActive ? "border-navy bg-navy text-white" : "border-line bg-white text-muted"
 
                   }`}
 
@@ -2282,7 +2280,7 @@ export default function OnboardingGradesPage() {
                         setExtraInquiryPick("");
                       }}
                       className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
-                        inquiryPickMode === "social" ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                        inquiryPickMode === "social" ? "border-navy bg-navy text-white" : "border-line bg-white text-muted"
                       }`}
                     >
                       사회탐구
@@ -2294,7 +2292,7 @@ export default function OnboardingGradesPage() {
                         setExtraInquiryPick("");
                       }}
                       className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
-                        inquiryPickMode === "science" ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                        inquiryPickMode === "science" ? "border-navy bg-navy text-white" : "border-line bg-white text-muted"
                       }`}
                     >
                       과학탐구
@@ -2311,7 +2309,7 @@ export default function OnboardingGradesPage() {
                         setExtraInquiryPick("");
                       }}
                       className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
-                        otherPickMode === "foreign" ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                        otherPickMode === "foreign" ? "border-navy bg-navy text-white" : "border-line bg-white text-muted"
                       }`}
                     >
                       제2외국어
@@ -2323,7 +2321,7 @@ export default function OnboardingGradesPage() {
                         setExtraInquiryPick("");
                       }}
                       className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
-                        otherPickMode === "elective" ? "border-navy bg-navy text-white" : "border-line bg-white text-ink"
+                        otherPickMode === "elective" ? "border-navy bg-navy text-white" : "border-line bg-white text-muted"
                       }`}
                     >
                       선택과목
@@ -2332,11 +2330,11 @@ export default function OnboardingGradesPage() {
                 ) : null}
 
                 {extraInquiryPanelOpen === "history" ? (
-                  <div className="rounded-xl border border-white bg-white px-3 py-2.5 text-sm text-ink">한국사</div>
+                  <div className="rounded-xl border border-white bg-white px-3 py-2.5 text-sm text-muted">한국사</div>
                 ) : (
                   <div className="relative">
                     <select
-                      className={`w-full appearance-none rounded-xl border border-white bg-white px-3 py-2.5 pr-9 text-sm ${extraInquiryPick ? "text-ink" : "text-muted"}`}
+                      className="w-full appearance-none rounded-xl border border-white bg-white px-3 py-2.5 pr-9 text-sm text-muted"
                       value={extraInquiryPick}
                       onChange={(event) => setExtraInquiryPick(event.target.value)}
                     >
@@ -2352,7 +2350,7 @@ export default function OnboardingGradesPage() {
                         );
                       })}
                     </select>
-                    <SelectChevron active={Boolean(extraInquiryPick)} />
+                    <SelectChevron />
                   </div>
                 )}
 
