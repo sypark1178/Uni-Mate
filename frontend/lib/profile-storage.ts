@@ -14,6 +14,10 @@ function getScopedProfileStorageKey() {
   return `${profileStorageKey}:${getCurrentUserKey()}`;
 }
 
+/** `local-user` 로컬에 남은 구버전/서버 병합 프로필을 1회 비움(이후 버전만 유지). */
+const LOCAL_USER_PROFILE_STORE_VERSION_KEY = "uni-mate-local-profile-store-v";
+const LOCAL_USER_PROFILE_STORE_VERSION = "2";
+
 function withLoggedInMemberName(profile: StudentProfile): StudentProfile {
   const memberName = getCurrentMember()?.name?.trim() || "";
   if (!memberName) return profile;
@@ -129,6 +133,17 @@ export function useStudentProfile() {
     let cancelled = false;
     const hydrate = async () => {
       const userKey = getCurrentUserKey();
+      if (userKey === "local-user" && typeof window !== "undefined") {
+        try {
+          const v = window.localStorage.getItem(LOCAL_USER_PROFILE_STORE_VERSION_KEY);
+          if (v !== LOCAL_USER_PROFILE_STORE_VERSION) {
+            window.localStorage.removeItem(`${profileStorageKey}:${userKey}`);
+            window.localStorage.setItem(LOCAL_USER_PROFILE_STORE_VERSION_KEY, LOCAL_USER_PROFILE_STORE_VERSION);
+          }
+        } catch {
+          /* noop */
+        }
+      }
       let localProfile: StudentProfile | null = null;
       try {
         const raw = window.localStorage.getItem(getScopedProfileStorageKey());
@@ -139,9 +154,14 @@ export function useStudentProfile() {
         window.localStorage.removeItem(getScopedProfileStorageKey());
         localProfile = normalizeProfile({});
       }
-      const serverProfile = await loadProfileFromServer();
+      let serverProfile = await loadProfileFromServer(userKey);
+      if (userKey === "local-user") {
+        serverProfile = null;
+      }
       const draftProfile = getDraftProfile<StudentProfile>();
-      const resolved = withLoggedInMemberName(draftProfile ?? serverProfile ?? localProfile ?? normalizeProfile({}));
+      const resolved = withLoggedInMemberName(
+        draftProfile ?? localProfile ?? serverProfile ?? normalizeProfile({})
+      );
       if (!cancelled) {
         persistProfile(resolved);
         setStudentProfile(resolved);
