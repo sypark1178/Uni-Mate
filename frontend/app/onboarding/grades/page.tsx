@@ -15,28 +15,32 @@ import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import { onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
 
 import {
-
-  getScoreRecord,
-
-  getGradeTermOptionsByTab,
-
   canonicalStudentRecordTerm,
-
+  getGradeTermOptionsByTab,
   getMockExamSeriesCaption,
-
+  getScoreRecord,
+  gradeTermForStudentSemester,
   gradeTermOptions,
-
   gradeYearOptions,
-
+  schoolGradeFromSchoolYear,
   scoreTabOptions,
-
+  studentSchoolYearOptions,
+  studentRecordTypeOptions,
+  studentSemesterOptions,
   subjectGradeOptions,
-
+  uploadMatchesStudentSelection,
   useScoreRecords
-
 } from "@/lib/score-storage";
 
-import type { GradePeriodRecord, GradeTerm, GradeYear, ScoreTabKey, SubjectScoreEntry } from "@/lib/types";
+import type {
+  GradePeriodRecord,
+  GradeTerm,
+  GradeYear,
+  ScoreTabKey,
+  StudentRecordSchoolYear,
+  StudentRecordType,
+  SubjectScoreEntry
+} from "@/lib/types";
 
 
 
@@ -187,34 +191,35 @@ function isPassFailSubject(subject: string) {
 
 
 
-function getInquiryAverageScoreForAverage(subjects: SubjectScoreEntry[]): string {
+function getInquiryAverageScoreForAverage(subjects: SubjectScoreEntry[], inquiryType: "social" | "science"): string {
 
-  const inquiryScores = subjects
-    .filter((entry) => {
-      const name = entry.subject.trim();
+  const isMatch = (name: string) => {
+    if (inquiryType === "social") {
       return (
         isOneOfLabels(name, socialInquirySubjectLabels) ||
-        isOneOfLabels(name, scienceInquirySubjectLabels) ||
         isOneOfLabels(name, integratedSocialSubjectLabels) ||
-        isOneOfLabels(name, integratedScienceSubjectLabels)
+        name === "사탐" ||
+        name === "사회탐구"
       );
-    })
+    }
+    return (
+      isOneOfLabels(name, scienceInquirySubjectLabels) ||
+      isOneOfLabels(name, integratedScienceSubjectLabels) ||
+      name === "과탐" ||
+      name === "과학탐구"
+    );
+  };
+
+  const inquiryScores = subjects
+    .filter((entry) => isMatch(entry.subject.trim()))
     .map((entry) => parseNumericScore(entry.score))
     .filter((value): value is number => value !== null);
 
-  if (inquiryScores.length > 0) {
-    return formatAverageValue(inquiryScores.reduce((sum, value) => sum + value, 0) / inquiryScores.length);
-  }
-
-  const legacyScores = ["사탐", "과탐"]
-    .map((legacyName) => parseNumericScore(subjects.find((entry) => entry.subject.trim() === legacyName)?.score?.trim() ?? ""))
-    .filter((value): value is number => value !== null);
-
-  if (legacyScores.length === 0) {
+  if (inquiryScores.length === 0) {
     return "";
   }
 
-  return formatAverageValue(legacyScores.reduce((sum, value) => sum + value, 0) / legacyScores.length);
+  return formatAverageValue(inquiryScores.reduce((sum, value) => sum + value, 0) / inquiryScores.length);
 
 }
 
@@ -688,6 +693,8 @@ export default function OnboardingGradesPage() {
 
     setSelectedPeriod,
 
+    setStudentRecordSelection,
+
     updateSubjectScore,
 
     updateOverallAverage,
@@ -730,8 +737,6 @@ export default function OnboardingGradesPage() {
   const [savedRecordsFilterTab, setSavedRecordsFilterTab] = useState<"all" | "schoolRecord" | "mockExam">("all");
   const didSyncFromQueryRef = useRef(false);
 
-  const [selectedStudentRecordType, setSelectedStudentRecordType] = useState("");
-
   const [extraInquiryPanelOpen, setExtraInquiryPanelOpen] = useState<ExtraInquiryPanel | null>("history");
 
   const [extraInquiryPick, setExtraInquiryPick] = useState("");
@@ -771,6 +776,11 @@ export default function OnboardingGradesPage() {
   const selectedYear = store.selectedYear;
 
   const selectedTerm = store.selectedTerm;
+  const selectedStudentSchoolYear = store.selectedStudentSchoolYear;
+  const selectedStudentSemester = store.selectedStudentSemester;
+  const selectedStudentRecordType = store.selectedStudentRecordType;
+  const studentUploadYear = schoolGradeFromSchoolYear(selectedStudentSchoolYear);
+  const studentUploadTerm = gradeTermForStudentSemester(selectedStudentSemester);
 
   const selectedSchoolTerm = useMemo(() => splitSchoolTerm(selectedTerm), [selectedTerm]);
 
@@ -949,12 +959,15 @@ export default function OnboardingGradesPage() {
     () =>
 
       store.uploads
-
-        .filter((file) => file.sourceTab === selectedTab && file.year === selectedYear && file.term === selectedTerm)
+        .filter((file) =>
+          selectedTab === "studentRecord"
+            ? uploadMatchesStudentSelection(file, selectedStudentSchoolYear, selectedStudentSemester, selectedStudentRecordType)
+            : file.sourceTab === selectedTab && file.year === selectedYear && file.term === selectedTerm
+        )
 
         .map((file) => file.name),
 
-    [selectedTab, selectedTerm, selectedYear, store.uploads]
+    [selectedStudentSchoolYear, selectedStudentRecordType, selectedStudentSemester, selectedTab, selectedTerm, selectedYear, store.uploads]
 
   );
 
@@ -980,9 +993,18 @@ export default function OnboardingGradesPage() {
 
 
 
-    const inquiryScore = getInquiryAverageScoreForAverage(activeScoreRecord.subjects);
+    if (selectedTab !== "schoolRecord") {
+      return;
+    }
 
-    const values = [...coreAverageSubjects.map((subjectName) => activeScoreRecord.subjects.find((entry) => entry.subject.trim() === subjectName)?.score ?? ""), inquiryScore]
+    const socialInquiryScore = getInquiryAverageScoreForAverage(activeScoreRecord.subjects, "social");
+    const scienceInquiryScore = getInquiryAverageScoreForAverage(activeScoreRecord.subjects, "science");
+
+    const values = [
+      ...coreAverageSubjects.map((subjectName) => activeScoreRecord.subjects.find((entry) => entry.subject.trim() === subjectName)?.score ?? ""),
+      socialInquiryScore,
+      scienceInquiryScore
+    ]
 
       .map(parseNumericScore)
 
@@ -990,7 +1012,12 @@ export default function OnboardingGradesPage() {
 
 
 
-    const nextAverage = values.length === 0 ? "" : formatAverageValue(values.reduce((sum, value) => sum + value, 0) / values.length);
+    const nextAverage = values.length === 0 ? "" : (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2);
+
+    const currentOverall = activeScoreRecord.overallAverage.trim();
+    if (currentOverall && currentOverall !== nextAverage) {
+      return;
+    }
 
     if (activeScoreRecord.overallAverage !== nextAverage) {
 
@@ -1444,26 +1471,54 @@ export default function OnboardingGradesPage() {
 
 
       <div className="mt-4 grid grid-cols-3 gap-3">
-
-        <TopFilterDropdown
-          ariaLabel="학년 구분"
-          value={selectedYear}
-          options={gradeYearOptions.map((item) => ({ value: item.value, label: item.label }))}
-          onChange={(nextValue) => {
-            const nextYear = nextValue as GradeYear;
-            if (selectedTab === "mockExam") {
-              const nextTermOptions = getGradeTermOptionsByTab("mockExam", nextYear);
-              const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm)
-                ? selectedTerm
-                : nextTermOptions[0].value;
+        {selectedTab !== "studentRecord" ? (
+          <TopFilterDropdown
+            ariaLabel="학년 구분"
+            value={selectedYear}
+            options={gradeYearOptions.map((item) => ({ value: item.value, label: item.label }))}
+            onChange={(nextValue) => {
+              const nextYear = nextValue as GradeYear;
+              if (selectedTab === "mockExam") {
+                const nextTermOptions = getGradeTermOptionsByTab("mockExam", nextYear);
+                const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm)
+                  ? selectedTerm
+                  : nextTermOptions[0].value;
+                setSelectedPeriod(nextYear, nextTerm);
+                return;
+              }
+              const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
+              const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
               setSelectedPeriod(nextYear, nextTerm);
-              return;
-            }
-            const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
-            const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
-            setSelectedPeriod(nextYear, nextTerm);
-          }}
-        />
+            }}
+          />
+        ) : (
+          <>
+            <TopFilterDropdown
+              ariaLabel="학년 구분"
+              value={String(selectedStudentSchoolYear)}
+              options={studentSchoolYearOptions.map((item) => ({ value: String(item.value), label: item.label }))}
+              onChange={(nextValue) =>
+                setStudentRecordSelection(Number(nextValue) as StudentRecordSchoolYear, selectedStudentSemester, selectedStudentRecordType)
+              }
+            />
+            <TopFilterDropdown
+              ariaLabel="학기 구분"
+              value={String(selectedStudentSemester)}
+              options={studentSemesterOptions.map((item) => ({ value: String(item.value), label: item.label }))}
+              onChange={(nextValue) =>
+                setStudentRecordSelection(selectedStudentSchoolYear, Number(nextValue) === 2 ? 2 : 1, selectedStudentRecordType)
+              }
+            />
+            <TopFilterDropdown
+              ariaLabel="기록유형"
+              value={selectedStudentRecordType}
+              options={studentRecordTypeOptions.map((item) => ({ value: item.value, label: item.label }))}
+              onChange={(nextValue) =>
+                setStudentRecordSelection(selectedStudentSchoolYear, selectedStudentSemester, nextValue as StudentRecordType)
+              }
+            />
+          </>
+        )}
 
         {selectedTab === "schoolRecord" ? (
 
@@ -1542,32 +1597,6 @@ export default function OnboardingGradesPage() {
 
         ) : null}
 
-        {selectedTab !== "schoolRecord" && selectedTab !== "mockExam" ? (
-          <>
-            <TopFilterDropdown
-              ariaLabel="학기 구분"
-              value={selectedTerm}
-              options={availableTermOptions.map((item) => ({ value: item.value, label: item.label.replace(" ", "·") }))}
-              onChange={(nextValue) => setSelectedPeriod(selectedYear, nextValue as GradeTerm)}
-            />
-            <TopFilterDropdown
-              ariaLabel="기록유형"
-              value={selectedStudentRecordType}
-              placeholder="기록유형"
-              options={[
-                { value: "", label: "선택 안함" },
-                { value: "행동특성", label: "행동특성" },
-                { value: "동아리", label: "동아리" },
-                { value: "봉사", label: "봉사" },
-                { value: "진로", label: "진로" },
-                { value: "수상", label: "수상" },
-                { value: "독서", label: "독서" }
-              ]}
-              onChange={(nextValue) => setSelectedStudentRecordType(nextValue)}
-            />
-          </>
-        ) : null}
-
       </div>
 
 
@@ -1590,7 +1619,15 @@ export default function OnboardingGradesPage() {
 
                 value={currentStudentRecord.title}
 
-                onChange={(event) => updateStudentRecordField(selectedYear, selectedTerm, "title", event.target.value)}
+                onChange={(event) =>
+                  updateStudentRecordField(
+                    selectedStudentSchoolYear,
+                    selectedStudentSemester,
+                    selectedStudentRecordType,
+                    "title",
+                    event.target.value
+                  )
+                }
 
               />
 
@@ -1608,7 +1645,15 @@ export default function OnboardingGradesPage() {
 
                 value={currentStudentRecord.description}
 
-                onChange={(event) => updateStudentRecordField(selectedYear, selectedTerm, "description", event.target.value)}
+                onChange={(event) =>
+                  updateStudentRecordField(
+                    selectedStudentSchoolYear,
+                    selectedStudentSemester,
+                    selectedStudentRecordType,
+                    "description",
+                    event.target.value
+                  )
+                }
 
               />
 
@@ -1908,7 +1953,10 @@ export default function OnboardingGradesPage() {
 
                 value={activeScoreRecord?.overallAverage ?? ""}
 
-                readOnly
+                onChange={(event) => {
+                  if (!activeScoreRecord) return;
+                  updateOverallAverage(selectedTab, selectedYear, selectedTerm, event.target.value);
+                }}
 
                 placeholder="자동 계산"
 
@@ -2096,11 +2144,21 @@ export default function OnboardingGradesPage() {
 
             onFilesSelected={(files) => {
 
-              registerUploads(files, selectedTab, selectedYear, selectedTerm);
+              registerUploads(
+                files,
+                selectedTab,
+                selectedTab === "studentRecord" ? studentUploadYear : selectedYear,
+                selectedTab === "studentRecord" ? studentUploadTerm : selectedTerm
+              );
 
             }}
             onFilesDeleted={(fileNames) => {
-              removeUploads(selectedTab, selectedYear, selectedTerm, fileNames);
+              removeUploads(
+                selectedTab,
+                selectedTab === "studentRecord" ? studentUploadYear : selectedYear,
+                selectedTab === "studentRecord" ? studentUploadTerm : selectedTerm,
+                fileNames
+              );
             }}
             onSave={async () => {
               await flushStoreToServer();

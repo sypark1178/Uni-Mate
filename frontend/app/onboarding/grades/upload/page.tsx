@@ -11,7 +11,7 @@ import {
   gradeTermForStudentSemester,
   gradeTermOptions,
   gradeYearOptions,
-  schoolGradeFromAcademicYear,
+  schoolGradeFromSchoolYear,
   scoreTabOptions,
   uploadMatchesStudentSelection,
   useScoreRecords
@@ -49,7 +49,7 @@ export default function GradeUploadPage() {
       : availableTermOptions.some((item) => item.value === candidateTerm)
         ? candidateTerm
         : fallbackTerm;
-  const yearForStudentUpload = schoolGradeFromAcademicYear(store.selectedStudentAcademicYear);
+  const yearForStudentUpload = schoolGradeFromSchoolYear(store.selectedStudentSchoolYear);
   const yearForUpload = tab === "studentRecord" ? yearForStudentUpload : year;
 
   const existingFiles = useMemo(() => {
@@ -58,7 +58,7 @@ export default function GradeUploadPage() {
         .filter((file) =>
           uploadMatchesStudentSelection(
             file,
-            store.selectedStudentAcademicYear,
+            store.selectedStudentSchoolYear,
             store.selectedStudentSemester,
             store.selectedStudentRecordType
           )
@@ -73,7 +73,7 @@ export default function GradeUploadPage() {
     tab,
     term,
     year,
-    store.selectedStudentAcademicYear,
+    store.selectedStudentSchoolYear,
     store.selectedStudentSemester,
     store.selectedStudentRecordType
   ]);
@@ -98,7 +98,7 @@ export default function GradeUploadPage() {
       <div className="mb-3 rounded-2xl bg-mist px-4 py-3 text-sm text-muted">
         {tab === "studentRecord" ? (
           <>
-            현재 대상: {scoreTabOptions.find((item) => item.key === tab)?.label} / {store.selectedStudentAcademicYear}학년도 /{" "}
+            현재 대상: {scoreTabOptions.find((item) => item.key === tab)?.label} / {store.selectedStudentSchoolYear}학년 /{" "}
             {store.selectedStudentSemester}학기 / {store.selectedStudentRecordType}
           </>
         ) : (

@@ -21,13 +21,11 @@ function tabClass(active: boolean) {
 }
 
 function SectionTabsFallback({ tabs }: SectionTabsProps) {
-  const pathname = usePathname();
   return (
     <div className="mb-4 flex gap-2 overflow-x-auto pr-2">
       {tabs.map((tab) => {
-        const active = pathname === tab.href;
         return (
-          <Link key={tab.href} href={tab.href} className={tabClass(active)} prefetch>
+          <Link key={tab.href} href={tab.href} className={tabClass(false)} prefetch>
             {tab.label}
           </Link>
         );

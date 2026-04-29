@@ -71,7 +71,7 @@ class OnboardingScoreStoreTests(unittest.TestCase):
         with self.store._connect() as connection:  # noqa: SLF001
             row = connection.execute(
                 """
-                SELECT sr.record_type, sr.subject_name, sr.content_body, sr.academic_year, sr.semester
+                SELECT sr.record_type, sr.subject_name, sr.content_body, sr.school_year, sr.semester
                 FROM TB_STUDENT_RECORD sr
                 JOIN TB_STUDENT_PROFILE sp ON sp.student_id = sr.student_id
                 JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
@@ -86,7 +86,7 @@ class OnboardingScoreStoreTests(unittest.TestCase):
         self.assertEqual(row["record_type"], "세특")
         self.assertIsNone(row["subject_name"])
         self.assertEqual(row["content_body"], "탐구 활동을 수행했습니다. 후속 연구 계획을 정리했습니다.")
-        self.assertEqual(row["academic_year"], 2026)
+        self.assertEqual(row["school_year"], 1)
         self.assertEqual(row["semester"], 1)
 
     def test_student_record_round_trip_preserves_record_id_and_subject_name(self) -> None:
@@ -117,10 +117,10 @@ class OnboardingScoreStoreTests(unittest.TestCase):
             connection.execute(
                 """
                 INSERT INTO TB_STUDENT_RECORD
-                    (record_id, student_id, record_type, subject_name, content_body, academic_year, semester)
+                    (record_id, student_id, record_type, subject_name, content_body, school_year, semester)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (1, sid, "세특", "국어, 수학", "국어 세특: 기존 내용.", 2026, 1),
+                (1, sid, "세특", "국어, 수학", "국어 세특: 기존 내용.", 1, 1),
             )
             connection.commit()
 
@@ -174,10 +174,10 @@ class OnboardingScoreStoreTests(unittest.TestCase):
             connection.execute(
                 """
                 INSERT INTO TB_STUDENT_RECORD
-                    (record_id, student_id, record_type, subject_name, content_body, academic_year, semester)
+                    (record_id, student_id, record_type, subject_name, content_body, school_year, semester)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (694, sid, "세특", "수학, 경제, 경영", "경제 세특: ESG경영 탐구.", 2026, 1),
+                (694, sid, "세특", "수학, 경제, 경영", "경제 세특: ESG경영 탐구.", 1, 1),
             )
             connection.commit()
 
@@ -223,7 +223,7 @@ class OnboardingScoreStoreTests(unittest.TestCase):
                 FROM TB_STUDENT_RECORD
                 WHERE student_id = ?
                   AND record_type = '세특'
-                  AND academic_year = 2026
+                  AND school_year = 1
                   AND semester = 1
                 """,
                 (sid,),
@@ -250,16 +250,16 @@ class OnboardingScoreStoreTests(unittest.TestCase):
             connection.execute(
                 """
                 INSERT INTO TB_STUDENT_RECORD
-                    (student_id, record_type, subject_name, content_body, academic_year, semester)
-                VALUES (?, '세특', '국어', 'A 사용자 세특', 2026, 1)
+                    (student_id, record_type, subject_name, content_body, school_year, semester)
+                VALUES (?, '세특', '국어', 'A 사용자 세특', 1, 1)
                 """,
                 (sid_a,),
             )
             connection.execute(
                 """
                 INSERT INTO TB_STUDENT_RECORD
-                    (student_id, record_type, subject_name, content_body, academic_year, semester)
-                VALUES (?, '세특', '국어', 'B 사용자 세특', 2030, 2)
+                    (student_id, record_type, subject_name, content_body, school_year, semester)
+                VALUES (?, '세특', '국어', 'B 사용자 세특', 3, 2)
                 """,
                 (sid_b,),
             )
@@ -274,7 +274,7 @@ class OnboardingScoreStoreTests(unittest.TestCase):
             a_row = connection.execute(
                 """
                 SELECT content_body FROM TB_STUDENT_RECORD
-                WHERE student_id = ? AND record_type = '세특' AND academic_year = 2026 AND semester = 1
+                WHERE student_id = ? AND record_type = '세특' AND school_year = 1 AND semester = 1
                 ORDER BY record_id ASC
                 LIMIT 1
                 """,
@@ -283,7 +283,7 @@ class OnboardingScoreStoreTests(unittest.TestCase):
             b_row = connection.execute(
                 """
                 SELECT content_body FROM TB_STUDENT_RECORD
-                WHERE student_id = ? AND record_type = '세특' AND academic_year = 2030 AND semester = 2
+                WHERE student_id = ? AND record_type = '세특' AND school_year = 3 AND semester = 2
                 ORDER BY record_id ASC
                 LIMIT 1
                 """,

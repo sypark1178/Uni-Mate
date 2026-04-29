@@ -399,10 +399,22 @@ def main(argv: list[str] | None = None) -> int:
 
         sr = sheet("STUDENT_RECORD")
         for _, r in sr.iterrows():
+            academic_year = _num(r.get("academic_year"), as_int=True)
+            if academic_year is None:
+                school_year = None
+            elif 1 <= academic_year <= 3:
+                school_year = academic_year
+            elif 2026 <= academic_year <= 2036:
+                school_year = max(1, min(3, academic_year - 2025))
+            elif 2020 <= academic_year <= 2022:
+                school_year = max(1, min(3, academic_year - 2019))
+            else:
+                school_year = None
+
             conn.execute(
                 """
                 INSERT INTO TB_STUDENT_RECORD
-                (record_id, student_id, record_type, subject_name, content_body, academic_year, semester)
+                (record_id, student_id, record_type, subject_name, content_body, school_year, semester)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -411,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
                     _text(r.get("record_type")),
                     _text(r.get("subject_name")),
                     _text(r.get("content_body")),
-                    _num(r.get("academic_year"), as_int=True),
+                    school_year,
                     _num(r.get("semester"), as_int=True),
                 ),
             )

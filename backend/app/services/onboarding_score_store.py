@@ -187,15 +187,46 @@ def _normalize_academic_subject(subject_name: Any) -> str | None:
     normalized = str(subject_name or "").strip().replace(" ", "")
     if not normalized:
         return None
+    social_keywords = (
+        "사탐",
+        "사회탐구",
+        "통합사회",
+        "생활과윤리",
+        "윤리와사상",
+        "한국지리",
+        "세계지리",
+        "동아시아사",
+        "세계사",
+        "경제",
+        "정치와법",
+        "사회문화",
+    )
+    science_keywords = (
+        "과탐",
+        "과학탐구",
+        "통합과학",
+        "물리학Ⅰ",
+        "물리학II",
+        "물리학Ⅱ",
+        "화학Ⅰ",
+        "화학II",
+        "화학Ⅱ",
+        "지구과학Ⅰ",
+        "지구과학II",
+        "지구과학Ⅱ",
+        "생명과학Ⅰ",
+        "생명과학II",
+        "생명과학Ⅱ",
+    )
     if "국어" in normalized:
         return "국어"
     if "영어" in normalized:
         return "영어"
     if "수학" in normalized:
         return "수학"
-    if "사탐" in normalized or "사회탐구" in normalized:
+    if any(keyword in normalized for keyword in social_keywords):
         return "사탐"
-    if "과탐" in normalized or "과학탐구" in normalized:
+    if any(keyword in normalized for keyword in science_keywords):
         return "과탐"
     return None
 
@@ -554,7 +585,7 @@ class OnboardingScoreStore:
                     record_type TEXT,
                     subject_name TEXT,
                     content_body TEXT,
-                    academic_year INTEGER,
+                    school_year INTEGER,
                     semester INTEGER,
                     FOREIGN KEY (student_id) REFERENCES TB_STUDENT_PROFILE(student_id)
                 );
@@ -655,6 +686,7 @@ class OnboardingScoreStore:
             self._ensure_student_profile_mapping_columns(connection)
             self._ensure_academic_columns(connection)
             self._ensure_csat_columns(connection)
+            self._migrate_student_record_academic_year_to_school_year(connection)
             self._ensure_metadata_field_map_columns(connection)
             self._ensure_metadata_aligned_columns(connection)
             self._ensure_subject_table(connection)
@@ -978,6 +1010,78 @@ class OnboardingScoreStore:
             connection.execute("ALTER TABLE TB_ACADEMIC_SCORE ADD COLUMN school_year INTEGER")
         if "exam_period" not in col_names:
             connection.execute("ALTER TABLE TB_ACADEMIC_SCORE ADD COLUMN exam_period TEXT")
+
+    def _migrate_student_record_academic_year_to_school_year(self, connection: sqlite3.Connection) -> None:
+        """TB_STUDENT_RECORD의 academic_year 컬럼을 school_year로 전환합니다.
+
+        - 마이그레이션: academic_year -> school_year 리네임(가능하면) 또는 컬럼 추가
+        - 데이터 전환: record_type != 'snapshot' 인 행에 대해 school_year를 TB_STUDENT_PROFILE.grade로 보정합니다.
+          TB_STUDENT_PROFILE.grade가 비어 있으면 academic_year 값을 학년으로 유도해(1~3 클램프) 유지합니다.
+        """
+        rows = connection.execute("PRAGMA table_info(TB_STUDENT_RECORD)").fetchall()
+        col_names = {str(r[1]) for r in rows}
+
+        # 1) 컬럼 전환
+        did_rename = False
+        if "school_year" not in col_names and "academic_year" in col_names:
+            try:
+                connection.execute("ALTER TABLE TB_STUDENT_RECORD RENAME COLUMN academic_year TO school_year")
+                did_rename = True
+            except sqlite3.OperationalError:
+                # 리네임이 불가한 SQLite 버전 대응: ADD 후 값만 유지
+                connection.execute("ALTER TABLE TB_STUDENT_RECORD ADD COLUMN school_year INTEGER")
+            col_names = {str(r[1]) for r in connection.execute("PRAGMA table_info(TB_STUDENT_RECORD)").fetchall()}
+
+        if "school_year" not in col_names:
+            return
+
+        # 2) 값 보정
+        # 주의: 기존 school_year 데이터(이미 1/2/3로 적재된 행)는 절대 덮어쓰지 않는다.
+        # 실제 보정은 "academic_year -> school_year" 전환이 필요한 경우에만 수행.
+        if did_rename:
+            connection.execute(
+                """
+                UPDATE TB_STUDENT_RECORD
+                SET school_year = max(
+                    1,
+                    min(
+                        3,
+                        CASE
+                            WHEN school_year BETWEEN 1 AND 3 THEN school_year
+                            WHEN school_year BETWEEN 2026 AND 2036 THEN school_year - 2025
+                            WHEN school_year BETWEEN 2020 AND 2022 THEN school_year - 2019
+                            ELSE school_year
+                        END
+                    )
+                )
+                WHERE record_type != 'snapshot'
+                  AND (school_year IS NULL OR school_year NOT BETWEEN 1 AND 3)
+                """
+            )
+            return
+
+        if "academic_year" not in col_names:
+            return
+
+        connection.execute(
+            """
+            UPDATE TB_STUDENT_RECORD
+            SET school_year = max(
+                1,
+                min(
+                    3,
+                    CASE
+                        WHEN academic_year BETWEEN 1 AND 3 THEN academic_year
+                        WHEN academic_year BETWEEN 2026 AND 2036 THEN academic_year - 2025
+                        WHEN academic_year BETWEEN 2020 AND 2022 THEN academic_year - 2019
+                        ELSE school_year
+                    END
+                )
+            )
+            WHERE record_type != 'snapshot'
+              AND (school_year IS NULL OR school_year NOT BETWEEN 1 AND 3)
+            """
+        )
 
     def _ensure_csat_columns(self, connection: sqlite3.Connection) -> None:
         """기존 DB의 TB_CSAT_SCORE에 탐구 컬럼이 없으면 추가합니다."""
@@ -1365,14 +1469,41 @@ class OnboardingScoreStore:
             )
 
         student_records = payload.get("studentRecords", [])
+        profile_grade_row = connection.execute(
+            "SELECT grade FROM TB_STUDENT_PROFILE WHERE student_id = ?",
+            (student_id,),
+        ).fetchone()
+        profile_school_year = self._safe_int(profile_grade_row["grade"]) if profile_grade_row is not None else None
+
         for record in student_records:
             record_id = self._safe_int(record.get("recordId") or record.get("record_id"))
             legacy_year, legacy_semester = self._infer_period(record)
-            academic_year = self._safe_int(record.get("academicYear") or record.get("academic_year"))
-            if academic_year is None:
-                academic_year = 2025 + legacy_year if legacy_year in (1, 2, 3) else 2026
+            # DB 저장용 학년(1~3)
+            school_year = self._safe_int(record.get("schoolYear") or record.get("school_year"))
+            if school_year is None:
+                academic_year = self._safe_int(record.get("academicYear") or record.get("academic_year"))
+                if academic_year is None:
+                    school_year = legacy_year if legacy_year in (1, 2, 3) else profile_school_year
+                else:
+                    if 1 <= academic_year <= 3:
+                        school_year = academic_year
+                    elif 2026 <= academic_year <= 2036:
+                        school_year = academic_year - 2025
+                    elif 2020 <= academic_year <= 2022:
+                        school_year = academic_year - 2019
+                    else:
+                        school_year = profile_school_year
+
+            if school_year not in (1, 2, 3):
+                school_year = profile_school_year
+            if school_year not in (1, 2, 3):
+                school_year = 1
+
             semester_no = self._safe_int(record.get("semester")) or legacy_semester or 1
             record_type = str(record.get("recordType") or record.get("record_type") or "세특").strip()
+            # 엑셀/과거 데이터에서 '자율활동'으로 들어온 경우를 프론트 슬롯의 '행동특성'에 맞춥니다.
+            if record_type == "자율활동":
+                record_type = "행동특성"
             if record_type not in {"세특", "동아리", "봉사", "진로", "수상", "독서", "행동특성"}:
                 record_type = "세특"
             content = str(record.get("description") if "description" in record else record.get("content_body") if "content_body" in record else "")
@@ -1397,13 +1528,13 @@ class OnboardingScoreStore:
                     FROM TB_STUDENT_RECORD
                     WHERE student_id = ?
                       AND record_type = ?
-                      AND academic_year = ?
+                      AND school_year = ?
                       AND semester = ?
                       AND NOT (record_type = 'snapshot' AND subject_name = 'onboarding-json')
                     ORDER BY record_id ASC
                     LIMIT 1
                     """,
-                    (student_id, record_type, academic_year, semester_no),
+                    (student_id, record_type, school_year, semester_no),
                 ).fetchone()
             if existing_record is None and not content.strip():
                 continue
@@ -1433,17 +1564,17 @@ class OnboardingScoreStore:
                     DELETE FROM TB_STUDENT_RECORD
                     WHERE student_id = ?
                       AND record_type = ?
-                      AND academic_year = ?
+                      AND school_year = ?
                       AND semester = ?
                       AND record_id != ?
                       AND NOT (record_type = 'snapshot' AND subject_name = 'onboarding-json')
                     """,
-                    (student_id, record_type, academic_year, semester_no, master_rid),
+                    (student_id, record_type, school_year, semester_no, master_rid),
                 )
             else:
                 cur = connection.execute(
                     """
-                    INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, academic_year, semester)
+                    INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, school_year, semester)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
@@ -1451,7 +1582,7 @@ class OnboardingScoreStore:
                         record_type,
                         subject_name,
                         content,
-                        academic_year,
+                        school_year,
                         semester_no,
                     ),
                 )
@@ -1461,12 +1592,12 @@ class OnboardingScoreStore:
                     DELETE FROM TB_STUDENT_RECORD
                     WHERE student_id = ?
                       AND record_type = ?
-                      AND academic_year = ?
+                      AND school_year = ?
                       AND semester = ?
                       AND record_id != ?
                       AND NOT (record_type = 'snapshot' AND subject_name = 'onboarding-json')
                     """,
-                    (student_id, record_type, academic_year, semester_no, master_rid),
+                    (student_id, record_type, school_year, semester_no, master_rid),
                 )
 
     def _resolve_goal_admission(self, connection: sqlite3.Connection, university: str, major: str, year: int) -> int:
@@ -1556,7 +1687,7 @@ class OnboardingScoreStore:
             )
             connection.execute(
                 """
-                INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, academic_year, semester)
+                INSERT INTO TB_STUDENT_RECORD (student_id, record_type, subject_name, content_body, school_year, semester)
                 VALUES (?, 'snapshot', 'onboarding-json', ?, NULL, NULL)
                 """,
                 (student_id, json.dumps(payload, ensure_ascii=False)),
@@ -1584,6 +1715,11 @@ class OnboardingScoreStore:
             if student_row is None:
                 return {"ok": True, "source": "sqlite", "data": None}
             student_id = int(student_row["student_id"])
+            profile_grade_row = connection.execute(
+                "SELECT grade FROM TB_STUDENT_PROFILE WHERE student_id = ?",
+                (student_id,),
+            ).fetchone()
+            profile_school_year = self._safe_int(profile_grade_row["grade"]) if profile_grade_row is not None else None
             settings_display = compute_settings_display_from_tables(connection, student_id)
             row = connection.execute(
                 """
@@ -1661,11 +1797,11 @@ class OnboardingScoreStore:
             ).fetchall()
             student_rows = connection.execute(
                 """
-                SELECT record_id, record_type, subject_name, content_body, academic_year, semester
+                SELECT record_id, record_type, subject_name, content_body, school_year, semester
                 FROM TB_STUDENT_RECORD
                 WHERE student_id = ?
                   AND NOT (record_type = 'snapshot' AND subject_name = 'onboarding-json')
-                ORDER BY academic_year ASC, semester ASC, record_id ASC
+                ORDER BY school_year ASC, semester ASC, record_id ASC
                 """,
                 (student_id,),
             ).fetchall()
@@ -1752,8 +1888,23 @@ class OnboardingScoreStore:
                 for item in existing_records:
                     if not isinstance(item, dict):
                         continue
+                    snapshot_school_year = self._safe_int(item.get("schoolYear") or item.get("school_year"))
+                    if snapshot_school_year not in (1, 2, 3):
+                        snapshot_academic_year = self._safe_int(item.get("academicYear") or item.get("academic_year") or 2026) or 2026
+                        snapshot_school_year = (
+                            snapshot_academic_year
+                            if snapshot_academic_year in (1, 2, 3)
+                            else (
+                                snapshot_academic_year - 2025
+                                if 2026 <= snapshot_academic_year <= 2036
+                                else (snapshot_academic_year - 2019 if 2020 <= snapshot_academic_year <= 2022 else None)
+                            )
+                        )
+                    school_year_for_files = profile_school_year if profile_school_year in (1, 2, 3) else snapshot_school_year
+                    if school_year_for_files not in (1, 2, 3):
+                        school_year_for_files = 1
                     key = (
-                        str(item.get("academicYear") or item.get("academic_year") or 2026),
+                        str(int(school_year_for_files)),
                         str(item.get("semester") or 1),
                         str(item.get("recordType") or item.get("record_type") or "세특"),
                     )
@@ -1762,11 +1913,13 @@ class OnboardingScoreStore:
 
             groups: dict[tuple[int, int, str], list[sqlite3.Row]] = {}
             for srow in student_rows:
-                academic_year = self._safe_int(srow["academic_year"]) or 2026
-                if academic_year < 2026 or academic_year > 2036:
-                    academic_year = 2026
+                school_year = self._safe_int(srow["school_year"]) or 1
+                # 학년(1~3) -> 프론트 호환용 달력 학년도(2026~)
+                academic_year = 2025 + school_year
                 semester_no = self._safe_int(srow["semester"]) or 1
                 record_type = str(srow["record_type"] or "세특").strip()
+                if record_type == "자율활동":
+                    record_type = "행동특성"
                 if record_type not in {"세특", "동아리", "봉사", "진로", "수상", "독서", "행동특성"}:
                     record_type = "세특"
                 gkey = (academic_year, semester_no, record_type)
@@ -1785,13 +1938,15 @@ class OnboardingScoreStore:
                 subj_parts = [str(r["subject_name"] or "").strip() for r in rows_sorted]
                 subj_parts = [s for s in subj_parts if s]
                 subject_display = " · ".join(subj_parts) if subj_parts else ""
-                key = (str(academic_year), semester, record_type)
+                key = (str(school_year), semester, record_type)
+                school_year = academic_year - 2025
                 next_student_records.append(
                     {
-                        "id": f"{academic_year}-{semester}-{record_type}",
+                        "id": f"{school_year}-{semester}-{record_type}",
                         "recordId": primary_id,
-                        "year": "1" if academic_year <= 2026 else "2" if academic_year == 2027 else "3",
+                        "year": "1" if school_year == 1 else "2" if school_year == 2 else "3",
                         "term": "2-final" if semester == "2" else "1-final",
+                        "schoolYear": school_year,
                         "academicYear": academic_year,
                         "semester": semester_no,
                         "recordType": record_type,

@@ -74,15 +74,13 @@ const itemClass = (active: boolean) =>
   }`;
 
 function BottomNavFallback() {
-  const pathname = usePathname();
   return (
     <nav className={navClass} aria-label="하단 메뉴">
       {items.map((item) => {
-        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
-          <Link key={item.href} href={item.href} className={itemClass(isActive)} prefetch>
+          <Link key={item.href} href={item.href} className={itemClass(false)} prefetch>
             <span className="flex h-6 w-6 items-center justify-center">
-              <NavIcon icon={item.icon} active={isActive} />
+              <NavIcon icon={item.icon} active={false} />
             </span>
             <span>{item.label}</span>
           </Link>

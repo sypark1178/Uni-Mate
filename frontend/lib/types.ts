@@ -53,18 +53,7 @@ export type GradeTerm =
   | "mock-csat-6"
   | "mock-csat-9";
 
-export type StudentRecordAcademicYear =
-  | 2026
-  | 2027
-  | 2028
-  | 2029
-  | 2030
-  | 2031
-  | 2032
-  | 2033
-  | 2034
-  | 2035
-  | 2036;
+export type StudentRecordSchoolYear = 1 | 2 | 3;
 
 export type StudentRecordSemester = 1 | 2;
 
@@ -95,8 +84,8 @@ export type UploadedRecordFile = {
   year: GradeYear;
   term: GradeTerm;
   uploadedAt: string;
-  /** 생기부 탭: TB_STUDENT_RECORD (학년도·학기·기록유형)과 동일 키로 필터 */
-  studentAcademicYear?: StudentRecordAcademicYear;
+  /** 생기부 탭: TB_STUDENT_RECORD (학년·학기·기록유형)과 동일 키로 필터 */
+  studentSchoolYear?: StudentRecordSchoolYear;
   studentSemester?: StudentRecordSemester;
   studentRecordType?: StudentRecordType;
 };
@@ -106,7 +95,7 @@ export type StudentRecordPeriod = {
   recordId?: number;
   year: GradeYear;
   term: GradeTerm;
-  academicYear: StudentRecordAcademicYear;
+  schoolYear: StudentRecordSchoolYear;
   semester: StudentRecordSemester;
   recordType: StudentRecordType;
   subjectName?: string;
@@ -124,7 +113,7 @@ export type ScoreMemoryStore = {
   activeTab: ScoreTabKey;
   selectedYear: GradeYear;
   selectedTerm: GradeTerm;
-  selectedStudentAcademicYear: StudentRecordAcademicYear;
+  selectedStudentSchoolYear: StudentRecordSchoolYear;
   selectedStudentSemester: StudentRecordSemester;
   selectedStudentRecordType: StudentRecordType;
   updatedAt: string;
