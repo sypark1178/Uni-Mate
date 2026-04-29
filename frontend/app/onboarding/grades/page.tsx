@@ -17,7 +17,6 @@ import { onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
 import {
   canonicalStudentRecordTerm,
   getGradeTermOptionsByTab,
-  getMockExamSeriesCaption,
   getScoreRecord,
   gradeTermForStudentSemester,
   gradeTermOptions,
@@ -446,6 +445,24 @@ function inferMockMonth(term: GradeTerm): string {
 
 }
 
+type MockExamType = "csat" | "nat";
+
+function inferMockExamType(term: GradeTerm): MockExamType {
+  return String(term).startsWith("mock-csat-") ? "csat" : "nat";
+}
+
+function getGradeOptionValues(currentScore: string): string[] {
+  const trimmed = currentScore.trim();
+  if (!trimmed) {
+    return [...subjectGradeOptions];
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 9) {
+    return [...subjectGradeOptions];
+  }
+  return (subjectGradeOptions as readonly string[]).includes(trimmed) ? [...subjectGradeOptions] : [trimmed, ...subjectGradeOptions];
+}
+
 
 
 function buildFixedSubjectSlots(subjects: SubjectScoreEntry[]) {
@@ -472,9 +489,9 @@ function buildFixedSubjectSlots(subjects: SubjectScoreEntry[]) {
 
 
 
-function SelectChevron({ variant = "inset" }: { variant?: "inset" | "flush" }) {
+function SelectChevron({ variant = "inset" }: { variant?: "inset" | "flush" | "tight" }) {
 
-  const positionClass = variant === "flush" ? "right-0" : "right-4";
+  const positionClass = variant === "flush" ? "right-0" : variant === "tight" ? "right-2" : "right-4";
 
   return (
 
@@ -498,24 +515,61 @@ function SelectChevron({ variant = "inset" }: { variant?: "inset" | "flush" }) {
 type TopFilterDropdownOption = {
   value: string;
   label: string;
+  triggerLabel?: string;
 };
+
+function MockExamTypeToggle({
+  value,
+  options,
+  onChange
+}: {
+  value: MockExamType;
+  options: ReadonlyArray<{ value: MockExamType; caption: string }>;
+  onChange: (value: MockExamType) => void;
+}) {
+  const currentIndex = options.findIndex((option) => option.value === value);
+  const resolvedIndex = currentIndex >= 0 ? currentIndex : 0;
+  const currentOption = options[resolvedIndex];
+  const nextOption = options[(resolvedIndex + 1) % options.length] ?? currentOption;
+
+  return (
+    <button
+      type="button"
+      aria-label="시험구분 변경"
+      onClick={() => onChange(nextOption.value)}
+      className="flex h-11 w-full items-center justify-center rounded-full border border-[#93B9F5] bg-[#EAF4FF] px-3 text-center text-[12px] font-semibold tracking-[-0.01em] text-[#2A69C7] transition-colors hover:bg-[#DDEEFF]"
+    >
+      {currentOption.caption}
+    </button>
+  );
+}
 
 function TopFilterDropdown({
   ariaLabel,
   value,
   options,
   onChange,
-  placeholder
+  placeholder,
+  labelClassName,
+  multiline = false
 }: {
   ariaLabel: string;
   value: string;
   options: TopFilterDropdownOption[];
   onChange: (value: string) => void;
   placeholder?: string;
+  labelClassName?: string;
+  multiline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const selectedLabel = value ? options.find((item) => item.value === value)?.label ?? options[0]?.label ?? "" : placeholder ?? "";
+  const selectedOption = value ? options.find((item) => item.value === value) : undefined;
+  const selectedLabel = value
+    ? selectedOption?.triggerLabel ?? selectedOption?.label ?? options[0]?.triggerLabel ?? options[0]?.label ?? ""
+    : placeholder ?? "";
+  const resolvedLabelClassName = multiline
+    ? `block whitespace-pre-line leading-[1.1] tracking-[-0.02em] ${labelClassName ?? ""}`.trim()
+    : labelClassName;
 
   useEffect(() => {
     if (!open) {
@@ -550,11 +604,13 @@ function TopFilterDropdown({
           aria-label={ariaLabel}
           aria-expanded={open}
           onClick={() => setOpen((prev) => !prev)}
-          className={`relative z-0 w-full whitespace-nowrap rounded-full border bg-white px-3 py-3 pr-10 text-left text-sm font-normal text-muted ${open ? "border-navy" : "border-line"}`}
+          className={`relative z-0 w-full rounded-full border bg-white text-left font-normal text-muted ${
+            open ? "border-navy" : "border-line"
+          } ${multiline ? "h-11 px-1.5 py-1.5 pr-5 text-[8px]" : "whitespace-nowrap px-3 py-3 pr-10 text-sm"}`}
         >
-          {selectedLabel}
+          <span className={resolvedLabelClassName}>{selectedLabel}</span>
         </button>
-        <SelectChevron />
+        <SelectChevron variant={multiline ? "tight" : "inset"} />
       </div>
       {open ? (
         <div className="absolute left-0 right-0 top-full z-30 mt-0 overflow-hidden rounded-none border border-[#707070] bg-white shadow-none">
@@ -568,11 +624,13 @@ function TopFilterDropdown({
                   onChange(option.value);
                   setOpen(false);
                 }}
-                className={`flex h-10 w-full items-center px-4 text-left text-sm font-normal leading-none ${
+                className={`flex w-full items-center text-left font-normal ${
+                  multiline ? "h-11 px-2 text-[9px]" : "h-10 px-4 text-sm leading-none"
+                } ${
                   selected ? "bg-[#2A69C7] text-white" : "bg-white text-muted hover:bg-mist"
                 }`}
               >
-                {option.label}
+                <span className={resolvedLabelClassName}>{option.label}</span>
               </button>
             );
           })}
@@ -641,7 +699,7 @@ function ModalInquirySubjectGroupBlock({
               ) : (
                 <>
                   <option value="">등급</option>
-                  {subjectGradeOptions.map((grade) => (
+                  {getGradeOptionValues(entry.score).map((grade) => (
                     <option key={grade} value={grade}>
                       {grade}
                     </option>
@@ -785,18 +843,32 @@ export default function OnboardingGradesPage() {
   const selectedSchoolTerm = useMemo(() => splitSchoolTerm(selectedTerm), [selectedTerm]);
 
   const availableTermOptions = useMemo(() => getGradeTermOptionsByTab(selectedTab, selectedYear), [selectedTab, selectedYear]);
-
-  const mockExamSeriesCaption = useMemo(() => {
-
+  const selectedMockExamType = useMemo<MockExamType>(() => inferMockExamType(selectedTerm), [selectedTerm]);
+  const mockExamTypeOptions = useMemo(
+    () => [
+      { value: "nat", label: "전국연합학력평가\n(학력평가)", triggerLabel: "전국연합\n학력평가", caption: "학력평가" },
+      { value: "csat", label: "대학수학능력시험\n(모의고사)", triggerLabel: "대학수학\n능력시험", caption: "대학능력시험" }
+    ] as const,
+    []
+  );
+  const mockYearOptionsByType = useMemo(() => {
     if (selectedTab !== "mockExam") {
-
-      return "";
-
+      return [];
     }
-
-    return getMockExamSeriesCaption(selectedYear, selectedTerm);
-
-  }, [selectedTab, selectedTerm, selectedYear]);
+    return gradeYearOptions.filter((item) =>
+      getGradeTermOptionsByTab("mockExam", item.value).some((termItem) =>
+        selectedMockExamType === "csat" ? termItem.value.startsWith("mock-csat-") : termItem.value.startsWith("mock-nat-")
+      )
+    );
+  }, [selectedMockExamType, selectedTab]);
+  const mockMonthOptions = useMemo(() => {
+    if (selectedTab !== "mockExam") {
+      return [];
+    }
+    return getGradeTermOptionsByTab("mockExam", selectedYear).filter((item) =>
+      selectedMockExamType === "csat" ? item.value.startsWith("mock-csat-") : item.value.startsWith("mock-nat-")
+    );
+  }, [selectedMockExamType, selectedTab, selectedYear]);
 
   const filteredSavedGradeSummaries = useMemo(() => {
     return savedGradeSummaries.filter((summary) => {
@@ -809,6 +881,12 @@ export default function OnboardingGradesPage() {
       return true;
     });
   }, [savedGradeSummaries, savedRecordsFilterYear, savedRecordsFilterTab]);
+
+  const latestSavedMockRecord = useMemo(() => {
+    const savedRecords = store.mockExams.filter((record) => hasSavedGradeContent(record));
+    return savedRecords[savedRecords.length - 1] ?? null;
+  }, [store.mockExams]);
+  const didAutoSelectMockRecordRef = useRef(false);
 
   useEffect(() => {
     const nextSummaries = [
@@ -887,6 +965,49 @@ export default function OnboardingGradesPage() {
     }
 
   }, [availableTermOptions, selectedTab, selectedTerm, selectedYear, setSelectedPeriod]);
+
+  useEffect(() => {
+    if (selectedTab !== "mockExam") {
+      didAutoSelectMockRecordRef.current = false;
+      return;
+    }
+    if (didAutoSelectMockRecordRef.current) {
+      return;
+    }
+    didAutoSelectMockRecordRef.current = true;
+    if (!latestSavedMockRecord) {
+      return;
+    }
+    const selectedSavedMockRecord = store.mockExams.find(
+      (record) => record.year === selectedYear && record.term === selectedTerm && hasSavedGradeContent(record)
+    );
+    if (selectedSavedMockRecord) {
+      return;
+    }
+    if (selectedYear !== latestSavedMockRecord.year || selectedTerm !== latestSavedMockRecord.term) {
+      setSelectedPeriod(latestSavedMockRecord.year, latestSavedMockRecord.term);
+    }
+  }, [latestSavedMockRecord, selectedTab, selectedTerm, selectedYear, setSelectedPeriod, store.mockExams]);
+
+  useEffect(() => {
+    if (selectedTab !== "mockExam") {
+      return;
+    }
+    const availableYears = mockYearOptionsByType.map((item) => item.value);
+    const resolvedYear = availableYears.includes(selectedYear) ? selectedYear : availableYears[0];
+    if (!resolvedYear) {
+      return;
+    }
+    const terms = getGradeTermOptionsByTab("mockExam", resolvedYear).filter((item) =>
+      selectedMockExamType === "csat" ? item.value.startsWith("mock-csat-") : item.value.startsWith("mock-nat-")
+    );
+    if (terms.length === 0) {
+      return;
+    }
+    if (resolvedYear !== selectedYear || !terms.some((item) => item.value === selectedTerm)) {
+      setSelectedPeriod(resolvedYear, terms[0].value);
+    }
+  }, [mockYearOptionsByType, selectedMockExamType, selectedTab, selectedTerm, selectedYear, setSelectedPeriod]);
 
 
 
@@ -1470,28 +1591,48 @@ export default function OnboardingGradesPage() {
 
 
 
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        {selectedTab !== "studentRecord" ? (
-          <TopFilterDropdown
-            ariaLabel="학년 구분"
-            value={selectedYear}
-            options={gradeYearOptions.map((item) => ({ value: item.value, label: item.label }))}
-            onChange={(nextValue) => {
-              const nextYear = nextValue as GradeYear;
-              if (selectedTab === "mockExam") {
-                const nextTermOptions = getGradeTermOptionsByTab("mockExam", nextYear);
-                const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm)
-                  ? selectedTerm
-                  : nextTermOptions[0].value;
+      <div className="mt-4 grid grid-cols-3 items-start gap-3">
+        {selectedTab === "schoolRecord" ? (
+          <>
+            <TopFilterDropdown
+              ariaLabel="학년 구분"
+              value={selectedYear}
+              options={gradeYearOptions.map((item) => ({ value: item.value, label: item.label }))}
+              onChange={(nextValue) => {
+                const nextYear = nextValue as GradeYear;
+                const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
+                const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
                 setSelectedPeriod(nextYear, nextTerm);
-                return;
-              }
-              const nextTermOptions = getGradeTermOptionsByTab(selectedTab, nextYear);
-              const nextTerm = nextTermOptions.some((item) => item.value === selectedTerm) ? selectedTerm : nextTermOptions[0].value;
-              setSelectedPeriod(nextYear, nextTerm);
-            }}
-          />
-        ) : (
+              }}
+            />
+            <TopFilterDropdown
+              ariaLabel="학기 구분"
+              value={selectedSchoolTerm.semester}
+              options={[
+                { value: "1", label: "1학기" },
+                { value: "2", label: "2학기" }
+              ]}
+              onChange={(nextValue) => {
+                const semester = nextValue === "2" ? "2" : "1";
+                setSelectedPeriod(selectedYear, buildSchoolTerm(semester, selectedSchoolTerm.exam));
+              }}
+            />
+            <TopFilterDropdown
+              ariaLabel="중간 또는 기말"
+              value={selectedSchoolTerm.exam}
+              options={[
+                { value: "midterm", label: "중간" },
+                { value: "final", label: "기말" }
+              ]}
+              onChange={(nextValue) => {
+                const exam = nextValue === "final" ? "final" : "midterm";
+                setSelectedPeriod(selectedYear, buildSchoolTerm(selectedSchoolTerm.semester, exam));
+              }}
+            />
+          </>
+        ) : null}
+
+        {selectedTab === "studentRecord" ? (
           <>
             <TopFilterDropdown
               ariaLabel="학년 구분"
@@ -1518,85 +1659,63 @@ export default function OnboardingGradesPage() {
               }
             />
           </>
-        )}
-
-        {selectedTab === "schoolRecord" ? (
-
-          <>
-
-            <TopFilterDropdown
-              ariaLabel="학기 구분"
-              value={selectedSchoolTerm.semester}
-              options={[
-                { value: "1", label: "1학기" },
-                { value: "2", label: "2학기" }
-              ]}
-              onChange={(nextValue) => {
-                const semester = nextValue === "2" ? "2" : "1";
-                setSelectedPeriod(selectedYear, buildSchoolTerm(semester, selectedSchoolTerm.exam));
-              }}
-            />
-
-            <TopFilterDropdown
-              ariaLabel="중간 또는 기말"
-              value={selectedSchoolTerm.exam}
-              options={[
-                { value: "midterm", label: "중간" },
-                { value: "final", label: "기말" }
-              ]}
-              onChange={(nextValue) => {
-                const exam = nextValue === "final" ? "final" : "midterm";
-                setSelectedPeriod(selectedYear, buildSchoolTerm(selectedSchoolTerm.semester, exam));
-              }}
-            />
-
-          </>
-
         ) : null}
 
         {selectedTab === "mockExam" ? (
-
           <>
-
-            <div className="min-w-0 self-start">
-
-              <TopFilterDropdown
-                ariaLabel="모의고사 시기 선택"
-                value={selectedTerm}
-                options={availableTermOptions.map((item) => ({
-                  value: item.value,
-                  label:
-                    item.value === "mock-nat-11" && selectedYear === "3" ? "수능(11월)" : `${inferMockMonth(item.value)}월`
-                }))}
-                onChange={(nextValue) => setSelectedPeriod(selectedYear, nextValue as GradeTerm)}
-              />
-
-            </div>
-
-            {mockExamSeriesCaption ? (
-
-              <div className="flex min-w-0 items-center justify-center self-center">
-
-                <p
-
-                  className="rounded-full border border-navy/25 bg-[#F4F7FB] px-2.5 py-1.5 text-center text-[11px] font-semibold leading-snug text-navy"
-
-                  title={availableTermOptions.find((item) => item.value === selectedTerm)?.label}
-
-                >
-
-                  {mockExamSeriesCaption}
-
-                </p>
-
-              </div>
-
-            ) : null}
-
+            <MockExamTypeToggle
+              value={selectedMockExamType}
+              options={mockExamTypeOptions.map((item) => ({
+                value: item.value,
+                caption: item.caption
+              }))}
+              onChange={(nextType) => {
+                const yearOptions = gradeYearOptions.filter((item) =>
+                  getGradeTermOptionsByTab("mockExam", item.value).some((termItem) =>
+                    nextType === "csat" ? termItem.value.startsWith("mock-csat-") : termItem.value.startsWith("mock-nat-")
+                  )
+                );
+                const nextYear = yearOptions.some((item) => item.value === selectedYear) ? selectedYear : yearOptions[0]?.value;
+                if (!nextYear) {
+                  return;
+                }
+                const monthOptions = getGradeTermOptionsByTab("mockExam", nextYear).filter((item) =>
+                  nextType === "csat" ? item.value.startsWith("mock-csat-") : item.value.startsWith("mock-nat-")
+                );
+                if (monthOptions.length === 0) {
+                  return;
+                }
+                const nextTerm = monthOptions.some((item) => item.value === selectedTerm) ? selectedTerm : monthOptions[0].value;
+                setSelectedPeriod(nextYear, nextTerm);
+              }}
+            />
+            <TopFilterDropdown
+              ariaLabel="모의고사 학년 선택"
+              value={selectedYear}
+              options={mockYearOptionsByType.map((item) => ({ value: item.value, label: item.label }))}
+              onChange={(nextValue) => {
+                const nextYear = nextValue as GradeYear;
+                const monthOptions = getGradeTermOptionsByTab("mockExam", nextYear).filter((item) =>
+                  selectedMockExamType === "csat" ? item.value.startsWith("mock-csat-") : item.value.startsWith("mock-nat-")
+                );
+                if (monthOptions.length === 0) {
+                  return;
+                }
+                const nextTerm = monthOptions.some((item) => item.value === selectedTerm) ? selectedTerm : monthOptions[0].value;
+                setSelectedPeriod(nextYear, nextTerm);
+              }}
+            />
+            <TopFilterDropdown
+              ariaLabel="모의고사 월 선택"
+              value={selectedTerm}
+              options={mockMonthOptions.map((item) => ({
+                value: item.value,
+                label: item.value === "mock-nat-11" && selectedYear === "3" ? "수능(11월)" : `${inferMockMonth(item.value)}월`
+              }))}
+              onChange={(nextValue) => setSelectedPeriod(selectedYear, nextValue as GradeTerm)}
+            />
           </>
-
         ) : null}
-
       </div>
 
 
@@ -1702,7 +1821,7 @@ export default function OnboardingGradesPage() {
                       <>
                         <option value="">등급 선택</option>
 
-                        {subjectGradeOptions.map((grade) => (
+                        {getGradeOptionValues(entry?.score ?? "").map((grade) => (
 
                           <option key={grade} value={grade}>
 
@@ -1761,7 +1880,7 @@ export default function OnboardingGradesPage() {
                       <>
                         <option value="">등급 선택</option>
 
-                        {subjectGradeOptions.map((grade) => (
+                        {getGradeOptionValues(entry?.score ?? "").map((grade) => (
 
                           <option key={grade} value={grade}>
 
@@ -1864,7 +1983,7 @@ export default function OnboardingGradesPage() {
                       <>
                         <option value="">등급 선택</option>
 
-                        {subjectGradeOptions.map((grade) => (
+                        {getGradeOptionValues(entry.score).map((grade) => (
 
                           <option key={grade} value={grade}>
 
@@ -1917,7 +2036,7 @@ export default function OnboardingGradesPage() {
                       <>
                         <option value="">등급 선택</option>
 
-                        {subjectGradeOptions.map((grade) => (
+                        {getGradeOptionValues(entry.score).map((grade) => (
 
                           <option key={grade} value={grade}>
 

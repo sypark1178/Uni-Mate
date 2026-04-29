@@ -3,7 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from backend.app.services.onboarding_score_store import OnboardingScoreStore, build_payload_summary
+from backend.app.services.onboarding_score_store import (
+    MOCK_EXAM_TYPE_CSAT,
+    OnboardingScoreStore,
+    build_payload_summary,
+)
 
 
 class OnboardingScoreStoreTests(unittest.TestCase):
@@ -403,6 +407,171 @@ class OnboardingScoreStoreTests(unittest.TestCase):
 
         loaded = self.store.get_snapshot(user_key="mock-latest")
         self.assertEqual(loaded["settingsDisplay"]["latestMockFourGradeAverage"], "2.50")
+
+    def test_save_snapshot_maps_mock_exam_term_fields_into_csat_columns(self) -> None:
+        payload = json.loads(json.dumps(self.payload))
+        payload["mockExams"] = [
+            {
+                "id": "3-mock-csat-9",
+                "year": "3",
+                "term": "mock-csat-9",
+                "subjects": [
+                    {"subject": "국어", "score": "2.7", "isCustom": False},
+                    {"subject": "수학", "score": "3", "isCustom": False},
+                    {"subject": "영어", "score": "4", "isCustom": False},
+                    {"subject": "사회탐구", "score": "4.5", "isCustom": False},
+                ],
+                "overallAverage": "3.55",
+                "updatedAt": "2026-04-29T00:00:00Z",
+            }
+        ]
+
+        self.store.save_snapshot(payload, user_key="mock-save-map")
+
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                """
+                SELECT school_year, exam_type, exam_month, korean_grade, math_grade, english_grade, social_grade, total_score
+                FROM TB_CSAT_SCORE cs
+                JOIN TB_STUDENT_PROFILE sp ON sp.student_id = cs.student_id
+                JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
+                WHERE a.login_id = ?
+                LIMIT 1
+                """,
+                ("mock-save-map",),
+            ).fetchone()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["school_year"], 3)
+        self.assertEqual(row["exam_type"], "대학수학능력시험")
+        self.assertEqual(row["exam_month"], 9)
+        self.assertAlmostEqual(float(row["korean_grade"]), 2.7, places=2)
+        self.assertAlmostEqual(float(row["math_grade"]), 3.0, places=2)
+        self.assertAlmostEqual(float(row["english_grade"]), 4.0, places=2)
+        self.assertAlmostEqual(float(row["social_grade"]), 4.5, places=2)
+        self.assertAlmostEqual(float(row["total_score"]), 3.55, places=2)
+
+    def test_get_snapshot_rebuilds_mock_exams_from_csat_columns(self) -> None:
+        self.store.save_snapshot(self.payload, user_key="mock-load-map")
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                """
+                SELECT sp.student_id
+                FROM TB_STUDENT_PROFILE sp
+                JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
+                WHERE a.login_id = ?
+                """,
+                ("mock-load-map",),
+            ).fetchone()
+            self.assertIsNotNone(row)
+            sid = int(row["student_id"])
+            connection.execute("DELETE FROM TB_CSAT_SCORE WHERE student_id = ?", (sid,))
+            connection.executemany(
+                """
+                INSERT INTO TB_CSAT_SCORE
+                    (student_id, school_year, exam_year, exam_type, exam_month, inquiry_type, korean_grade, math_grade, english_grade, social_grade, science_grade, language2_grade, total_score)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (sid, 2, 2026, "전국연합학력평가 사회탐구", 3, "사회탐구", 2, 3, 4, 5, None, None, 3.5),
+                    (sid, 3, 2026, "대학수학능력시험 사회탐구", 9, "사회탐구", 1.5, 2.5, 3.5, 4.5, None, None, 3.0),
+                ],
+            )
+            connection.commit()
+
+        loaded = self.store.get_snapshot(user_key="mock-load-map")
+        exams = loaded["data"]["mockExams"]
+        self.assertEqual([(exam["year"], exam["term"]) for exam in exams], [("2", "mock-nat-3"), ("3", "mock-csat-9")])
+        self.assertEqual(exams[0]["subjects"][0]["score"], "2")
+        self.assertEqual(exams[0]["subjects"][1]["score"], "3")
+        self.assertEqual(exams[0]["subjects"][2]["score"], "4")
+        self.assertEqual(exams[0]["subjects"][3]["score"], "5")
+        self.assertEqual(exams[1]["subjects"][0]["score"], "1.5")
+        self.assertEqual(exams[1]["subjects"][1]["score"], "2.5")
+        self.assertEqual(exams[1]["subjects"][2]["score"], "3.5")
+        self.assertEqual(exams[1]["subjects"][3]["score"], "4.5")
+
+    def test_get_snapshot_prefers_more_complete_backup_mock_rows_and_realigns_selection(self) -> None:
+        payload = json.loads(json.dumps(self.payload))
+        payload["activeTab"] = "mockExam"
+        payload["selectedYear"] = "1"
+        payload["selectedTerm"] = "mock-nat-3"
+        self.store.save_snapshot(payload, user_key="mock-backup-source")
+
+        with self.store._connect() as connection:  # noqa: SLF001
+            row = connection.execute(
+                """
+                SELECT sp.student_id
+                FROM TB_STUDENT_PROFILE sp
+                JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
+                WHERE a.login_id = ?
+                """,
+                ("mock-backup-source",),
+            ).fetchone()
+            self.assertIsNotNone(row)
+            sid = int(row["student_id"])
+
+            connection.execute("DELETE FROM TB_CSAT_SCORE WHERE student_id = ?", (sid,))
+            connection.execute(
+                """
+                INSERT INTO TB_CSAT_SCORE
+                    (student_id, school_year, exam_year, exam_type, exam_month, inquiry_type, korean_grade, math_grade, english_grade, social_grade)
+                VALUES (?, NULL, 2026, ?, NULL, '사회탐구', 4, 4, 4, 4)
+                """,
+                (sid, f"{MOCK_EXAM_TYPE_CSAT} 사회탐구"),
+            )
+
+            connection.execute("DROP TABLE IF EXISTS TB_CSAT_SCORE_BAK_20260427")
+            connection.execute("CREATE TABLE TB_CSAT_SCORE_BAK_20260427 AS SELECT * FROM TB_CSAT_SCORE WHERE 0")
+            connection.execute(
+                """
+                INSERT INTO TB_CSAT_SCORE_BAK_20260427
+                    (student_id, school_year, exam_year, exam_type, exam_month, inquiry_type, korean_grade, math_grade, english_grade, social_grade)
+                VALUES (?, 3, 2026, ?, 9, '사회탐구', 4, 4, 4, 4)
+                """,
+                (sid, MOCK_EXAM_TYPE_CSAT),
+            )
+            connection.commit()
+
+        loaded = self.store.get_snapshot(user_key="mock-backup-source")
+        exams = loaded["data"]["mockExams"]
+
+        self.assertEqual([(exam["year"], exam["term"]) for exam in exams], [("3", "mock-csat-9")])
+        self.assertEqual(loaded["data"]["selectedYear"], "3")
+        self.assertEqual(loaded["data"]["selectedTerm"], "mock-csat-9")
+        self.assertEqual(loaded["settingsDisplay"]["latestMockFourGradeAverage"], "4.00")
+
+    def test_save_snapshot_clears_mock_exam_rows_when_payload_mock_exams_is_empty(self) -> None:
+        payload = json.loads(json.dumps(self.payload))
+        payload["mockExams"] = [
+            {
+                "id": "1-mock-nat-3",
+                "year": "1",
+                "term": "mock-nat-3",
+                "subjects": [{"subject": "국어", "score": "3", "isCustom": False}],
+                "overallAverage": "3.00",
+                "updatedAt": "2026-04-29T00:00:00Z",
+            }
+        ]
+        self.store.save_snapshot(payload, user_key="mock-clear")
+
+        payload["mockExams"] = []
+        self.store.save_snapshot(payload, user_key="mock-clear")
+
+        with self.store._connect() as connection:  # noqa: SLF001
+            count_row = connection.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM TB_CSAT_SCORE cs
+                JOIN TB_STUDENT_PROFILE sp ON sp.student_id = cs.student_id
+                JOIN TB_USER_AUTH a ON a.user_id = sp.user_id
+                WHERE a.login_id = ?
+                """,
+                ("mock-clear",),
+            ).fetchone()
+
+        self.assertIsNotNone(count_row)
+        self.assertEqual(int(count_row["cnt"]), 0)
 
     def test_save_snapshot_overwrites_same_user_key(self) -> None:
         self.store.save_snapshot(self.payload, user_key="student-1")
