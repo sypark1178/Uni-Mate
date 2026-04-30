@@ -34,6 +34,7 @@ def build_payload_summary(payload: dict[str, Any]) -> dict[str, int]:
 
 MOCK_SCORE_SOURCE_TABLES = (
     "TB_CSAT_SCORE",
+    "TB_CSAT_SCORE_BAK_20260429_RECREATE",
     "TB_CSAT_SCORE_BAK_20260427_RECREATE",
     "TB_CSAT_SCORE_BAK_20260427_CSV",
     "TB_CSAT_SCORE_BAK_20260427",
