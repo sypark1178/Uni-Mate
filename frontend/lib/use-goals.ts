@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { GoalChoice } from "@/lib/types";
 import { defaultGoals, goalStorageKey } from "@/lib/planning";
 import { normalizeUniversityName } from "@/lib/admission-data";
-import { clearDraftGoals, getDraftGoals, isDraftDirty, setDraftGoals } from "@/lib/draft-store";
+import { clearDraftGoals, getDraftGoals, isDraftGoalsDirty, setDraftGoals } from "@/lib/draft-store";
 import { getCurrentMember } from "@/lib/member-store";
 import { readJsonResponse } from "@/lib/read-json-response";
 
@@ -124,9 +124,10 @@ export function useGoals(seedGoals?: GoalChoice[] | null) {
       const draftRaw = getDraftGoals<GoalChoice[]>();
       const draftGoals =
         Array.isArray(draftRaw) && draftRaw.length > 0 ? normalizeStoredGoals(draftRaw.slice(0, 3)) : null;
+      const hasEditedGoalsInSession = isDraftGoalsDirty();
       let resolved: GoalChoice[];
       if (memberKey) {
-        if (isDraftDirty() && draftGoals) {
+        if (hasEditedGoalsInSession && draftGoals) {
           resolved = draftGoals;
         } else {
           if (serverGoals) {

@@ -1,20 +1,20 @@
-## TB_ACADEMIC_SCORE  rows=3200
+## TB_ACADEMIC_SCORE  rows=3462
 columns: score_id, student_id, school_year, semester, exam_period, subject_name, subject_cat, raw_score, grade, credit_hours, z_score
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_ACADEMIC_SCORE.csv
 
-## TB_ADMISSION_CUTOFF  rows=620
+## TB_ADMISSION_CUTOFF  rows=642
 columns: cutoff_id, admission_id, cutoff_year, cutoff_50, cutoff_70, cutoff_80, competition_ratio, avg_grade, three_grade_possible, record_importance, grade_policy_note, support_notes, source_doc, best_grade, worst_grade
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_ADMISSION_CUTOFF.csv
 
-## TB_ADMISSION_TYPE  rows=620
+## TB_ADMISSION_TYPE  rows=642
 columns: admission_id, dept_id, admission_year, admission_type, admission_method, recruit_cnt, doc_ratio, interview_ratio, csat_required, univ_admission_year, admission_name, evaluation_focus, key_traits, source_doc
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_ADMISSION_TYPE.csv
 
-## TB_AI_ANALYSIS  rows=100
+## TB_AI_ANALYSIS  rows=103
 columns: analysis_id, student_id, analysis_type, pass_prob, score_gap, model_version, summary_text, analyzed_at, analysis_summary, record_strength, fit_keyword_count, analysis_version, created_at
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_AI_ANALYSIS.csv
 
-## TB_APPLICATION_LIST  rows=300
+## TB_APPLICATION_LIST  rows=309
 columns: application_id, student_id, admission_id, strategy_type, status, priority_no, note, priority_rank, analysis_note
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_APPLICATION_LIST.csv
 
@@ -22,19 +22,43 @@ csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_APPLICATION_LIST.csv
 columns: session_id, student_id, consultant_id, session_date, status, session_type, note, memo
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_CONSULTING_SESSION.csv
 
-## TB_CSAT_SCORE  rows=100
-columns: csat_id, student_id, exam_year, exam_type, korean_grade, math_grade, english_grade, science_grade, total_score, percentile, inquiry_type, social_grade, school_year, exam_month
+## TB_CSAT_SCORE  rows=106
+columns: csat_id, student_id, school_year, exam_year, exam_type, exam_month, inquiry_type, korean_grade, math_grade, english_grade, korean_history, social_grade, life_and_ethics, ethics_and_thought, korean_geography, world_geography, east_asian_history, world_history, economics, politics_and_law, society_and_culture, science_grade, physics_1, chemistry_1, earth_science_1, life_science_1, physics_2, chemistry_2, earth_science_2, life_science_2, language2_grade, german_1, french_1, spanish_1, chinese_1, japanese_1, russian_1, vietnamese_1, arabic_1, classical_chinese_1, total_score, percentile
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_CSAT_SCORE.csv
 
-## TB_DEPARTMENT  rows=620
+## TB_CSAT_SCORE_BAK_20260427  rows=100
+columns: csat_id, student_id, exam_year, exam_type, korean_grade, math_grade, english_grade, science_grade, total_score, percentile, inquiry_type, social_grade, school_year, exam_month
+csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_CSAT_SCORE_BAK_20260427.csv
+
+## TB_CSAT_SCORE_BAK_20260427_CSV  rows=100
+columns: csat_id, student_id, school_year, exam_year, exam_type, exam_month, inquiry_type, korean_grade, math_grade, english_grade, social_grade, life_and_ethics, ethics_and_thought, korean_geography, world_geography, east_asian_history, world_history, economics, politics_and_law, society_and_culture, science_grade, physics_1, chemistry_1, earth_science_1, life_science_1, physics_2, chemistry_2, earth_science_2, life_science_2, language2_grade, german_1, french_1, spanish_1, chinese_1, japanese_1, russian_1, vietnamese_1, arabic_1, classical_chinese_1, total_score, percentile
+csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_CSAT_SCORE_BAK_20260427_CSV.csv
+
+## TB_CSAT_SCORE_BAK_20260427_RECREATE  rows=100
+columns: csat_id, student_id, school_year, exam_year, exam_type, exam_month, inquiry_type, korean_grade, math_grade, english_grade, social_grade, life_and_ethics, ethics_and_thought, korean_geography, world_geography, east_asian_history, world_history, economics, politics_and_law, society_and_culture, science_grade, physics_1, chemistry_1, earth_science_1, life_science_1, physics_2, chemistry_2, earth_science_2, life_science_2, language2_grade, german_1, french_1, spanish_1, chinese_1, japanese_1, russian_1, vietnamese_1, arabic_1, classical_chinese_1, total_score, percentile
+csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_CSAT_SCORE_BAK_20260427_RECREATE.csv
+
+## TB_CSAT_SCORE_BAK_20260427_SCHEMA  rows=100
+columns: csat_id, student_id, school_year, exam_year, exam_type, exam_month, inquiry_type, korean_grade, math_grade, english_grade, social_grade, life_and_ethics, ethics_and_thought, korean_geography, world_geography, east_asian_history, world_history, economics, politics_and_law, society_and_culture, science_grade, physics_1, chemistry_1, earth_science_1, life_science_1, physics_2, chemistry_2, earth_science_2, life_science_2, language2_grade, german_1, french_1, spanish_1, chinese_1, japanese_1, russian_1, vietnamese_1, arabic_1, classical_chinese_1, total_score, percentile
+csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_CSAT_SCORE_BAK_20260427_SCHEMA.csv
+
+## TB_CSAT_SCORE_BAK_20260429_RECREATE  rows=100
+columns: csat_id, student_id, school_year, exam_year, exam_type, exam_month, inquiry_type, korean_grade, math_grade, english_grade, korean_history, social_grade, life_and_ethics, ethics_and_thought, korean_geography, world_geography, east_asian_history, world_history, economics, politics_and_law, society_and_culture, science_grade, physics_1, chemistry_1, earth_science_1, life_science_1, physics_2, chemistry_2, earth_science_2, life_science_2, language2_grade, german_1, french_1, spanish_1, chinese_1, japanese_1, russian_1, vietnamese_1, arabic_1, classical_chinese_1, total_score, percentile
+csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_CSAT_SCORE_BAK_20260429_RECREATE.csv
+
+## TB_DEPARTMENT  rows=642
 columns: dept_id, univ_id, dept_name, college_name, major_field, dept_type
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_DEPARTMENT.csv
 
-## TB_METADATA_FIELD_MAP  rows=137
+## TB_GUEST_TEMP_SESSION  rows=0
+columns: temp_id, contact_type, contact_id, payload_json, created_at, expires_at
+csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_GUEST_TEMP_SESSION.csv
+
+## TB_METADATA_FIELD_MAP  rows=172
 columns: meta_id, table_name_en, table_name_ko, field_name_en, field_name_ko, table_description, field_description, source_file, created_at, updated_at
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_METADATA_FIELD_MAP.csv
 
-## TB_NOTIFICATION  rows=200
+## TB_NOTIFICATION  rows=203
 columns: noti_id, user_id, noti_type, title, body, is_read, created_at, message_body
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_NOTIFICATION.csv
 
@@ -42,22 +66,26 @@ csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_NOTIFICATION.csv
 columns: rec_id, student_id, admission_id, rec_score, strategy_type, reason_text, created_at, priority_rank, reason_summary
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_RECOMMENDATION.csv
 
-## TB_STUDENT_PROFILE  rows=100
+## TB_STUDENT_PROFILE  rows=103
 columns: student_id, user_id, student_name, school_name, grade, target_major, admission_year, created_at, region, district, track, grade_label, current_grade, residence_city_county, residence_town, source_row_no, school_sido, school_sigungu, school_address, residence_sido, residence_sigungu, residence_dong, student_grade, academic_avg_grade, record_total_score, attendance_score, record_grade_band
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_STUDENT_PROFILE.csv
 
-## TB_STUDENT_RECORD  rows=700
-columns: record_id, student_id, record_type, subject_name, content_body, academic_year, semester
+## TB_STUDENT_RECORD  rows=810
+columns: record_id, student_id, record_type, subject_name, content_body, school_year, semester
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_STUDENT_RECORD.csv
 
-## TB_UNIVERSITY  rows=17
+## TB_SUBJECT  rows=30
+columns: subject_id, subject_name_en, subject_name_ko, is_required, inquiry_type, credit_hours
+csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_SUBJECT.csv
+
+## TB_UNIVERSITY  rows=39
 columns: univ_id, univ_code, univ_name, univ_type, region, homepage_url, created_at
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_UNIVERSITY.csv
 
-## TB_USER  rows=100
+## TB_USER  rows=104
 columns: user_id, email, password_hash, user_type, phone, profile_image_url, created_at, last_login_at, is_active, user_alias
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_USER.csv
 
-## TB_USER_AUTH  rows=100
+## TB_USER_AUTH  rows=104
 columns: auth_id, user_id, login_id, password_hash, role, created_at, updated_at
 csv: C:\project\Uni-Mate\backend\data\full_table_export\TB_USER_AUTH.csv

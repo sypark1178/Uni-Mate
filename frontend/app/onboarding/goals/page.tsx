@@ -47,6 +47,7 @@ export default function OnboardingGoalsPage() {
   const hasSeededGoals = seededGoals.length > 0;
   const { goals, updateGoals, hydrated, flushGoalsToServer } = useGoals(seededGoals);
   const [activeMode, setActiveMode] = useState<(typeof onboardingTabs)[number]>(onboardingTabs[1]);
+  const [hasUserEditedGoals, setHasUserEditedGoals] = useState(false);
   const [goalRanks, setGoalRanks] = useState<GoalRankState[]>(
     hasSeededGoals
       ? normalizeGoalRanks(seededGoals)
@@ -59,10 +60,10 @@ export default function OnboardingGoalsPage() {
   );
 
   useEffect(() => {
-    if (!hasSeededGoals && hydrated && goals.length > 0) {
+    if (!hasSeededGoals && !hasUserEditedGoals && hydrated && goals.length > 0) {
       setGoalRanks(normalizeGoalRanks(goals));
     }
-  }, [goals, hasSeededGoals, hydrated]);
+  }, [goals, hasSeededGoals, hasUserEditedGoals, hydrated]);
 
   const helperText = useMemo(() => {
     if (activeMode === onboardingTabs[0]) {
@@ -75,6 +76,7 @@ export default function OnboardingGoalsPage() {
   }, [activeMode]);
 
   const handleUniversityChange = (index: number, university: string) => {
+    setHasUserEditedGoals(true);
     const next = goalRanks.map((item, itemIndex) =>
       itemIndex === index
         ? {
@@ -90,6 +92,7 @@ export default function OnboardingGoalsPage() {
   };
 
   const handleMajorChange = (index: number, major: string) => {
+    setHasUserEditedGoals(true);
     const next = goalRanks.map((item, itemIndex) => (itemIndex === index ? { ...item, major } : item));
     setGoalRanks(next);
     updateGoals(next);

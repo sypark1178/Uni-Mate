@@ -83,18 +83,235 @@
 ### TB_CSAT_SCORE
   - csat_id: INTEGER PK
   - student_id: INTEGER NOT NULL
+  - school_year: INTEGER
   - exam_year: INTEGER
   - exam_type: TEXT
+  - exam_month: INTEGER
+  - inquiry_type: TEXT
   - korean_grade: INTEGER
   - math_grade: INTEGER
   - english_grade: INTEGER
+  - korean_history: INTEGER
+  - social_grade: INTEGER
+  - life_and_ethics: INTEGER
+  - ethics_and_thought: INTEGER
+  - korean_geography: INTEGER
+  - world_geography: INTEGER
+  - east_asian_history: INTEGER
+  - world_history: INTEGER
+  - economics: INTEGER
+  - politics_and_law: INTEGER
+  - society_and_culture: INTEGER
   - science_grade: INTEGER
+  - physics_1: INTEGER
+  - chemistry_1: INTEGER
+  - earth_science_1: INTEGER
+  - life_science_1: INTEGER
+  - physics_2: INTEGER
+  - chemistry_2: INTEGER
+  - earth_science_2: INTEGER
+  - life_science_2: INTEGER
+  - language2_grade: INTEGER
+  - german_1: INTEGER
+  - french_1: INTEGER
+  - spanish_1: INTEGER
+  - chinese_1: INTEGER
+  - japanese_1: INTEGER
+  - russian_1: INTEGER
+  - vietnamese_1: INTEGER
+  - arabic_1: INTEGER
+  - classical_chinese_1: INTEGER
+  - total_score: REAL
+  - percentile: REAL
+
+### TB_CSAT_SCORE_BAK_20260427
+  - csat_id: INT
+  - student_id: INT
+  - exam_year: INT
+  - exam_type: TEXT
+  - korean_grade: INT
+  - math_grade: INT
+  - english_grade: INT
+  - science_grade: INT
   - total_score: REAL
   - percentile: REAL
   - inquiry_type: TEXT
-  - social_grade: INTEGER
-  - school_year: INTEGER
-  - exam_month: INTEGER
+  - social_grade: INT
+  - school_year: INT
+  - exam_month: INT
+
+### TB_CSAT_SCORE_BAK_20260427_CSV
+  - csat_id: INT
+  - student_id: INT
+  - school_year: INT
+  - exam_year: INT
+  - exam_type: TEXT
+  - exam_month: INT
+  - inquiry_type: TEXT
+  - korean_grade: INT
+  - math_grade: INT
+  - english_grade: INT
+  - social_grade: INT
+  - life_and_ethics: INT
+  - ethics_and_thought: INT
+  - korean_geography: INT
+  - world_geography: INT
+  - east_asian_history: INT
+  - world_history: INT
+  - economics: INT
+  - politics_and_law: INT
+  - society_and_culture: INT
+  - science_grade: INT
+  - physics_1: INT
+  - chemistry_1: INT
+  - earth_science_1: INT
+  - life_science_1: INT
+  - physics_2: INT
+  - chemistry_2: INT
+  - earth_science_2: INT
+  - life_science_2: INT
+  - language2_grade: INT
+  - german_1: INT
+  - french_1: INT
+  - spanish_1: INT
+  - chinese_1: INT
+  - japanese_1: INT
+  - russian_1: INT
+  - vietnamese_1: INT
+  - arabic_1: INT
+  - classical_chinese_1: INT
+  - total_score: REAL
+  - percentile: REAL
+
+### TB_CSAT_SCORE_BAK_20260427_RECREATE
+  - csat_id: INT
+  - student_id: INT
+  - school_year: INT
+  - exam_year: INT
+  - exam_type: TEXT
+  - exam_month: INT
+  - inquiry_type: TEXT
+  - korean_grade: INT
+  - math_grade: INT
+  - english_grade: INT
+  - social_grade: INT
+  - life_and_ethics: INT
+  - ethics_and_thought: INT
+  - korean_geography: INT
+  - world_geography: INT
+  - east_asian_history: INT
+  - world_history: INT
+  - economics: INT
+  - politics_and_law: INT
+  - society_and_culture: INT
+  - science_grade: INT
+  - physics_1: INT
+  - chemistry_1: INT
+  - earth_science_1: INT
+  - life_science_1: INT
+  - physics_2: INT
+  - chemistry_2: INT
+  - earth_science_2: INT
+  - life_science_2: INT
+  - language2_grade: INT
+  - german_1: INT
+  - french_1: INT
+  - spanish_1: INT
+  - chinese_1: INT
+  - japanese_1: INT
+  - russian_1: INT
+  - vietnamese_1: INT
+  - arabic_1: INT
+  - classical_chinese_1: INT
+  - total_score: REAL
+  - percentile: REAL
+
+### TB_CSAT_SCORE_BAK_20260427_SCHEMA
+  - csat_id: INT
+  - student_id: INT
+  - school_year: INT
+  - exam_year: INT
+  - exam_type: TEXT
+  - exam_month: INT
+  - inquiry_type: TEXT
+  - korean_grade: INT
+  - math_grade: INT
+  - english_grade: INT
+  - social_grade: INT
+  - life_and_ethics: INT
+  - ethics_and_thought: INT
+  - korean_geography: INT
+  - world_geography: INT
+  - east_asian_history: INT
+  - world_history: INT
+  - economics: INT
+  - politics_and_law: INT
+  - society_and_culture: INT
+  - science_grade: INT
+  - physics_1: INT
+  - chemistry_1: INT
+  - earth_science_1: INT
+  - life_science_1: INT
+  - physics_2: INT
+  - chemistry_2: INT
+  - earth_science_2: INT
+  - life_science_2: INT
+  - language2_grade: INT
+  - german_1: INT
+  - french_1: INT
+  - spanish_1: INT
+  - chinese_1: INT
+  - japanese_1: INT
+  - russian_1: INT
+  - vietnamese_1: INT
+  - arabic_1: INT
+  - classical_chinese_1: INT
+  - total_score: REAL
+  - percentile: REAL
+
+### TB_CSAT_SCORE_BAK_20260429_RECREATE
+  - csat_id: INT
+  - student_id: INT
+  - school_year: INT
+  - exam_year: INT
+  - exam_type: TEXT
+  - exam_month: INT
+  - inquiry_type: TEXT
+  - korean_grade: REAL
+  - math_grade: REAL
+  - english_grade: REAL
+  - korean_history: REAL
+  - social_grade: REAL
+  - life_and_ethics: REAL
+  - ethics_and_thought: REAL
+  - korean_geography: REAL
+  - world_geography: REAL
+  - east_asian_history: REAL
+  - world_history: REAL
+  - economics: REAL
+  - politics_and_law: REAL
+  - society_and_culture: REAL
+  - science_grade: REAL
+  - physics_1: REAL
+  - chemistry_1: REAL
+  - earth_science_1: REAL
+  - life_science_1: REAL
+  - physics_2: REAL
+  - chemistry_2: REAL
+  - earth_science_2: REAL
+  - life_science_2: REAL
+  - language2_grade: REAL
+  - german_1: REAL
+  - french_1: REAL
+  - spanish_1: REAL
+  - chinese_1: REAL
+  - japanese_1: REAL
+  - russian_1: REAL
+  - vietnamese_1: REAL
+  - arabic_1: REAL
+  - classical_chinese_1: REAL
+  - total_score: REAL
+  - percentile: REAL
 
 ### TB_DEPARTMENT
   - dept_id: INTEGER PK
@@ -103,6 +320,14 @@
   - college_name: TEXT
   - major_field: TEXT
   - dept_type: TEXT
+
+### TB_GUEST_TEMP_SESSION
+  - temp_id: INTEGER PK
+  - contact_type: TEXT NOT NULL
+  - contact_id: TEXT NOT NULL
+  - payload_json: TEXT NOT NULL
+  - created_at: TEXT NOT NULL
+  - expires_at: TEXT NOT NULL
 
 ### TB_METADATA_FIELD_MAP
   - meta_id: INTEGER PK
@@ -172,8 +397,16 @@
   - record_type: TEXT
   - subject_name: TEXT
   - content_body: TEXT
-  - academic_year: INTEGER
+  - school_year: INTEGER
   - semester: INTEGER
+
+### TB_SUBJECT
+  - subject_id: INTEGER PK
+  - subject_name_en: TEXT NOT NULL
+  - subject_name_ko: TEXT NOT NULL
+  - is_required: TEXT NOT NULL
+  - inquiry_type: TEXT NOT NULL
+  - credit_hours: INTEGER NOT NULL
 
 ### TB_UNIVERSITY
   - univ_id: INTEGER PK

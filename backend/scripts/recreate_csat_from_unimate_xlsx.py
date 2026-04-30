@@ -51,17 +51,13 @@ def load_rows(xlsx_path: Path, sheet_name: str, column_names: list[str]) -> list
         raise SystemExit("CSAT_SCORE에는 csat_id/student_id 컬럼이 필요합니다.")
 
     rows: list[tuple] = []
-    blank_streak = 0
-    for r in ws.iter_rows(min_row=header_row_no + 1, values_only=True):
+    max_col = max(header_to_idx.values()) + 1
+    for r in ws.iter_rows(min_row=header_row_no + 1, max_col=max_col, values_only=True):
         if r is None:
             continue
         has_required_values = id_col < len(r) and student_col < len(r) and r[id_col] is not None and r[student_col] is not None
         if not has_required_values:
-            blank_streak += 1
-            if rows and blank_streak >= 50:
-                break
             continue
-        blank_streak = 0
         tup = tuple(_nv(r[header_to_idx[c]]) if c in header_to_idx and header_to_idx[c] < len(r) else None for c in column_names)
         rows.append(tup)
     wb.close()

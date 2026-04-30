@@ -141,7 +141,6 @@ def _derive_mock_subject_group_averages(row: sqlite3.Row) -> dict[str, float | N
     )
     science = _avg_non_null(
         [
-            _row_value(row, "science_grade"),
             _row_value(row, "physics_1"),
             _row_value(row, "chemistry_1"),
             _row_value(row, "earth_science_1"),

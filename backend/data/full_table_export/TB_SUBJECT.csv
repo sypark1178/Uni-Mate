@@ -1,0 +1,31 @@
+﻿subject_id,subject_name_en,subject_name_ko,is_required,inquiry_type,credit_hours
+1,korean_language,국어,필수,기본,4
+2,english,영어,필수,기본,4
+3,mathematics,수학,필수,기본,4
+4,life_and_ethics,생활과윤리,선택,사회탐구,3
+5,ethics_and_thought,윤리와 사상,선택,사회탐구,3
+6,korean_geography,한국지리,선택,사회탐구,3
+7,world_geography,세계지리,선택,사회탐구,3
+8,east_asian_history,동아시아사,선택,사회탐구,3
+9,world_history,세계사,선택,사회탐구,3
+10,economics,경제,선택,사회탐구,3
+11,politics_and_law,정치와법,선택,사회탐구,3
+12,society_and_culture,사회문화,선택,사회탐구,3
+13,physics_1,물리학 I,선택,과학탐구,3
+14,chemistry_1,화학 I,선택,과학탐구,3
+15,earth_science_1,지구과학 I,선택,과학탐구,3
+16,life_science_1,생명과학 I,선택,과학탐구,3
+17,physics_2,물리학II,선택,과학탐구,3
+18,chemistry_2,화학II,선택,과학탐구,3
+19,earth_science_2,지구과학II,선택,과학탐구,3
+20,life_science_2,생명과학 II,선택,과학탐구,3
+21,german_1,독일어 I,선택,제2외국어,3
+22,french_1,프랑스어 I,선택,제2외국어,3
+23,spanish_1,스페인어 I,선택,제2외국어,3
+24,chinese_1,중국어 I,선택,제2외국어,3
+25,japanese_1,일본어 I,선택,제2외국어,3
+26,russian_1,러시아어 I,선택,제2외국어,3
+27,vietnamese_1,베트남어 I,선택,제2외국어,3
+28,arabic_1,아랍어 I,선택,제2외국어,3
+29,classical_chinese_1,한문 I,선택,제2외국어,3
+30,korean_history,한국사,필수,기본,4

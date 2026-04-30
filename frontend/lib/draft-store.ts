@@ -6,6 +6,7 @@ const draftProfileKey = "uni-mate-draft-profile";
 const draftGoalsKey = "uni-mate-draft-goals";
 const draftScoresKey = "uni-mate-draft-scores";
 const draftDirtyKey = "uni-mate-draft-dirty";
+const draftGoalsDirtyKey = "uni-mate-draft-goals-dirty";
 
 function getDraftUserKey() {
   return getCurrentMember()?.userId?.trim() || "local-user";
@@ -52,6 +53,7 @@ export function getDraftGoals<T>() {
 
 export function setDraftGoals(value: unknown) {
   writeJson(draftGoalsKey, value);
+  markDraftGoalsDirty(true);
   markDraftDirty(true);
 }
 
@@ -59,6 +61,7 @@ export function clearDraftGoals() {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(scopedKey(draftGoalsKey));
   window.sessionStorage.removeItem(draftGoalsKey);
+  markDraftGoalsDirty(false);
 }
 
 export function getDraftScores<T>() {
@@ -92,6 +95,19 @@ export function markDraftDirty(isDirty: boolean) {
 export function isDraftDirty() {
   if (typeof window === "undefined") return false;
   return window.sessionStorage.getItem(scopedKey(draftDirtyKey)) === "1";
+}
+
+export function markDraftGoalsDirty(isDirty: boolean) {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(scopedKey(draftGoalsDirtyKey), isDirty ? "1" : "0");
+  if (!isDirty) {
+    window.sessionStorage.removeItem(draftGoalsDirtyKey);
+  }
+}
+
+export function isDraftGoalsDirty() {
+  if (typeof window === "undefined") return false;
+  return window.sessionStorage.getItem(scopedKey(draftGoalsDirtyKey)) === "1";
 }
 
 /** 프로필·목표 초안만 비움. 성적(2단계) 세션 초안은 건드리지 않음 — 입력 성적 보존. */
