@@ -14,7 +14,7 @@ if str(WORKSPACE_ROOT) not in sys.path:
 from backend.app.services.onboarding_score_store import DEFAULT_DB_PATH, OnboardingScoreStore
 
 DEFAULT_EXCEL_PATH = Path(
-    r"E:\sangyun\200 AI기획(20251223~20260514)\프로젝트진행\70 프로세스 설계\가상데이터 생성\Uni-Mate Meta 20260424.xlsx"
+    r"E:\sangyun\200 AI기획(20251223~20260514)\프로젝트진행\70 프로세스 설계\Uni-Mate Meta 20260429.xlsx"
 )
 
 
@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
         raise RuntimeError("메타정보 파일은 최소 4개 컬럼(테이블영문/한글, 필드영문/한글)이 필요합니다.")
 
     # 컬럼명 인코딩 차이를 피하기 위해 위치 기반: 0~3 필수, 4~5는 테이블/필드 설명(선택)
-    tuples: list[tuple[str, str, str, str, str, str, str]] = []
+    rows_by_key: dict[tuple[str, str], tuple[str, str, str, str, str, str, str]] = {}
     for row in frame.itertuples(index=False):
         table_name_en = normalize_text(row[0])
         table_name_ko = normalize_text(row[1])
@@ -52,17 +52,16 @@ def main(argv: list[str] | None = None) -> int:
         field_description = normalize_text(row[5]) if frame.shape[1] > 5 else ""
         if not table_name_en or not field_name_en:
             continue
-        tuples.append(
-            (
-                table_name_en,
-                table_name_ko,
-                field_name_en,
-                field_name_ko,
-                table_description,
-                field_description,
-                str(excel_path),
-            )
+        rows_by_key[(table_name_en, field_name_en)] = (
+            table_name_en,
+            table_name_ko,
+            field_name_en,
+            field_name_ko,
+            table_description,
+            field_description,
+            str(excel_path),
         )
+    tuples = list(rows_by_key.values())
 
     with sqlite3.connect(db_path) as connection:
         cursor = connection.cursor()

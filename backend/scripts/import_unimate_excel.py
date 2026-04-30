@@ -82,7 +82,7 @@ def _build_ext_to_uid_from_db(conn: sqlite3.Connection, users: pd.DataFrame) -> 
     ext_to_uid: dict[str, int] = {}
     for _, r in users.iterrows():
         ext = str(r["user_id"]).strip()
-        row = conn.execute("SELECT user_id FROM TB_USER_AUTH WHERE login_id = ?", (ext,)).fetchone()
+        row = conn.execute("SELECT user_id FROM TB_USER_AUTH WHERE lower(login_id) = lower(?)", (ext,)).fetchone()
         if row is not None:
             ext_to_uid[ext] = int(row["user_id"])
             continue
@@ -99,14 +99,36 @@ def _build_ext_to_uid_from_db(conn: sqlite3.Connection, users: pd.DataFrame) -> 
                 (email,),
             ).fetchone()
             if row is not None:
-                ext_to_uid[ext] = int(row["user_id"])
+                user_id = int(row["user_id"])
+                ext_to_uid[ext] = user_id
+                conn.execute(
+                    """
+                    INSERT INTO TB_USER_AUTH (user_id, login_id, password_hash, role)
+                    VALUES (?, ?, NULL, '사용자')
+                    ON CONFLICT(user_id) DO UPDATE
+                    SET login_id = excluded.login_id,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (user_id, ext),
+                )
                 continue
             row = conn.execute(
                 "SELECT user_id FROM TB_USER WHERE lower(email) = lower(?) LIMIT 1",
                 (email,),
             ).fetchone()
             if row is not None:
-                ext_to_uid[ext] = int(row["user_id"])
+                user_id = int(row["user_id"])
+                ext_to_uid[ext] = user_id
+                conn.execute(
+                    """
+                    INSERT INTO TB_USER_AUTH (user_id, login_id, password_hash, role)
+                    VALUES (?, ?, NULL, '사용자')
+                    ON CONFLICT(user_id) DO UPDATE
+                    SET login_id = excluded.login_id,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (user_id, ext),
+                )
                 continue
         raise RuntimeError(
             f"USER 시트의 user_id={ext!r} 에 해당하는 TB_USER_AUTH.login_id 또는 이메일이 DB에 없습니다. "
@@ -123,6 +145,11 @@ def main(argv: list[str] | None = None) -> int:
         "--replace-users",
         action="store_true",
         help="TB_USER / TB_USER_AUTH 까지 삭제 후 USER 시트로 재생성 (기본은 유지)",
+    )
+    parser.add_argument(
+        "--preserve-csat-application-meta",
+        action="store_true",
+        help="TB_CSAT_SCORE, TB_APPLICATION_LIST, TB_METADATA_FIELD_MAP은 보존하고 나머지 엑셀 테이블만 교체",
     )
     args = parser.parse_args(argv)
 
@@ -145,16 +172,16 @@ def main(argv: list[str] | None = None) -> int:
     xl = pd.ExcelFile(excel_path, engine="openpyxl")
 
     def sheet(name: str) -> pd.DataFrame:
-        return pd.read_excel(xl, sheet_name=name)
+        # 20260429 통합 엑셀은 1행 한글명, 2행 영문 컬럼명 구조입니다.
+        frame = pd.read_excel(xl, sheet_name=name, header=1)
+        return frame.dropna(how="all")
 
     delete_tables = [
         "TB_NOTIFICATION",
         "TB_CONSULTING_SESSION",
         "TB_RECOMMENDATION",
         "TB_AI_ANALYSIS",
-        "TB_APPLICATION_LIST",
         "TB_STUDENT_RECORD",
-        "TB_CSAT_SCORE",
         "TB_ACADEMIC_SCORE",
         "TB_STUDENT_PROFILE",
         "TB_ADMISSION_CUTOFF",
@@ -162,6 +189,9 @@ def main(argv: list[str] | None = None) -> int:
         "TB_DEPARTMENT",
         "TB_UNIVERSITY",
     ]
+    if not args.preserve_csat_application_meta:
+        delete_tables[4:4] = ["TB_APPLICATION_LIST"]
+        delete_tables[6:6] = ["TB_CSAT_SCORE"]
     if not preserve_users:
         delete_tables.extend(["TB_USER_AUTH", "TB_USER"])
 
@@ -305,7 +335,8 @@ def main(argv: list[str] | None = None) -> int:
             if uid is None:
                 raise RuntimeError(f"unknown user key {ext_u}")
             grade_num = _num(r.get("grade"), as_int=True)
-            grade_label = f"고{grade_num}" if grade_num is not None else None
+            student_grade = _text(r.get("student_grade")) or (f"고{grade_num}" if grade_num is not None else None)
+            grade_label = student_grade
             region = _text(r.get("residence_sido")) or _text(r.get("school_sido"))
             district = " ".join(
                 x
@@ -315,15 +346,30 @@ def main(argv: list[str] | None = None) -> int:
             conn.execute(
                 """
                 INSERT INTO TB_STUDENT_PROFILE
-                (student_id, user_id, student_name, school_name, grade, target_major, admission_year, created_at, region, district, track, grade_label)
-                VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?, ?)
+                (
+                    student_id, user_id, source_row_no, student_name, school_name,
+                    school_sido, school_sigungu, school_address,
+                    residence_sido, residence_sigungu, residence_dong,
+                    grade, student_grade, target_major, admission_year, created_at,
+                    region, district, track, grade_label, current_grade,
+                    academic_avg_grade, record_total_score, attendance_score, record_grade_band
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     int(r["student_id"]),
                     uid,
+                    _num(r.get("source_row_no"), as_int=True),
                     _text(r["student_name"]) or "학생",
                     _text(r.get("school_name")),
+                    _text(r.get("school_sido")),
+                    _text(r.get("school_sigungu")),
+                    _text(r.get("school_address")),
+                    _text(r.get("residence_sido")),
+                    _text(r.get("residence_sigungu")),
+                    _text(r.get("residence_dong")),
                     grade_num,
+                    student_grade,
                     _text(r.get("target_major")),
                     _num(r.get("admission_year"), as_int=True),
                     _ts(r.get("created_at")),
@@ -331,6 +377,11 @@ def main(argv: list[str] | None = None) -> int:
                     district,
                     "",
                     grade_label,
+                    student_grade,
+                    _num(r.get("academic_avg_grade")),
+                    _num(r.get("record_total_score")),
+                    _num(r.get("attendance_score")),
+                    _text(r.get("record_grade_band")),
                 ),
             )
 
@@ -367,37 +418,80 @@ def main(argv: list[str] | None = None) -> int:
                 ),
             )
 
-        cs = sheet("CSAT_SCORE")
-        for _, r in cs.iterrows():
-            csat_id = _num(r.get("csat_id"), as_int=True)
-            student_id = _num(r.get("student_id"), as_int=True)
-            if csat_id is None or student_id is None:
-                # 엑셀 하단의 공백/요약 행은 건너뜁니다.
-                continue
-            exam_type = " ".join(
-                x for x in (_text(r.get("exam_type")), _text(r.get("inquiry_type"))) if x
-            )
-            conn.execute(
-                """
-                INSERT INTO TB_CSAT_SCORE
-                (csat_id, student_id, exam_year, exam_type, korean_grade, math_grade, english_grade, science_grade, total_score, percentile)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    csat_id,
-                    student_id,
-                    _num(r.get("exam_year"), as_int=True),
-                    exam_type or None,
-                    _num(r.get("korean_grade"), as_int=True),
-                    _num(r.get("math_grade"), as_int=True),
-                    _num(r.get("english_grade"), as_int=True),
-                    _num(r.get("inquiry_grade"), as_int=True),
-                    _num(r.get("total_score")),
-                    _num(r.get("percentile")),
-                ),
-            )
+        if not args.preserve_csat_application_meta:
+            cs = sheet("CSAT_SCORE")
+            for _, r in cs.iterrows():
+                csat_id = _num(r.get("csat_id"), as_int=True)
+                student_id = _num(r.get("student_id"), as_int=True)
+                if csat_id is None or student_id is None:
+                    # 엑셀 하단의 공백/요약 행은 건너뜁니다.
+                    continue
+                exam_type = " ".join(
+                    x for x in (_text(r.get("exam_type")), _text(r.get("inquiry_type"))) if x
+                )
+                conn.execute(
+                    """
+                    INSERT INTO TB_CSAT_SCORE
+                    (
+                        csat_id, student_id, school_year, exam_year, exam_type, exam_month, inquiry_type,
+                        korean_grade, math_grade, english_grade, korean_history, social_grade, science_grade,
+                        life_and_ethics, ethics_and_thought, korean_geography, world_geography,
+                        east_asian_history, world_history, economics, politics_and_law, society_and_culture,
+                        physics_1, chemistry_1, earth_science_1, life_science_1,
+                        physics_2, chemistry_2, earth_science_2, life_science_2,
+                        language2_grade, german_1, french_1, spanish_1, chinese_1, japanese_1,
+                        russian_1, vietnamese_1, arabic_1, classical_chinese_1, total_score, percentile
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        csat_id,
+                        student_id,
+                        _num(r.get("school_year"), as_int=True),
+                        _num(r.get("exam_year"), as_int=True),
+                        exam_type or None,
+                        _num(r.get("exam_month"), as_int=True),
+                        _text(r.get("inquiry_type")),
+                        _num(r.get("korean_grade"), as_int=True),
+                        _num(r.get("math_grade"), as_int=True),
+                        _num(r.get("english_grade"), as_int=True),
+                        _num(r.get("korean_history"), as_int=True),
+                        _num(r.get("social_grade"), as_int=True),
+                        _num(r.get("science_grade"), as_int=True) or _num(r.get("inquiry_grade"), as_int=True),
+                        _num(r.get("life_and_ethics"), as_int=True),
+                        _num(r.get("ethics_and_thought"), as_int=True),
+                        _num(r.get("korean_geography"), as_int=True),
+                        _num(r.get("world_geography"), as_int=True),
+                        _num(r.get("east_asian_history"), as_int=True),
+                        _num(r.get("world_history"), as_int=True),
+                        _num(r.get("economics"), as_int=True),
+                        _num(r.get("politics_and_law"), as_int=True),
+                        _num(r.get("society_and_culture"), as_int=True),
+                        _num(r.get("physics_1"), as_int=True),
+                        _num(r.get("chemistry_1"), as_int=True),
+                        _num(r.get("earth_science_1"), as_int=True),
+                        _num(r.get("life_science_1"), as_int=True),
+                        _num(r.get("physics_2"), as_int=True),
+                        _num(r.get("chemistry_2"), as_int=True),
+                        _num(r.get("earth_science_2"), as_int=True),
+                        _num(r.get("life_science_2"), as_int=True),
+                        _num(r.get("language2_grade"), as_int=True),
+                        _num(r.get("german_1"), as_int=True),
+                        _num(r.get("french_1"), as_int=True),
+                        _num(r.get("spanish_1"), as_int=True),
+                        _num(r.get("chinese_1"), as_int=True),
+                        _num(r.get("japanese_1"), as_int=True),
+                        _num(r.get("russian_1"), as_int=True),
+                        _num(r.get("vietnamese_1"), as_int=True),
+                        _num(r.get("arabic_1"), as_int=True),
+                        _num(r.get("classical_chinese_1"), as_int=True),
+                        _num(r.get("total_score")),
+                        _num(r.get("percentile")),
+                    ),
+                )
 
         sr = sheet("STUDENT_RECORD")
+        sr = sr.drop_duplicates(subset=["record_id"], keep="last")
         for _, r in sr.iterrows():
             academic_year = _num(r.get("academic_year"), as_int=True)
             if academic_year is None:
@@ -428,27 +522,28 @@ def main(argv: list[str] | None = None) -> int:
                 ),
             )
 
-        al = sheet("APPLICATION_LIST")
-        for _, r in al.iterrows():
-            pr = _num(r.get("priority_rank"), as_int=True)
-            if pr is None:
-                pr = _num(r.get("priority_no"), as_int=True)
-            conn.execute(
-                """
-                INSERT INTO TB_APPLICATION_LIST
-                (application_id, student_id, admission_id, strategy_type, status, priority_no, note)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    int(r["application_id"]),
-                    int(r["student_id"]),
-                    int(r["admission_id"]),
-                    _text(r.get("strategy_type")) or "적정",
-                    _text(r.get("status")) or "active",
-                    pr,
-                    _text(r.get("analysis_note")),
-                ),
-            )
+        if not args.preserve_csat_application_meta:
+            al = sheet("APPLICATION_LIST")
+            for _, r in al.iterrows():
+                pr = _num(r.get("priority_rank"), as_int=True)
+                if pr is None:
+                    pr = _num(r.get("priority_no"), as_int=True)
+                conn.execute(
+                    """
+                    INSERT INTO TB_APPLICATION_LIST
+                    (application_id, student_id, admission_id, strategy_type, status, priority_no, note)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        int(r["application_id"]),
+                        int(r["student_id"]),
+                        int(r["admission_id"]),
+                        _text(r.get("strategy_type")) or "적정",
+                        _text(r.get("status")) or "active",
+                        pr,
+                        _text(r.get("analysis_note")),
+                    ),
+                )
 
         aa = sheet("AI_ANALYSIS")
         for _, r in aa.iterrows():
@@ -557,14 +652,15 @@ def main(argv: list[str] | None = None) -> int:
             ("TB_ADMISSION_CUTOFF", "cutoff_id"),
             ("TB_STUDENT_PROFILE", "student_id"),
             ("TB_ACADEMIC_SCORE", "score_id"),
-            ("TB_CSAT_SCORE", "csat_id"),
             ("TB_STUDENT_RECORD", "record_id"),
-            ("TB_APPLICATION_LIST", "application_id"),
             ("TB_AI_ANALYSIS", "analysis_id"),
             ("TB_RECOMMENDATION", "rec_id"),
             ("TB_CONSULTING_SESSION", "session_id"),
             ("TB_NOTIFICATION", "noti_id"),
         ]
+        if not args.preserve_csat_application_meta:
+            sequence_tables.insert(6, ("TB_CSAT_SCORE", "csat_id"))
+            sequence_tables.insert(8, ("TB_APPLICATION_LIST", "application_id"))
         if not preserve_users:
             sequence_tables.insert(4, ("TB_USER", "user_id"))
 

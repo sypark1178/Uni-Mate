@@ -445,6 +445,7 @@ def _compute_latest_mock_average_from_snapshot(mock_exams: list[dict[str, Any]])
                 "korean_grade": None,
                 "english_grade": None,
                 "math_grade": None,
+                "korean_history": None,
                 "social_grade": None,
                 "life_and_ethics": None,
                 "ethics_and_thought": None,
@@ -491,6 +492,8 @@ def _compute_latest_mock_average_from_snapshot(mock_exams: list[dict[str, Any]])
                     parsed_rows[-1]["english_grade"] = score
                 elif subject == "수학":
                     parsed_rows[-1]["math_grade"] = score
+                elif subject == "한국사":
+                    parsed_rows[-1]["korean_history"] = score
                 elif subject in {"사회탐구", "사탐"}:
                     parsed_rows[-1]["social_grade"] = score
                 elif subject in {"과학탐구", "과탐"}:
@@ -681,6 +684,7 @@ class OnboardingScoreStore:
                     korean_grade INTEGER,
                     math_grade INTEGER,
                     english_grade INTEGER,
+                    korean_history REAL,
                     science_grade INTEGER,
                     total_score REAL,
                     percentile REAL,
@@ -792,6 +796,7 @@ class OnboardingScoreStore:
             )
             self._ensure_user_columns(connection)
             self._ensure_student_profile_mapping_columns(connection)
+            self._backfill_student_grade(connection)
             self._ensure_academic_columns(connection)
             self._ensure_csat_columns(connection)
             self._migrate_student_record_academic_year_to_school_year(connection)
@@ -813,6 +818,9 @@ class OnboardingScoreStore:
                 SELECT
                     u.user_id,
                     CASE
+                        WHEN instr(u.email, '@') > 1
+                         AND lower(substr(u.email, instr(u.email, '@') + 1)) IN ('unimate.local', 'local.uni-mate')
+                            THEN trim(substr(u.email, 1, instr(u.email, '@') - 1))
                         WHEN trim(coalesce(u.password_hash, '')) <> '' THEN trim(u.password_hash)
                         ELSE printf('user-%d', u.user_id)
                     END,
@@ -837,6 +845,7 @@ class OnboardingScoreStore:
                     updated_at = CURRENT_TIMESTAMP
                 """
             )
+            self._backfill_user_auth_from_local_email(connection)
 
     def _ensure_columns(self, connection: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
         """주어진 테이블에 누락된 컬럼을 안전하게 추가합니다."""
@@ -845,6 +854,28 @@ class OnboardingScoreStore:
         for column_name, column_type in columns.items():
             if column_name not in existing:
                 connection.execute(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_type}")
+
+    def _backfill_user_auth_from_local_email(self, connection: sqlite3.Connection) -> None:
+        """`KMJ12@unimate.local` 같은 시스템 계정은 이메일 로컬파트를 로그인 ID로 보강합니다."""
+        connection.execute(
+            """
+            INSERT INTO TB_USER_AUTH (user_id, login_id, password_hash, role)
+            SELECT
+                u.user_id,
+                trim(substr(u.email, 1, instr(u.email, '@') - 1)) AS login_id,
+                NULL,
+                CASE WHEN lower(u.user_type) = '관리자' THEN '관리자' ELSE '사용자' END
+            FROM TB_USER u
+            WHERE instr(u.email, '@') > 1
+              AND lower(substr(u.email, instr(u.email, '@') + 1)) IN ('unimate.local', 'local.uni-mate')
+              AND NOT EXISTS (SELECT 1 FROM TB_USER_AUTH a WHERE a.user_id = u.user_id)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM TB_USER_AUTH a2
+                  WHERE lower(a2.login_id) = lower(trim(substr(u.email, 1, instr(u.email, '@') - 1)))
+              )
+            """
+        )
 
     def _ensure_metadata_aligned_columns(self, connection: sqlite3.Connection) -> None:
         """
@@ -901,6 +932,7 @@ class OnboardingScoreStore:
             {
                 "school_year": "INTEGER",
                 "exam_month": "INTEGER",
+                "korean_history": "REAL",
             },
         )
         self._ensure_columns(connection, "TB_APPLICATION_LIST", {"priority_rank": "INTEGER", "analysis_note": "TEXT"})
@@ -1103,6 +1135,8 @@ class OnboardingScoreStore:
         """기본정보 매핑 전용 컬럼(현재학년/거주시군구/거주읍면동) 보장."""
         rows = connection.execute("PRAGMA table_info(TB_STUDENT_PROFILE)").fetchall()
         col_names = {str(r[1]) for r in rows}
+        if "student_grade" not in col_names:
+            connection.execute("ALTER TABLE TB_STUDENT_PROFILE ADD COLUMN student_grade TEXT")
         if "current_grade" not in col_names:
             connection.execute("ALTER TABLE TB_STUDENT_PROFILE ADD COLUMN current_grade TEXT")
         if "residence_city_county" not in col_names:
@@ -1118,6 +1152,57 @@ class OnboardingScoreStore:
             connection.execute("ALTER TABLE TB_ACADEMIC_SCORE ADD COLUMN school_year INTEGER")
         if "exam_period" not in col_names:
             connection.execute("ALTER TABLE TB_ACADEMIC_SCORE ADD COLUMN exam_period TEXT")
+
+    def _profile_school_year(self, row: sqlite3.Row | None) -> int | None:
+        if row is None:
+            return None
+        for key in ("student_grade", "grade", "current_grade", "grade_label"):
+            value = _row_value(row, key)
+            parsed = self._safe_int(value)
+            if parsed in (1, 2, 3):
+                return parsed
+            match = re.search(r"[1-3]", str(value or ""))
+            if match:
+                return int(match.group(0))
+        return None
+
+    def _backfill_student_grade(self, connection: sqlite3.Connection) -> None:
+        """기존 grade/current_grade 값을 메타 기준 `student_grade`로 채웁니다."""
+        connection.execute(
+            """
+            UPDATE TB_STUDENT_PROFILE
+            SET student_grade = COALESCE(
+                    NULLIF(trim(student_grade), ''),
+                    NULLIF(trim(current_grade), ''),
+                    NULLIF(trim(grade_label), ''),
+                    CASE
+                        WHEN grade BETWEEN 1 AND 3 THEN '고' || grade
+                        ELSE NULL
+                    END
+                ),
+                current_grade = COALESCE(
+                    NULLIF(trim(current_grade), ''),
+                    NULLIF(trim(student_grade), ''),
+                    NULLIF(trim(grade_label), ''),
+                    CASE
+                        WHEN grade BETWEEN 1 AND 3 THEN '고' || grade
+                        ELSE NULL
+                    END
+                ),
+                grade_label = COALESCE(
+                    NULLIF(trim(grade_label), ''),
+                    NULLIF(trim(student_grade), ''),
+                    NULLIF(trim(current_grade), ''),
+                    CASE
+                        WHEN grade BETWEEN 1 AND 3 THEN '고' || grade
+                        ELSE NULL
+                    END
+                )
+            WHERE NULLIF(trim(student_grade), '') IS NULL
+               OR NULLIF(trim(current_grade), '') IS NULL
+               OR NULLIF(trim(grade_label), '') IS NULL
+            """
+        )
 
     def _migrate_student_record_academic_year_to_school_year(self, connection: sqlite3.Connection) -> None:
         """TB_STUDENT_RECORD의 academic_year 컬럼을 school_year로 전환합니다.
@@ -1201,6 +1286,7 @@ class OnboardingScoreStore:
                 "exam_month": "INTEGER",
                 "inquiry_type": "TEXT",
                 "social_grade": "REAL",
+                "korean_history": "REAL",
                 "life_and_ethics": "REAL",
                 "ethics_and_thought": "REAL",
                 "korean_geography": "REAL",
@@ -1425,17 +1511,17 @@ class OnboardingScoreStore:
         lowered = normalized.lower()
         # 데모: kmj11 / kmg11 동일 학생 — DB·스냅샷은 kmg11 쪽 user_id로 통합 조회
         lookup_login = "kmg11" if lowered == "kmj11" else lowered
-        email_candidate = lookup_login if "@" in lookup_login else f"{lookup_login}@local.uni-mate"
+        email_candidates = [lookup_login] if "@" in lookup_login else [f"{lookup_login}@unimate.local", f"{lookup_login}@local.uni-mate"]
         row = connection.execute(
             """
             SELECT u.user_id
             FROM TB_USER u
             LEFT JOIN TB_USER_AUTH a ON a.user_id = u.user_id
             WHERE lower(coalesce(a.login_id, '')) = ?
-               OR lower(u.email) = ?
+               OR lower(u.email) IN (?, ?)
             LIMIT 1
             """,
-            (lookup_login, email_candidate),
+            (lookup_login, email_candidates[0], email_candidates[-1]),
         ).fetchone()
         if row is None:
             # login_id가 없는 시드 데이터는 학생명으로 역매핑해 기존 user_id를 재사용
@@ -1494,11 +1580,11 @@ class OnboardingScoreStore:
 
         connection.execute(
             """
-            INSERT INTO TB_STUDENT_PROFILE (user_id, student_name, school_name, grade, target_major, admission_year)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO TB_STUDENT_PROFILE (user_id, student_name, school_name, grade, student_grade, target_major, admission_year)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO NOTHING
             """,
-            (user_id, "학생", "", None, "", None),
+            (user_id, "학생", "", None, None, "", None),
         )
         student_row = connection.execute(
             "SELECT student_id FROM TB_STUDENT_PROFILE WHERE user_id = ?",
@@ -1577,13 +1663,24 @@ class OnboardingScoreStore:
             korean_grade = self._safe_grade_number(subject_map.get("국어", {}).get("score"))
             math_grade = self._safe_grade_number(subject_map.get("수학", {}).get("score"))
             english_grade = self._safe_grade_number(subject_map.get("영어", {}).get("score"))
+            korean_history = self._safe_grade_number((subject_map.get("한국사") or subject_map.get("korean_history") or {}).get("score"))
             social_grade = self._safe_grade_number((subject_map.get("사회탐구") or subject_map.get("사탐") or {}).get("score"))
             science_grade = self._safe_grade_number((subject_map.get("과학탐구") or subject_map.get("과탐") or {}).get("score"))
             language2_grade = self._safe_grade_number((subject_map.get("언어영역") or subject_map.get("제2외국어") or {}).get("score"))
             if school_year is None:
                 school_year = year if year in (1, 2, 3) else 1
             if all(
-                value is None for value in [korean_grade, math_grade, english_grade, social_grade, science_grade, language2_grade, total]
+                value is None
+                for value in [
+                    korean_grade,
+                    math_grade,
+                    english_grade,
+                    korean_history,
+                    social_grade,
+                    science_grade,
+                    language2_grade,
+                    total,
+                ]
             ):
                 continue
             inquiry_type = "과학탐구" if science_grade is not None else "사회탐구"
@@ -1597,6 +1694,7 @@ class OnboardingScoreStore:
                     korean_grade,
                     math_grade,
                     english_grade,
+                    korean_history,
                     science_grade,
                     inquiry_type,
                     social_grade,
@@ -1617,23 +1715,24 @@ class OnboardingScoreStore:
                     korean_grade,
                     math_grade,
                     english_grade,
+                    korean_history,
                     science_grade,
                     inquiry_type,
                     social_grade,
                     language2_grade,
                     total_score
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 parsed_mock_rows,
             )
 
         student_records = payload.get("studentRecords", [])
         profile_grade_row = connection.execute(
-            "SELECT grade FROM TB_STUDENT_PROFILE WHERE student_id = ?",
+            "SELECT student_grade, grade, current_grade, grade_label FROM TB_STUDENT_PROFILE WHERE student_id = ?",
             (student_id,),
         ).fetchone()
-        profile_school_year = self._safe_int(profile_grade_row["grade"]) if profile_grade_row is not None else None
+        profile_school_year = self._profile_school_year(profile_grade_row)
 
         for record in student_records:
             record_id = self._safe_int(record.get("recordId") or record.get("record_id"))
@@ -1876,10 +1975,10 @@ class OnboardingScoreStore:
                 return {"ok": True, "source": "sqlite", "data": None}
             student_id = int(student_row["student_id"])
             profile_grade_row = connection.execute(
-                "SELECT grade FROM TB_STUDENT_PROFILE WHERE student_id = ?",
+                "SELECT student_grade, grade, current_grade, grade_label FROM TB_STUDENT_PROFILE WHERE student_id = ?",
                 (student_id,),
             ).fetchone()
-            profile_school_year = self._safe_int(profile_grade_row["grade"]) if profile_grade_row is not None else None
+            profile_school_year = self._profile_school_year(profile_grade_row)
             settings_display = compute_settings_display_from_tables(connection, student_id)
             row = connection.execute(
                 """
@@ -2112,6 +2211,7 @@ class OnboardingScoreStore:
                 SET student_name = ?,
                     school_name = ?,
                     grade = ?,
+                    student_grade = ?,
                     current_grade = ?,
                     admission_year = ?,
                     residence_city_county = ?,
@@ -2126,6 +2226,7 @@ class OnboardingScoreStore:
                     str(payload.get("name") or "학생"),
                     str(payload.get("schoolName") or ""),
                     grade_num,
+                    grade_label,
                     grade_label,
                     payload.get("targetYear"),
                     str(payload.get("region") or ""),
@@ -2179,6 +2280,7 @@ class OnboardingScoreStore:
                 SELECT
                     sp.student_name,
                     sp.school_name,
+                    sp.student_grade,
                     sp.current_grade,
                     sp.grade_label,
                     sp.residence_city_county,
@@ -2202,7 +2304,7 @@ class OnboardingScoreStore:
             "data": {
                 "name": row["student_name"] or "",
                 "schoolName": row["school_name"] or "",
-                "gradeLabel": row["current_grade"] or row["grade_label"] or "고2",
+                "gradeLabel": row["student_grade"] or row["current_grade"] or row["grade_label"] or "고2",
                 "region": row["residence_city_county"] or row["region"] or "서울",
                 "district": row["residence_town"] or row["district"] or "강남구",
                 "track": row["track"] or "인문",
@@ -2298,13 +2400,17 @@ class OnboardingScoreStore:
                        a.login_id, a.password_hash AS auth_password, a.role AS role,
                        trim(coalesce(sp.student_name, '')) AS student_name
                 FROM TB_USER u
-                INNER JOIN TB_USER_AUTH a ON a.user_id = u.user_id
+                LEFT JOIN TB_USER_AUTH a ON a.user_id = u.user_id
                 LEFT JOIN TB_STUDENT_PROFILE sp ON sp.user_id = u.user_id
                 WHERE lower(trim(a.login_id)) = ?
                    OR lower(trim(u.email)) = ?
+                   OR (
+                       ? NOT LIKE '%@%'
+                       AND lower(trim(u.email)) IN (?, ?)
+                   )
                 LIMIT 1
                 """,
-                (lowered, lowered),
+                (lowered, lowered, lowered, f"{lowered}@unimate.local", f"{lowered}@local.uni-mate"),
             ).fetchone()
 
         if row is None:
@@ -2335,6 +2441,8 @@ class OnboardingScoreStore:
             self._touch_user_log_at(connection, int(row["user_id"]))
 
         login_key = str(row["login_id"] or "").strip() or lid
+        if not str(row["login_id"] or "").strip() and "@" in str(row["email"] or ""):
+            login_key = str(row["email"]).split("@", 1)[0].strip() or lid
         name = str(row["student_name"] or "").strip() or login_key
         email = str(row["email"] or "").strip().lower()
         if not email:

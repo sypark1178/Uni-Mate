@@ -24,6 +24,7 @@ schema_columns = [
     ("korean_grade", "INTEGER"),
     ("math_grade", "INTEGER"),
     ("english_grade", "INTEGER"),
+    ("korean_history", "INTEGER"),
     ("social_grade", "INTEGER"),
     ("life_and_ethics", "INTEGER"),
     ("ethics_and_thought", "INTEGER"),

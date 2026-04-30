@@ -24,7 +24,16 @@ def load_rows(xlsx_path: Path, sheet_name: str, column_names: list[str]) -> list
     if sheet_name not in wb.sheetnames:
         raise SystemExit(f"시트 없음: {sheet_name!r}. 사용 가능: {wb.sheetnames}")
     ws = wb[sheet_name]
-    header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True))
+    header_row_no = 1
+    header_row = None
+    for row_no, candidate in enumerate(ws.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
+        names = {str(cell).strip() for cell in candidate if cell is not None}
+        if {"csat_id", "student_id"}.issubset(names):
+            header_row_no = row_no
+            header_row = candidate
+            break
+    if header_row is None:
+        raise SystemExit("CSAT_SCORE 헤더 행을 찾지 못했습니다. csat_id/student_id 컬럼이 필요합니다.")
     header_to_idx = {}
     for idx, cell in enumerate(header_row):
         if cell is None:
@@ -34,15 +43,26 @@ def load_rows(xlsx_path: Path, sheet_name: str, column_names: list[str]) -> list
             header_to_idx[name] = idx
     missing = [c for c in column_names if c not in header_to_idx]
     if missing:
-        raise SystemExit(f"엑셀에 없는 컬럼: {missing}")
+        print("missing_optional_columns", missing)
+
+    id_col = header_to_idx.get("csat_id")
+    student_col = header_to_idx.get("student_id")
+    if id_col is None or student_col is None:
+        raise SystemExit("CSAT_SCORE에는 csat_id/student_id 컬럼이 필요합니다.")
 
     rows: list[tuple] = []
-    for r in ws.iter_rows(min_row=2, values_only=True):
+    blank_streak = 0
+    for r in ws.iter_rows(min_row=header_row_no + 1, values_only=True):
         if r is None:
             continue
-        tup = tuple(_nv(r[header_to_idx[c]]) for c in column_names)
-        if tup[0] is None or tup[1] is None:
+        has_required_values = id_col < len(r) and student_col < len(r) and r[id_col] is not None and r[student_col] is not None
+        if not has_required_values:
+            blank_streak += 1
+            if rows and blank_streak >= 50:
+                break
             continue
+        blank_streak = 0
+        tup = tuple(_nv(r[header_to_idx[c]]) if c in header_to_idx and header_to_idx[c] < len(r) else None for c in column_names)
         rows.append(tup)
     wb.close()
     return rows
@@ -87,6 +107,7 @@ def main() -> int:
         ("korean_grade", "INTEGER"),
         ("math_grade", "INTEGER"),
         ("english_grade", "INTEGER"),
+        ("korean_history", "INTEGER"),
         ("social_grade", "INTEGER"),
         ("life_and_ethics", "INTEGER"),
         ("ethics_and_thought", "INTEGER"),

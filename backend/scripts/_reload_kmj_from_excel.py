@@ -74,7 +74,7 @@ with con:
                 vals.append(v)
         cur.execute(f"INSERT INTO TB_ACADEMIC_SCORE ({','.join(ac_cols)}) VALUES ({','.join(['?']*len(ac_cols))})", vals)
 
-    cs_cols = ['student_id','school_year','exam_year','exam_type','exam_month','inquiry_type','korean_grade','math_grade','english_grade','social_grade','life_and_ethics','ethics_and_thought','korean_geography','world_geography','east_asian_history','world_history','economics','politics_and_law','society_and_culture','science_grade','physics_1','chemistry_1','earth_science_1','life_science_1','physics_2','chemistry_2','earth_science_2','life_science_2','language2_grade','german_1','french_1','spanish_1','chinese_1','japanese_1','russian_1','vietnamese_1','arabic_1','classical_chinese_1','total_score','percentile']
+    cs_cols = ['student_id','school_year','exam_year','exam_type','exam_month','inquiry_type','korean_grade','math_grade','english_grade','korean_history','social_grade','life_and_ethics','ethics_and_thought','korean_geography','world_geography','east_asian_history','world_history','economics','politics_and_law','society_and_culture','science_grade','physics_1','chemistry_1','earth_science_1','life_science_1','physics_2','chemistry_2','earth_science_2','life_science_2','language2_grade','german_1','french_1','spanish_1','chinese_1','japanese_1','russian_1','vietnamese_1','arabic_1','classical_chinese_1','total_score','percentile']
     for _, r in cs.iterrows():
         vals = []
         for c in cs_cols:
