@@ -74,15 +74,6 @@ const seededMembers: MemberRecord[] = [
     createdAt: "2026-04-21T00:00:00.000Z"
   },
   {
-    id: "seed-park-sangyun",
-    userId: "sypark1178",
-    name: "박상윤",
-    email: "sypark1178@gmail.com",
-    password: "",
-    seeded: true,
-    createdAt: "2026-04-21T00:00:00.000Z"
-  },
-  {
     id: "seed-kim-minji",
     userId: "kmj11",
     name: "김민지",

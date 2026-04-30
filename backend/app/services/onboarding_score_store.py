@@ -16,7 +16,6 @@ SEEDED_LOGIN_TO_STUDENT_NAME: dict[str, str] = {
     "kmj11": "김민지",
     "gimsohui407": "김소희",
     "sammya0902": "안새미",
-    "sypark1178": "박상윤",
 }
 
 MOCK_EXAM_TYPE_NAT = "전국연합학력평가"
