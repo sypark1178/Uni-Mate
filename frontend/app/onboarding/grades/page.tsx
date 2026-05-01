@@ -725,7 +725,7 @@ function ModalInquirySubjectGroupBlock({
         <div className="mt-2 border-t border-line/80 pt-2">
           <p className="text-center text-sm font-semibold leading-tight text-navy">
             {averageLeadingText}
-            <span className="tabular-nums">{averageValue}</span>등급
+            <span className="tabular-nums">{averageValue}</span>
           </p>
         </div>
       ) : null}
@@ -1278,7 +1278,7 @@ export default function OnboardingGradesPage() {
     if (!v) {
       return "";
     }
-    return selectedYear === "1" ? v : `${v}등급`;
+    return v;
 
   }, [modalSocialInquiryAverageValue, selectedYear]);
 
@@ -1305,7 +1305,7 @@ export default function OnboardingGradesPage() {
     if (!v) {
       return "";
     }
-    return selectedYear === "1" ? v : `${v}등급`;
+    return v;
 
   }, [modalScienceInquiryAverageValue, selectedYear]);
 
