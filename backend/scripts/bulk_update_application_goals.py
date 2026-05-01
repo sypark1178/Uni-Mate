@@ -2,7 +2,7 @@
 Bulk-update TB_APPLICATION_LIST (+ TB_RECOMMENDATION) for all students.
 
 Sets 1st/2nd/3rd 지망 to Kyung Hee / Sogang / Soongsil business programs
-using canonical TB_UNIVERSITY + TB_DEPARTMENT rows (경영학과 / 경영학부).
+using canonical TB_UNIVERSITY + TB_DEPARTMENT rows (경영학과).
 """
 from __future__ import annotations
 
@@ -15,31 +15,65 @@ DB_PATH = Path(__file__).resolve().parents[1] / "data" / "uni_mate.db"
 # Canonical names from TB_UNIVERSITY / TB_DEPARTMENT in seeded DB
 GOALS: list[tuple[str, str, str, int]] = [
     ("경희대학교", "경영학과", "도전", 1),
-    ("서강대학교", "경영학부", "적정", 2),
-    ("숭실대학교", "경영학부", "안정", 3),
+    ("서강대학교", "경영학과", "적정", 2),
+    ("숭실대학교", "경영학과", "안정", 3),
 ]
 
 
 def resolve_admission(
     conn: sqlite3.Connection, univ_name: str, dept_name: str, year: int
 ) -> int:
+    univ_row = conn.execute("SELECT univ_id FROM TB_UNIVERSITY WHERE univ_name = ?", (univ_name,)).fetchone()
+    if univ_row is None:
+        cursor = conn.execute(
+            """
+            INSERT INTO TB_UNIVERSITY (univ_code, univ_name, univ_type, region)
+            VALUES (?, ?, '사립', '미상')
+            """,
+            (f"U{abs(hash(univ_name)) % 10_000_000:07d}", univ_name),
+        )
+        univ_id = int(cursor.lastrowid)
+    else:
+        univ_id = int(univ_row["univ_id"])
+
+    dept_row = conn.execute(
+        "SELECT dept_id FROM TB_DEPARTMENT WHERE univ_id = ? AND dept_name = ?",
+        (univ_id, dept_name),
+    ).fetchone()
+    if dept_row is None:
+        cursor = conn.execute(
+            """
+            INSERT INTO TB_DEPARTMENT (univ_id, dept_name, college_name, major_field, dept_type)
+            VALUES (?, ?, '', '', '')
+            """,
+            (univ_id, dept_name),
+        )
+        dept_id = int(cursor.lastrowid)
+    else:
+        dept_id = int(dept_row["dept_id"])
+
     row = conn.execute(
         """
         SELECT a.admission_id
         FROM TB_ADMISSION_TYPE a
-        JOIN TB_DEPARTMENT d ON d.dept_id = a.dept_id
-        JOIN TB_UNIVERSITY u ON u.univ_id = d.univ_id
-        WHERE u.univ_name = ? AND d.dept_name = ?
+        WHERE a.dept_id = ?
           AND a.admission_year = ? AND a.admission_type = '수시'
         LIMIT 1
         """,
-        (univ_name, dept_name, year),
+        (dept_id, year),
     ).fetchone()
-    if row is None:
-        raise RuntimeError(
-            f"admission 없음: {univ_name} / {dept_name} / {year} 수시 — TB_ADMISSION_TYPE 확인"
-        )
-    return int(row["admission_id"])
+    if row is not None:
+        return int(row["admission_id"])
+
+    cursor = conn.execute(
+        """
+        INSERT INTO TB_ADMISSION_TYPE
+            (dept_id, admission_year, admission_type, admission_method, recruit_cnt, doc_ratio, interview_ratio, csat_required)
+        VALUES (?, ?, '수시', '학생부교과', 0, 100.0, 0.0, 0)
+        """,
+        (dept_id, year),
+    )
+    return int(cursor.lastrowid)
 
 
 def main() -> None:

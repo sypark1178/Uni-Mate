@@ -13,6 +13,7 @@ import { UploadDropzone } from "@/components/upload-dropzone";
 import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 
 import { onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
+import { isDraftScoresDirty } from "@/lib/draft-store";
 
 import {
   canonicalStudentRecordTerm,
@@ -743,6 +744,8 @@ export default function OnboardingGradesPage() {
 
     store,
 
+    hydrated,
+
     currentScoreRecord,
 
     currentStudentRecord,
@@ -768,6 +771,8 @@ export default function OnboardingGradesPage() {
     registerUploads,
 
     removeUploads,
+
+    flushStore,
 
     flushStoreToServer,
 
@@ -889,6 +894,9 @@ export default function OnboardingGradesPage() {
   const didAutoSelectMockRecordRef = useRef(false);
 
   useEffect(() => {
+    if (isDraftScoresDirty()) {
+      return;
+    }
     const nextSummaries = [
       ...store.schoolRecords
         .filter((record) => hasSavedGradeContent(record))
@@ -1340,7 +1348,7 @@ export default function OnboardingGradesPage() {
 
   const handleMoveNext = async (href: string) => {
 
-    await flushStoreToServer();
+    flushStore();
 
     safeNavigate(router, href);
 
@@ -1350,7 +1358,7 @@ export default function OnboardingGradesPage() {
 
   const handleBack = async () => {
 
-    await flushStoreToServer();
+    flushStore();
 
     safeNavigate(router, basicHref);
 
@@ -1561,6 +1569,12 @@ export default function OnboardingGradesPage() {
 
     >
 
+      {!hydrated ? (
+        <div className="rounded-[22px] border border-line bg-white p-5 text-sm leading-6 text-muted">
+          저장된 성적정보를 불러오는 중입니다.
+        </div>
+      ) : (
+        <>
       <div className="grid grid-cols-3 gap-2">
 
         {scoreTabOptions.map((tab) => (
@@ -2203,6 +2217,9 @@ export default function OnboardingGradesPage() {
         ) : null}
 
       </div>
+
+        </>
+      )}
 
     </PhoneFrame>
 

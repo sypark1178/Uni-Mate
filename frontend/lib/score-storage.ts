@@ -14,7 +14,13 @@ import type {
   SubjectScoreEntry,
   UploadedRecordFile
 } from "@/lib/types";
-import { getDraftScores, setDraftScores, setDraftScoresSnapshot } from "@/lib/draft-store";
+import {
+  getDraftScores,
+  isDraftScoresDirty,
+  markDraftScoresDirty,
+  setDraftScores,
+  setDraftScoresSnapshot
+} from "@/lib/draft-store";
 import { readJsonResponse } from "@/lib/read-json-response";
 import { getCurrentMember } from "@/lib/member-store";
 
@@ -943,24 +949,18 @@ export function useScoreRecords() {
 
       const { store: serverStore, settingsDisplay: serverHints } = await loadServerStore(userKey);
       const draftStore = getDraftScores<ScoreMemoryStore>();
-      const draftTs = getStoreFreshnessTimestamp(draftStore);
-      const serverTs = getStoreFreshnessTimestamp(serverStore);
-      const localTs = getStoreFreshnessTimestamp(localStore);
+      const hasEditedScoresInSession = isDraftScoresDirty();
 
-      const draftWins =
-        draftStore != null &&
-        hasAnySavedScoreContent(draftStore) &&
-        draftTs >= serverTs &&
-        draftTs >= localTs;
-
-      let resolvedStore: ScoreMemoryStore | null = null;
-      if (draftWins) {
+      let resolvedStore: ScoreMemoryStore | null;
+      if (hasEditedScoresInSession && draftStore) {
         resolvedStore = draftStore;
+      } else if (userKey !== "local-user") {
+        resolvedStore = serverStore ?? localStore;
       } else {
         resolvedStore = pickBetterSnapshot(serverStore, localStore);
       }
 
-      const resolvedHints: ScoreSettingsDisplay | null = draftWins ? null : serverHints;
+      const resolvedHints: ScoreSettingsDisplay | null = hasEditedScoresInSession ? null : serverHints;
       const shouldSeedKimMinji =
         userKey === "kmg11" ||
         userKey === "kmj11" ||
@@ -990,11 +990,6 @@ export function useScoreRecords() {
         setSettingsDisplay(resolvedHints);
         persistStore(finalStore, userKey);
         setDraftScoresSnapshot(finalStore);
-        const serverHadScores = Boolean(serverStore && hasAnySavedScoreContent(serverStore));
-        const finalHasScores = hasAnySavedScoreContent(finalStore);
-        if (finalHasScores || !serverHadScores) {
-          void persistStoreToServer(finalStore, userKey);
-        }
         setHydrated(true);
       }
     };
@@ -1006,23 +1001,26 @@ export function useScoreRecords() {
     };
   }, [scoreUserKey]);
 
-  const commit = (updater: (previous: ScoreMemoryStore) => ScoreMemoryStore) => {
+  const commit = (updater: (previous: ScoreMemoryStore) => ScoreMemoryStore, options?: { markDirty?: boolean }) => {
     setSettingsDisplay(null);
     setStore((previous) => {
       const nextStore = normalizeScoreStore(updater(previous));
       persistStore(nextStore);
-      setDraftScores(nextStore);
-      void persistStoreToServer(nextStore);
+      if (options?.markDirty === false) {
+        setDraftScoresSnapshot(nextStore);
+      } else {
+        setDraftScores(nextStore);
+      }
       return nextStore;
     });
   };
 
   const setActiveTab = (tab: ScoreTabKey) => {
-    commit((previous) => ({ ...previous, activeTab: tab, updatedAt: nowIso() }));
+    commit((previous) => ({ ...previous, activeTab: tab, updatedAt: nowIso() }), { markDirty: false });
   };
 
   const setSelectedPeriod = (year: GradeYear, term: GradeTerm) => {
-    commit((previous) => ({ ...previous, selectedYear: year, selectedTerm: term, updatedAt: nowIso() }));
+    commit((previous) => ({ ...previous, selectedYear: year, selectedTerm: term, updatedAt: nowIso() }), { markDirty: false });
   };
 
   const updateSubjectScore = (tab: "schoolRecord" | "mockExam", year: GradeYear, term: GradeTerm, entryId: string, value: string) => {
@@ -1118,7 +1116,7 @@ export function useScoreRecords() {
       selectedStudentSemester: semester,
       selectedStudentRecordType: recordType,
       updatedAt: nowIso()
-    }));
+    }), { markDirty: false });
   };
 
   const updateStudentRecordField = (
@@ -1246,12 +1244,16 @@ export function useScoreRecords() {
   const flushStoreToServer = async () => {
     persistStore(store);
     await persistStoreToServer(store);
+    markDraftScoresDirty(false);
     return store;
   };
 
   /** 서버(DB) 스냅샷을 다시 받아 로컬·세션 초안에 반영 — 온보딩 성적 화면에서 마운트 시 호출 */
   const refreshScoresFromServer = useCallback(async () => {
     if (typeof window === "undefined") {
+      return;
+    }
+    if (isDraftScoresDirty()) {
       return;
     }
     const userKey = readEffectiveScoreUserKey();
@@ -1264,7 +1266,6 @@ export function useScoreRecords() {
     setSettingsDisplay(serverHints ?? null);
     persistStore(next, userKey);
     setDraftScoresSnapshot(next);
-    void persistStoreToServer(next, userKey);
   }, []);
 
   const currentScoreRecord = useMemo(() => {

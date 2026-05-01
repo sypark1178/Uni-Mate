@@ -60,7 +60,7 @@ export const recommendations: Recommendation[] = [
   {
     id: "sogang-business",
     university: "서강대",
-    major: "경영학부",
+    major: "경영학과",
     category: "적정",
     fitScore: 60,
     notes: "교과 성적과 비교과 근거를 균형 있게 준비해 보세요.",
@@ -75,7 +75,7 @@ export const recommendations: Recommendation[] = [
   {
     id: "soongsil-business",
     university: "숭실대",
-    major: "경영학부",
+    major: "경영학과",
     category: "안정",
     fitScore: 72,
     notes: "현재 페이스를 유지하면 안정권 합격 가능성이 높아요.",

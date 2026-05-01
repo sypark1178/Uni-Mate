@@ -84,6 +84,7 @@ export function SettingsView() {
 
   const completeLogout = () => {
     setShowLogoutModal(false);
+    clearAllDrafts();
     logoutMember();
     window.location.replace(`${window.location.origin}/login`);
   };
@@ -93,6 +94,7 @@ export function SettingsView() {
     if (userKey && typeof window !== "undefined") {
       window.localStorage.removeItem(`${profileStorageKey}:${userKey}`);
       window.localStorage.removeItem(`${scoreStorageKey}:${userKey}`);
+      window.localStorage.removeItem(`${scoreStorageKey}:${userKey.toLowerCase()}`);
       window.localStorage.removeItem(`${goalStorageKey}:${userKey}`);
     }
     clearAllDrafts();
@@ -229,13 +231,10 @@ export function SettingsView() {
 
         <section className="mb-5">
           <h2 className="app-section-title mb-3">목표정보</h2>
-          <div className="space-y-3">
-            {goalAnalyses.length > 0 ? (
-              goalAnalyses.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-[22px] border border-line bg-white p-4"
-                >
+          {goalAnalyses.length > 0 ? (
+            <div className="overflow-hidden rounded-[22px] border border-line bg-white">
+              {goalAnalyses.map((item, index) => (
+                <div key={item.id} className="border-t border-slate-100 p-4 first:border-t-0">
                   <div className="flex items-center gap-3">
                     <div
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${goalRankNumberToneClass(index)}`}
@@ -249,24 +248,17 @@ export function SettingsView() {
                       </div>
                     </div>
                   </div>
-                  <Link
-                    href={moveTo(`/onboarding/goals?focus=${index + 1}&returnTo=${encodeURIComponent(settingsReturnHref)}`)}
-                    prefetch
-                    className={editButtonClass}
-                  >
-                    수정
-                  </Link>
                 </div>
-              ))
-            ) : (
-              <div className="rounded-[22px] border border-line bg-white p-4 text-sm text-muted">
-                저장된 목표대학/학과가 없습니다. 목표설정에서 먼저 선택해 주세요.
-              </div>
-            )}
-            <Link href={goalsFullHref} prefetch className={`${wideEditButtonClass} text-center`}>
-              + 목표대학 추가 / 전체 수정
-            </Link>
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-[22px] border border-line bg-white p-4 text-sm text-muted">
+              저장된 목표대학/학과가 없습니다. 목표설정에서 먼저 선택해 주세요.
+            </div>
+          )}
+          <Link href={goalsFullHref} prefetch className={`${wideEditButtonClass} mt-3 text-center`}>
+            + 목표대학 추가 / 전체 수정
+          </Link>
         </section>
 
         <section className="mb-5">

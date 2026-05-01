@@ -33,7 +33,7 @@ function isGradeTerm(value: string | null): value is GradeTerm {
 export default function GradeUploadPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { store, registerUploads, flushStoreToServer } = useScoreRecords();
+  const { store, registerUploads, flushStore } = useScoreRecords();
   const requestedTab = searchParams.get("tab");
   const requestedYear = searchParams.get("year");
   const requestedTerm = searchParams.get("term");
@@ -86,7 +86,7 @@ export default function GradeUploadPage() {
   );
 
   const handleBack = async () => {
-    await flushStoreToServer();
+    flushStore();
     safeNavigate(router, gradesHref);
   };
 

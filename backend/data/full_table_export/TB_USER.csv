@@ -1,5 +1,5 @@
 ﻿user_id,email,password_hash,user_type,phone,profile_image_url,created_at,last_login_at,is_active,user_alias
-3049,student001@unimate.local,excel-import,학생,010-2001-1001,,2026-04-22 09:00:00,2026-04-22 09:00:00,1,
+3049,student001@unimate.local,excel-import,학생,010-2001-1001,,2026-04-22 09:00:00,2026-05-01 13:01:21,1,
 3050,student002@unimate.local,excel-import,학생,010-2002-1002,,2026-04-22 09:00:00,2026-04-22 09:00:00,1,
 3051,student003@unimate.local,excel-import,학생,010-2003-1003,,2026-04-22 09:00:00,2026-04-22 09:00:00,1,
 3052,student004@unimate.local,excel-import,학생,010-2004-1004,,2026-04-22 09:00:00,2026-04-22 09:00:00,1,
@@ -99,7 +99,7 @@
 3146,student098@unimate.local,excel-import,학생,010-2098-1098,,2026-04-22 09:00:00,2026-04-22 09:00:00,1,
 3147,student099@unimate.local,excel-import,학생,010-2099-1099,,2026-04-22 09:00:00,2026-04-22 09:00:00,1,
 3148,student100@unimate.local,excel-import,학생,010-2100-1100,,2026-04-28 09:00:00,2026-04-30 15:33:12,1,
-3149,student101@unimate.local,excel-import,학생,010-2100-1101,,2026-04-28 09:00:00,2026-04-30 16:01:39,1,
+3149,student101@unimate.local,excel-import,학생,010-2100-1101,,2026-04-28 09:00:00,2026-05-01 12:45:04,1,
 3150,student102@unimate.local,excel-import,학생,010-2100-1102,,2026-04-28 09:00:00,2026-04-22 09:00:00,1,
 3151,student103@unimate.local,excel-import,학생,010-2100-1103,,2026-04-28 09:00:00,2026-04-22 09:00:00,1,
 3152,admin@unimate.local,admin,관리자,,,2026-04-30 15:22:59,,1,

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { StudentProfile } from "@/lib/types";
 import { examYears } from "@/lib/admission-data";
 import { readJsonResponse } from "@/lib/read-json-response";
-import { getDraftProfile, setDraftProfile } from "@/lib/draft-store";
+import { getDraftProfile, markDraftProfileDirty, setDraftProfile } from "@/lib/draft-store";
 import { getCurrentMember } from "@/lib/member-store";
 
 export const profileStorageKey = "uni-mate-profile-memory";
@@ -159,7 +159,9 @@ export function useStudentProfile() {
       }
       const draftProfile = getDraftProfile<StudentProfile>();
       const resolved = withLoggedInMemberName(
-        draftProfile ?? localProfile ?? serverProfile ?? normalizeProfile({})
+        userKey === "local-user"
+          ? draftProfile ?? localProfile ?? normalizeProfile({})
+          : draftProfile ?? serverProfile ?? localProfile ?? normalizeProfile({})
       );
       if (!cancelled) {
         persistProfile(resolved);
@@ -208,6 +210,7 @@ export function useStudentProfile() {
     const normalized = normalizeProfile(studentProfile);
     persistProfile(normalized);
     await persistProfileToServer(normalized);
+    markDraftProfileDirty(false);
     return normalized;
   };
 

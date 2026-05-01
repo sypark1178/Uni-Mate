@@ -257,103 +257,111 @@ export default function OnboardingBasicPage() {
       prevLabel={returnTo ? "호출한 메뉴로 돌아가기" : undefined}
       helperLink={{ href: "/login", label: "뒤로가기", plainHref: true }}
       nextHref="/onboarding/grades"
-      nextLabel="2단계 성적 입력 →"
-      mutedNavAfterPrimary={{ href: "/", label: "처음으로" }}
+      nextLabel={hydrated ? "2단계 성적 입력 →" : "불러오는 중..."}
+      nextDisabled={!hydrated}
     >
-      <input
-        className={onboardingFormFieldClass}
-        placeholder="이름"
-        value={studentProfile.name}
-        onChange={(event) => updateField("name", event.target.value)}
-      />
-      <select
-        required
-        className={onboardingSelectFieldClass}
-        value={selectedGrade}
-        onChange={(event) => handleGradeChange(event.target.value)}
-      >
-        <option value="" disabled>
-          유형
-        </option>
-        {gradeOptions.map((label) => (
-          <option key={label} value={label}>
-            {label}
-          </option>
-        ))}
-      </select>
-      <select
-        required
-        className={onboardingSelectFieldClass}
-        value={selectedRegion}
-        onChange={(event) => handleRegionChange(event.target.value)}
-      >
-        <option value="" disabled>
-          지역
-        </option>
-        {regions.map((region) => (
-          <option key={region} value={region}>
-            {region}
-          </option>
-        ))}
-      </select>
-      <div className="-mt-1 text-xs leading-snug text-muted">
-        지역인재 등 전형 지원 가능 여부를 판단하는 데 사용됩니다.
-      </div>
-      <select
-        required={Boolean(selectedRegion)}
-        className={onboardingSelectFieldClass}
-        value={selectedDistrict}
-        disabled={!selectedRegion}
-        onChange={(event) => handleDistrictChange(event.target.value)}
-      >
-        <option value="" disabled>
-          {selectedRegion ? "세부지역" : "먼저 지역을 선택하세요"}
-        </option>
-        {districtsForUi.map((district) => (
-          <option key={district} value={district}>
-            {district}
-          </option>
-        ))}
-      </select>
-      <select
-        required={Boolean(selectedRegion && selectedGrade)}
-        className={onboardingSelectFieldClass}
-        value={selectedSchool}
-        disabled={!selectedRegion || !selectedGrade}
-        onChange={(event) => updateField("schoolName", event.target.value)}
-      >
-        <option value="" disabled>
-          {!selectedGrade ? "먼저 유형을 선택하세요" : selectedRegion ? "학교 선택" : "먼저 지역을 선택하세요"}
-        </option>
-        {selectedSchool && !schoolsForUi.includes(selectedSchool) ? (
-          <option key="__current-school" value={selectedSchool} hidden>
-            {selectedSchool}
-          </option>
-        ) : null}
-        {schoolsForUi.map((school) => (
-          <option key={school} value={school}>
-            {school}
-          </option>
-        ))}
-      </select>
-      <div className="-mt-1 text-xs leading-snug text-muted">
-        학교 알리미 데이터를 활용해 내신을 학교별로 알맞게 보정합니다.
-      </div>
-      <select
-        required
-        className={onboardingSelectFieldClass}
-        value={selectedYear}
-        onChange={(event) => updateField("targetYear", Number(event.target.value))}
-      >
-        <option value="" disabled>
-          수능 응시 년도
-        </option>
-        {examYears.map((year) => (
-          <option key={year} value={String(year)}>
-            {year}
-          </option>
-        ))}
-      </select>
+      {!hydrated ? (
+        <div className="rounded-[22px] border border-line bg-white p-5 text-sm leading-6 text-muted">
+          저장된 기본정보를 불러오는 중입니다.
+        </div>
+      ) : (
+        <>
+          <input
+            className={onboardingFormFieldClass}
+            placeholder="이름"
+            value={studentProfile.name}
+            onChange={(event) => updateField("name", event.target.value)}
+          />
+          <select
+            required
+            className={onboardingSelectFieldClass}
+            value={selectedGrade}
+            onChange={(event) => handleGradeChange(event.target.value)}
+          >
+            <option value="" disabled>
+              유형
+            </option>
+            {gradeOptions.map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            required
+            className={onboardingSelectFieldClass}
+            value={selectedRegion}
+            onChange={(event) => handleRegionChange(event.target.value)}
+          >
+            <option value="" disabled>
+              지역
+            </option>
+            {regions.map((region) => (
+              <option key={region} value={region}>
+                {region}
+              </option>
+            ))}
+          </select>
+          <div className="-mt-1 text-xs leading-snug text-muted">
+            지역인재 등 전형 지원 가능 여부를 판단하는 데 사용됩니다.
+          </div>
+          <select
+            required={Boolean(selectedRegion)}
+            className={onboardingSelectFieldClass}
+            value={selectedDistrict}
+            disabled={!selectedRegion}
+            onChange={(event) => handleDistrictChange(event.target.value)}
+          >
+            <option value="" disabled>
+              {selectedRegion ? "세부지역" : "먼저 지역을 선택하세요"}
+            </option>
+            {districtsForUi.map((district) => (
+              <option key={district} value={district}>
+                {district}
+              </option>
+            ))}
+          </select>
+          <select
+            required={Boolean(selectedRegion && selectedGrade)}
+            className={onboardingSelectFieldClass}
+            value={selectedSchool}
+            disabled={!selectedRegion || !selectedGrade}
+            onChange={(event) => updateField("schoolName", event.target.value)}
+          >
+            <option value="" disabled>
+              {!selectedGrade ? "먼저 유형을 선택하세요" : selectedRegion ? "학교 선택" : "먼저 지역을 선택하세요"}
+            </option>
+            {selectedSchool && !schoolsForUi.includes(selectedSchool) ? (
+              <option key="__current-school" value={selectedSchool} hidden>
+                {selectedSchool}
+              </option>
+            ) : null}
+            {schoolsForUi.map((school) => (
+              <option key={school} value={school}>
+                {school}
+              </option>
+            ))}
+          </select>
+          <div className="-mt-1 text-xs leading-snug text-muted">
+            학교 알리미 데이터를 활용해 내신을 학교별로 알맞게 보정합니다.
+          </div>
+          <select
+            required
+            className={onboardingSelectFieldClass}
+            value={selectedYear}
+            onChange={(event) => updateField("targetYear", Number(event.target.value))}
+          >
+            <option value="" disabled>
+              수능 응시 년도
+            </option>
+            {examYears.map((year) => (
+              <option key={year} value={String(year)}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
     </OnboardingStep>
   );
 }

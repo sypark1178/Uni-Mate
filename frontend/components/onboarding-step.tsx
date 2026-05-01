@@ -19,6 +19,7 @@ type OnboardingStepProps = {
   helperLink?: { href: string; label: string; plainHref?: boolean };
   postPrevLink?: { href: string; label: string; plainHref?: boolean };
   onNext?: () => Promise<void> | void;
+  nextDisabled?: boolean;
 };
 
 function mergeSearchParams(href: string, currentParams: URLSearchParams) {
@@ -54,7 +55,8 @@ export function OnboardingStep({
   nextLabel,
   helperLink,
   postPrevLink,
-  onNext
+  onNext,
+  nextDisabled = false
 }: OnboardingStepProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -82,6 +84,9 @@ export function OnboardingStep({
   };
 
   const handleNext = async () => {
+    if (nextDisabled) {
+      return;
+    }
     if (onNext) {
       await onNext();
     }
@@ -107,7 +112,12 @@ export function OnboardingStep({
     >
       <div className="space-y-4">{children}</div>
       <div className="mt-8 space-y-3">
-        <button type="button" onClick={() => void handleNext()} className={onboardingPrimaryCtaClass}>
+        <button
+          type="button"
+          onClick={() => void handleNext()}
+          disabled={nextDisabled}
+          className={`${onboardingPrimaryCtaClass} disabled:cursor-not-allowed disabled:opacity-60`}
+        >
           {nextLabel}
         </button>
         {helperLink && resolvedHelperHref ? (

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { GoalChoice } from "@/lib/types";
 import { defaultGoals, goalStorageKey } from "@/lib/planning";
 import { normalizeUniversityName } from "@/lib/admission-data";
-import { clearDraftGoals, getDraftGoals, isDraftGoalsDirty, setDraftGoals } from "@/lib/draft-store";
+import { clearDraftGoals, getDraftGoals, isDraftGoalsDirty, markDraftGoalsDirty, setDraftGoals } from "@/lib/draft-store";
 import { getCurrentMember } from "@/lib/member-store";
 import { readJsonResponse } from "@/lib/read-json-response";
 
@@ -82,7 +82,7 @@ export function useGoals(seedGoals?: GoalChoice[] | null) {
     let cancelled = false;
     const hydrate = async () => {
       const memberKey = getCurrentMember()?.userId?.trim();
-      if (seedKey.length > 0) {
+      if (!memberKey && seedKey.length > 0) {
         let parsed: GoalChoice[] = [];
         try {
           parsed = JSON.parse(seedKey) as GoalChoice[];
@@ -161,6 +161,7 @@ export function useGoals(seedGoals?: GoalChoice[] | null) {
     const trimmed = normalizePersistGoals(nextGoals ?? goals);
     persistGoalsLocally(trimmed);
     await persistGoalsToServer(trimmed);
+    markDraftGoalsDirty(false);
     return trimmed;
   };
 
