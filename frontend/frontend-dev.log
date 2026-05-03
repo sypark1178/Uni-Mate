@@ -1,0 +1,250 @@
+
+> uni-mate-frontend@0.1.0 dev
+> next dev -p 3001
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3001
+
+ ✓ Starting...
+ ✓ Ready in 8.6s
+ ○ Compiling / ...
+ ✓ Compiled / in 21.6s (549 modules)
+ HEAD / 200 in 4937ms
+ ○ Compiling /settings ...
+ ✓ Compiled /settings in 2.3s (586 modules)
+ GET /settings 200 in 7450ms
+ ○ Compiling /api/onboarding/scores ...
+ ✓ Compiled /api/onboarding/scores in 707ms (329 modules)
+ ✓ Compiled (334 modules)
+ GET /api/onboarding/goals 200 in 4270ms
+ GET /api/onboarding/profile 200 in 4286ms
+ GET /api/onboarding/goals 200 in 4319ms
+ GET /api/onboarding/profile 200 in 4362ms
+ GET /api/onboarding/scores?userKey=ldy01 200 in 4531ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 813ms (617 modules)
+ GET /login 200 in 1615ms
+ ✓ Compiled /api/auth/login in 179ms (340 modules)
+ POST /api/auth/login 200 in 546ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 674ms (629 modules)
+ GET /dashboard 200 in 1080ms
+ ✓ Compiled /api/analysis/result in 330ms (348 modules)
+ GET /api/onboarding/profile 200 in 502ms
+ ✓ Compiled in 0ms (348 modules)
+ GET /api/onboarding/goals 200 in 1120ms
+ ✓ Compiled in 1ms (348 modules)
+ GET /api/onboarding/profile 200 in 1237ms
+ GET /api/onboarding/goals 200 in 1249ms
+ ✓ Compiled in 0ms (348 modules)
+ GET /api/analysis/result 200 in 2114ms
+ GET /api/analysis/result 200 in 2121ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 1929ms
+ GET /login 200 in 446ms
+ POST /api/auth/login 200 in 320ms
+ GET /dashboard 200 in 255ms
+ GET /api/onboarding/profile 200 in 664ms
+ GET /api/onboarding/profile 200 in 851ms
+ GET /api/onboarding/goals 200 in 945ms
+ GET /api/onboarding/goals 200 in 995ms
+ GET /api/analysis/result 200 in 1129ms
+ GET /api/analysis/result 200 in 1132ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 709ms
+ GET /api/onboarding/goals 200 in 695ms
+ GET /api/onboarding/profile 200 in 937ms
+ GET /api/onboarding/profile 200 in 923ms
+ GET /api/onboarding/goals 200 in 1053ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 1159ms
+ GET /api/onboarding/profile 200 in 1485ms
+ GET /api/onboarding/goals 200 in 1717ms
+ GET /api/onboarding/goals 200 in 1905ms
+ GET /api/onboarding/profile 200 in 1910ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 2221ms
+ ○ Compiling /onboarding/grades ...
+ ✓ Compiled /onboarding/grades in 947ms (607 modules)
+ GET /api/onboarding/scores?userKey=kmj12 200 in 621ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 631ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 445ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 294ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 1618ms (571 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 4330ms
+ ○ Compiling /onboarding/goals ...
+ ✓ Compiled /onboarding/goals in 1595ms (579 modules)
+ GET /onboarding/goals?returnTo=%2Fsettings 200 in 3773ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 122ms
+ ○ Compiling /api/onboarding/goals ...
+ ✓ Compiled /api/onboarding/goals in 1634ms (321 modules)
+ GET /api/onboarding/goals 200 in 5883ms
+ GET /api/onboarding/goals 200 in 5915ms
+ ○ Compiling /analysis/loading ...
+ ✓ Compiled /analysis/loading in 5.3s (619 modules)
+ GET /analysis/loading?source=goals 200 in 6080ms
+ GET /analysis/loading?source=goals 200 in 1196ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 1251ms
+ ○ Compiling /api/analysis/result ...
+ ✓ Compiled /api/analysis/result in 2.8s (327 modules)
+ ○ Compiling /api/onboarding/profile ...
+ POST /api/analysis/result 200 in 8845ms
+ ✓ Compiled /api/onboarding/scores in 3.9s (329 modules)
+ ✓ Compiled (332 modules)
+ GET /api/onboarding/goals 200 in 8806ms
+ GET /api/onboarding/goals 200 in 9610ms
+ GET /api/onboarding/profile 200 in 10394ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 10560ms
+ GET /api/onboarding/profile 200 in 10731ms
+ GET /api/onboarding/goals 200 in 1171ms
+ GET /api/onboarding/profile 200 in 1542ms
+ GET /api/onboarding/goals 200 in 1627ms
+ GET /api/onboarding/profile 200 in 1875ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 2062ms
+ GET /login 200 in 380ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 124ms
+ ✓ Compiled /api/auth/login in 269ms (332 modules)
+ POST /api/auth/login 200 in 686ms
+ GET /dashboard 200 in 392ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 335ms
+ ○ Compiling /api/analysis/result ...
+ ✓ Compiled /api/analysis/result in 1079ms (334 modules)
+ GET /api/onboarding/profile 200 in 1670ms
+ GET /api/onboarding/profile 200 in 1711ms
+ ✓ Compiled in 1ms (334 modules)
+ GET /api/onboarding/goals 200 in 2634ms
+ ✓ Compiled in 1ms (334 modules)
+ GET /api/onboarding/goals 200 in 2798ms
+ ✓ Compiled in 0ms (334 modules)
+ GET /api/analysis/result 200 in 3644ms
+ GET /api/analysis/result 200 in 3893ms
+ GET /api/onboarding/scores?userKey=kmj14 200 in 2386ms
+ GET /api/onboarding/goals 200 in 1779ms
+ GET /api/onboarding/goals 200 in 1964ms
+ GET /api/onboarding/profile 200 in 2062ms
+ GET /api/onboarding/profile 200 in 2138ms
+ GET /api/onboarding/scores?userKey=kmj14 200 in 2235ms
+ GET /login 200 in 159ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 96ms
+ POST /api/auth/login 200 in 254ms
+ GET /dashboard 200 in 591ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 194ms
+ GET /api/onboarding/profile 200 in 1458ms
+ GET /api/analysis/result 200 in 1925ms
+ GET /api/onboarding/profile 200 in 1965ms
+ GET /api/analysis/result 200 in 2251ms
+ GET /api/onboarding/goals 200 in 2573ms
+ GET /api/onboarding/goals 200 in 2850ms
+ GET /api/onboarding/scores?userKey=kmj13 200 in 1465ms
+ GET /api/onboarding/profile 200 in 1842ms
+ GET /api/onboarding/goals 200 in 1853ms
+ GET /api/onboarding/profile 200 in 1853ms
+ GET /api/onboarding/goals 200 in 2019ms
+ GET /api/onboarding/scores?userKey=kmj13 200 in 2246ms
+ GET /login 200 in 233ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 107ms
+ POST /api/auth/login 200 in 441ms
+ GET /dashboard 200 in 110ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 139ms
+ GET /api/onboarding/profile 200 in 1673ms
+ GET /api/onboarding/profile 200 in 1918ms
+ GET /api/analysis/result 200 in 2134ms
+ GET /api/analysis/result 200 in 2151ms
+ GET /api/onboarding/goals 200 in 3592ms
+ GET /api/onboarding/goals 200 in 3950ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 2608ms
+ GET /api/onboarding/goals 200 in 1725ms
+ GET /api/onboarding/goals 200 in 1857ms
+ GET /api/onboarding/profile 200 in 1878ms
+ GET /api/onboarding/profile 200 in 1437ms
+ GET /api/onboarding/scores?userKey=kmj12 200 in 1623ms
+ GET /login 200 in 409ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 87ms
+ POST /api/auth/login 200 in 379ms
+ GET /dashboard 200 in 108ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 104ms
+ GET /api/onboarding/profile 200 in 1415ms
+ GET /api/onboarding/goals 200 in 1802ms
+ GET /api/analysis/result 200 in 2013ms
+ GET /api/analysis/result 200 in 2013ms
+ GET /api/onboarding/goals 200 in 2028ms
+ GET /api/onboarding/profile 200 in 2135ms
+ GET /api/onboarding/scores?userKey=ldy01 200 in 2005ms
+ GET /api/onboarding/goals 200 in 1661ms
+ GET /api/onboarding/goals 200 in 1756ms
+ GET /api/onboarding/profile 200 in 1815ms
+ GET /api/onboarding/profile 200 in 1984ms
+ GET /api/onboarding/scores?userKey=ldy01 200 in 2055ms
+ ○ Compiling /api/onboarding/profile-image ...
+ ✓ Compiled /api/onboarding/profile-image in 650ms (336 modules)
+ POST /api/onboarding/profile-image 200 in 1638ms
+ GET /login 200 in 753ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 527ms
+ POST /api/auth/login 200 in 437ms
+ GET /dashboard 200 in 105ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 290ms
+ GET /api/onboarding/profile 200 in 1465ms
+ GET /api/onboarding/goals 200 in 1736ms
+ GET /api/onboarding/goals 200 in 1645ms
+ GET /api/analysis/result 200 in 2252ms
+ GET /api/analysis/result 200 in 2260ms
+ GET /api/onboarding/profile 200 in 2499ms
+ GET /api/onboarding/scores?userKey=ldy01 200 in 2461ms
+ GET /api/onboarding/goals 200 in 1873ms
+ GET /api/onboarding/profile 200 in 2243ms
+ GET /api/onboarding/profile 200 in 2425ms
+ GET /api/onboarding/goals 200 in 2905ms
+ GET /api/onboarding/scores?userKey=ldy01 200 in 2902ms
+ GET /login 200 in 189ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 141ms
+ ✓ Compiled / in 223ms (320 modules)
+ GET / 200 in 1216ms
+ ⚠ Cross origin request detected from 127.0.0.1 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+ ✓ Compiled /api/auth/login in 172ms (354 modules)
+ POST /api/auth/login 200 in 1106ms
+ GET /dashboard 200 in 258ms
+ ✓ Compiled /api/analysis/result in 178ms (356 modules)
+ ✓ Compiled (360 modules)
+ GET /api/onboarding/goals 200 in 881ms
+ GET /api/onboarding/goals 200 in 1133ms
+ GET /api/onboarding/profile 200 in 1254ms
+ GET /api/onboarding/profile 200 in 1333ms
+ GET /api/analysis/result 200 in 1394ms
+ GET /api/analysis/result 200 in 1395ms
+ ○ Compiling /api/onboarding/scores ...
+ ✓ Compiled /api/onboarding/scores in 553ms (363 modules)
+ GET /api/onboarding/scores?userKey=kmj13 200 in 881ms
+ GET /api/onboarding/profile 200 in 552ms
+ GET /api/onboarding/goals 200 in 653ms
+ GET /api/onboarding/goals 200 in 778ms
+ GET /api/onboarding/profile 200 in 815ms
+ GET /api/onboarding/scores?userKey=kmj13 200 in 854ms
+ ○ Compiling /onboarding/basic ...
+ ✓ Compiled /onboarding/basic in 614ms (661 modules)
+ GET /api/onboarding/profile 200 in 438ms
+ GET /api/onboarding/profile 200 in 544ms
+ ✓ Compiled /api/onboarding/schools in 309ms (370 modules)
+ GET /api/onboarding/schools?region=%EC%A0%9C%EC%A3%BC%ED%8A%B9%EB%B3%84%EC%9E%90%EC%B9%98%EB%8F%84&district=%EC%84%9C%EA%B7%80%ED%8F%AC%EC%8B%9C+%EB%8C%80%EC%A0%95%EC%9D%8D&gradeLabel=%EA%B3%A03 200 in 446ms
+ GET /api/onboarding/schools?region=%EC%A0%9C%EC%A3%BC%ED%8A%B9%EB%B3%84%EC%9E%90%EC%B9%98%EB%8F%84&gradeLabel=%EA%B3%A03 200 in 447ms
+ GET /api/onboarding/goals 200 in 407ms
+ GET /api/onboarding/goals 200 in 550ms
+ GET /api/onboarding/profile 200 in 586ms
+ GET /api/onboarding/profile 200 in 649ms
+ GET /api/onboarding/scores?userKey=kmj13 200 in 736ms
+ ✓ Compiled /api/onboarding/profile-image in 333ms (372 modules)
+ POST /api/onboarding/profile-image 200 in 807ms
+ GET /login 200 in 166ms
+ POST /api/auth/login 200 in 255ms
+ GET /dashboard 200 in 83ms
+ GET /api/onboarding/profile 200 in 430ms
+ GET /api/onboarding/goals 200 in 528ms
+ GET /api/onboarding/goals 200 in 605ms
+ GET /api/analysis/result 200 in 633ms
+ GET /api/analysis/result 200 in 750ms
+ GET /api/onboarding/profile 200 in 780ms
+ GET /api/onboarding/scores?userKey=kmj14 200 in 458ms
+ GET /api/onboarding/goals 200 in 455ms
+ GET /api/onboarding/goals 200 in 538ms
+ GET /api/onboarding/profile 200 in 615ms
+ GET /api/onboarding/profile 200 in 702ms
+ GET /api/onboarding/scores?userKey=kmj14 200 in 746ms
+ POST /api/onboarding/profile-image 200 in 402ms
+ GET /login 200 in 85ms

@@ -41,6 +41,7 @@ export function SettingsView() {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [avatarSaveError, setAvatarSaveError] = useState<string | null>(null);
 
   const cleanedSearchParams = useMemo(() => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -72,10 +73,15 @@ export function SettingsView() {
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    setAvatarSaveError(null);
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        void updateProfileImageAndSync(reader.result);
+        void updateProfileImageAndSync(reader.result).then((result) => {
+          if (!result.saved) {
+            setAvatarSaveError("이미지 저장에 실패했어요. 잠시 후 다시 시도해 주세요.");
+          }
+        });
       }
     };
     reader.readAsDataURL(file);
@@ -192,6 +198,7 @@ export function SettingsView() {
                         })()
                       : "기본정보를 불러오는 중입니다."}
                   </div>
+                  {avatarSaveError ? <div className="mt-1 text-xs text-[#b42318]">{avatarSaveError}</div> : null}
                 </div>
               </div>
               <Link href={basicEditHref} prefetch className={editButtonClass}>

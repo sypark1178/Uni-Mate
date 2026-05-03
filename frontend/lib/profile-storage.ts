@@ -202,8 +202,12 @@ export function useStudentProfile() {
     persistProfile(nextProfile);
     setDraftProfile(nextProfile);
     setStudentProfile(nextProfile);
-    await persistProfileImageToServer(profileImageUrl);
-    return nextProfile;
+    const saved = await persistProfileImageToServer(profileImageUrl);
+    if (saved) {
+      // 프로필 이미지는 선택 즉시 백엔드에 저장되므로 dirty 상태를 바로 해제한다.
+      markDraftProfileDirty(false);
+    }
+    return { profile: nextProfile, saved };
   };
 
   const flushProfileToServer = async () => {
