@@ -54,6 +54,7 @@ export function SettingsView() {
   const gradesHref = moveTo("/onboarding/grades");
   const privacyHref = moveTo("/settings/privacy");
   const goalsFullHref = moveTo("/onboarding/goals");
+  const dataQueryHref = moveTo("/settings/data");
 
   const chips = useMemo(
     () => [studentProfile.gradeLabel, `${String(studentProfile.targetYear).slice(2)}학년도 입시`],
@@ -318,6 +319,23 @@ export function SettingsView() {
                   />
                 </button>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mb-5">
+          <h2 className="app-section-title mb-3">데이터 조회</h2>
+          <div className="rounded-[22px] border border-line bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="font-medium">테이블 / SQL 조회</div>
+                <div className="mt-1 text-sm text-muted">
+                  각 테이블 값을 조회하고 읽기 전용 SQL을 바로 실행할 수 있습니다.
+                </div>
+              </div>
+              <Link href={dataQueryHref} prefetch className={editButtonClass}>
+                열기
+              </Link>
             </div>
           </div>
         </section>
