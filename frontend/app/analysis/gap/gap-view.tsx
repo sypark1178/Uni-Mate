@@ -13,6 +13,16 @@ import { useScoreRecords } from "@/lib/score-storage";
 import { useGoals } from "@/lib/use-goals";
 import type { Recommendation } from "@/lib/types";
 
+/** 세특 키워드 갭 한 줄 — DB/목표에 짧게 들어와도 국문 계열이면 동일 문구로 맞춤 */
+function keywordGapLine(majorRaw: string): string {
+  const m = majorRaw.trim();
+  if (!m) return "목표학과 관련 활동 키워드 보완 필요";
+  if (m === "국어국문학과" || m.includes("국어국문") || m === "국문학과" || m === "국문") {
+    return "국어국문학과 관련 활동 키워드 보완 필요";
+  }
+  return `${m} 관련 활동 키워드 보완 필요`;
+}
+
 function GapAnalysisViewInner() {
   const searchParams = useSearchParams();
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams]);
@@ -54,7 +64,7 @@ function GapAnalysisViewInner() {
       {
         rank: 2,
         title: "세특 키워드 갭",
-        desc: `${major} 관련 활동 키워드 보완 필요`,
+        desc: keywordGapLine(major),
         tone: "good" as const,
         label: "보완가능"
       },

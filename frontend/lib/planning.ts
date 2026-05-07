@@ -2,11 +2,8 @@ import type { GoalChoice, Recommendation } from "@/lib/types";
 
 export const goalStorageKey = "uni-mate-goals";
 
-export const defaultGoals: GoalChoice[] = [
-  { university: "경희대학교", major: "경영학과" },
-  { university: "서강대", major: "경영학과" },
-  { university: "숭실대", major: "경영학과" }
-];
+/** 저장·서버 값이 없을 때: 온보딩에서 1순위만 보이고 대학·학과는 사용자가 채우도록 둔다 */
+export const defaultGoals: GoalChoice[] = [{ university: "경희대", major: "", priority: 1 }];
 
 const universityBaseScore: Record<string, number> = {
   서울대: 24,
@@ -57,7 +54,7 @@ type StrategySeed = {
 
 const strategyPoolByMajorKeyword: Record<string, StrategySeed[]> = {
   경영: [
-    { university: "서강대", major: "경영학과", category: "도전" },
+    { university: "서강대", major: "경영학부", category: "도전" },
     { university: "연세대", major: "경영학과", category: "도전" },
     { university: "한양대", major: "경영학부", category: "적정" },
     { university: "중앙대", major: "경영학부", category: "적정" },
@@ -75,7 +72,7 @@ const strategyPoolByMajorKeyword: Record<string, StrategySeed[]> = {
 };
 
 const fallbackStrategyPool: StrategySeed[] = [
-  { university: "서강대", major: "경영학과", category: "도전" },
+  { university: "서강대", major: "경영학부", category: "도전" },
   { university: "경희대학교", major: "경영학과", category: "도전" },
   { university: "한양대", major: "정책학과", category: "적정" },
   { university: "한국외대", major: "LD학부", category: "적정" },

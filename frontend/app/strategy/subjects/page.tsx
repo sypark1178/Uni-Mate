@@ -65,10 +65,7 @@ function scoreHintLine(schoolAverage: string, mockAverage: string): string {
   if (!hasSchool && !hasMock) {
     return "설정에 성적을 입력하면 과목 표시가 더 정확해져요.";
   }
-  const parts: string[] = [];
-  if (hasSchool) parts.push(`내신 평균 ${schoolAverage}`);
-  if (hasMock) parts.push(`모의고사 평균 ${mockAverage}`);
-  return `${parts.join(", ")} 숫자를 보고 ‘이수 중 / 미이수’를 짐작해 둔 거예요.`;
+  return "";
 }
 
 function businessCardsByUniversity(bucket: UniBucket, university: string, major: string): Omit<SubjectCard, "status">[] {
@@ -274,7 +271,7 @@ function StrategySubjectsPageInner() {
               );
             })}
           </div>
-          <p className="text-xs leading-snug text-muted">{scoreLine}</p>
+          {scoreLine ? <p className="text-xs leading-snug text-muted">{scoreLine}</p> : null}
         </div>
 
         <div className="space-y-4">

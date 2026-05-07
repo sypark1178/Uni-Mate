@@ -84,21 +84,21 @@ export default function StrategyPage() {
       }
 
       const target = categoryTarget[item.category];
-      const gapValue = Math.abs(schoolAverage - target);
-      const gap = gapValue.toFixed(1);
       const schoolText = schoolAverage.toFixed(2);
       const minMet = schoolAverage <= target + 0.3 ? "O" : "X";
+      const gapValue = Math.abs(schoolAverage - target);
+      const gap = gapValue.toFixed(1);
+      const scoreLineSuffix = mockAverage !== null ? ` / 모의 ${mockAverage.toFixed(2)}` : "";
+
       const riskByCategory: Record<Recommendation["category"], string> = {
         도전:
           gapValue > 0.5
             ? `붙으려면 대략 내신 ${target.toFixed(1)} 전후를 많이 보는 편인데, 지금이랑 ${gap} 정도 차이가 나요. 수능이랑 학생부를 같이 챙기는 게 좋아요.`
-            : `내신 차이는 ${gap} 정도로 버틸 만해요. 수능 조건을 못 맞추면 위험할 수 있어요.`
-            ,
+            : `내신 차이는 ${gap} 정도로 버틸 만해요. 수능 조건을 못 맞추면 위험할 수 있어요.`,
         적정:
           gapValue > 0.5
             ? `적당히 도전하는 구간인데, 내신이 대략 ${gap} 정도 부족해 보여요. 교과 말고 동아리·봉사 같은 활동도 조금 보태 보세요.`
-            : `적당한 구간이에요. 지금처럼 공부하는 속도를 유지하는 게 가장 중요해요.`
-            ,
+            : `적당한 구간이에요. 지금처럼 공부하는 속도를 유지하는 게 가장 중요해요.`,
         안정:
           gapValue > 0.7
             ? `비교적 여유 있어 보이지만, 내신이 크게 떨어지면 위험해질 수 있어요.`
@@ -110,11 +110,10 @@ export default function StrategyPage() {
         : item.major.includes("경제")
           ? "이 학교가 보는 키워드 | 자료 읽기 · 말이 맞는지 따지기 · 뉴스 이해"
           : "이 학교가 보는 키워드 | 과에 맞는지 · 공부 태도 · 스스로 계획하기";
-      const scoreLineSuffix = mockAverage !== null ? ` / 모의 ${mockAverage.toFixed(2)}` : "";
 
       return {
         ...item,
-        notes: `수능 조건 ${minMet} · 내신 평균 ${schoolText}${scoreLineSuffix}\n조심할 점: ${riskByCategory[item.category]}\n${keywordByMajor}`
+        notes: `수능 조건 ${minMet} · 내신 평균 ${schoolText}${scoreLineSuffix}\n조심할 점 | ${riskByCategory[item.category]}\n${keywordByMajor}`
       };
     });
   }, [filteredRecommendations, summary.schoolAverage, summary.mockAverage]);

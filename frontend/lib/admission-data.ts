@@ -149,6 +149,52 @@ export function normalizeUniversityName(university: string): string {
   return universityAliasMap[trimmed] ?? trimmed;
 }
 
+/**
+ * DB·저장값(예: `연세대학교`, `연세대학교(서울)`)을 앱 드롭다운 키(`universityMajorsMap`)에 맞춥니다.
+ * 매칭 실패 시 원문을 그대로 반환합니다(화면에서 별도 옵션으로 노출).
+ */
+export function matchUniversityToDropdownKey(raw: string): string {
+  const t = raw.trim();
+  if (!t) {
+    return universityOptions[0] ?? "";
+  }
+  if (universityMajorsMap[t]) {
+    return t;
+  }
+
+  const aliasResolved = normalizeUniversityName(t);
+  if (universityMajorsMap[aliasResolved]) {
+    return aliasResolved;
+  }
+
+  const base = t.replace(/\([^)]*\)/g, "").trim();
+  const collapsed = base
+    .replace(/여자대학교$/u, "여대")
+    .replace(/대학교$/u, "대")
+    .replace(/대학$/u, "");
+
+  for (const candidate of [base, collapsed, normalizeUniversityName(base), normalizeUniversityName(collapsed)]) {
+    if (candidate && universityMajorsMap[candidate]) {
+      return candidate;
+    }
+  }
+
+  let best = "";
+  for (const key of universityOptions) {
+    if (base === key || collapsed === key) {
+      return key;
+    }
+    if ((base.startsWith(key) || collapsed.startsWith(key)) && key.length >= best.length) {
+      best = key;
+    }
+  }
+  if (best) {
+    return best;
+  }
+
+  return t;
+}
+
 export function getMajorsByUniversity(university: string): string[] {
   const normalized = normalizeUniversityName(university);
   return universityMajorsMap[normalized] ?? [];

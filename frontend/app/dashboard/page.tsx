@@ -98,7 +98,9 @@ export default function DashboardPage() {
   const simulationHref = mergeHrefWithSearchParams("/analysis/simulation", searchParams);
   const goalsHref = useMemo(() => {
     const params = new URLSearchParams(currentSearch);
-    params.set("returnTo", dashboardCurrentHref);
+    // 홈에서 "수정"은 설정에서 편집하는 플로우로 통일한다.
+    // (편집 완료 후 돌아갈 위치도 /settings 로 맞춤)
+    params.set("returnTo", "/settings");
     [1, 2, 3].forEach((rank) => params.delete(`g${rank}`));
     goals.slice(0, 3).forEach((goal, index) => {
       const university = goal.university.trim();

@@ -57,6 +57,7 @@ export default function OnboardingBasicPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
+  const isSettingsEditMode = Boolean(returnTo && returnTo.startsWith("/settings"));
   const demoAppliedRef = useRef(false);
   /** 유형 자동 연도: 최초 로드(빈 연도)와 유형 변경 시에만 덮어씀 — 저장된 연도는 유지 */
   const prevGradeForAutoYear = useRef<string | null>(null);
@@ -250,14 +251,15 @@ export default function OnboardingBasicPage() {
   return (
     <OnboardingStep
       step="1/3"
-      title="기본 정보를 알려주세요"
+      title={isSettingsEditMode ? "기본 정보 수정하기" : "기본 정보를 알려주세요"}
       subtitle="학년, 지역, 수능 응시 연도 정보는 전형과 일정 계산의 기준이 됩니다."
       subtitleClassName="text-xs leading-5 whitespace-nowrap"
-      prevHref={returnTo ?? undefined}
-      prevLabel={returnTo ? "호출한 메뉴로 돌아가기" : undefined}
-      helperLink={{ href: "/login", label: "뒤로가기", plainHref: true }}
-      nextHref="/onboarding/grades"
-      nextLabel={hydrated ? "2단계 성적 입력 →" : "불러오는 중..."}
+      showStepIndicator={!isSettingsEditMode}
+      prevHref={isSettingsEditMode ? undefined : returnTo ?? undefined}
+      prevLabel={isSettingsEditMode ? undefined : returnTo ? "호출한 메뉴로 돌아가기" : undefined}
+      helperLink={isSettingsEditMode ? undefined : { href: "/login", label: "뒤로가기", plainHref: true }}
+      nextHref={isSettingsEditMode ? (returnTo ?? "/settings") : "/onboarding/grades"}
+      nextLabel={isSettingsEditMode ? "뒤로가기" : hydrated ? "2단계 성적 입력 →" : "불러오는 중..."}
       nextDisabled={!hydrated}
     >
       {!hydrated ? (

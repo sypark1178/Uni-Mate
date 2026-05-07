@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import type { GoalChoice } from "@/lib/types";
 import { defaultGoals, goalStorageKey } from "@/lib/planning";
-import { normalizeUniversityName } from "@/lib/admission-data";
+import { matchUniversityToDropdownKey } from "@/lib/admission-data";
 import { clearDraftGoals, getDraftGoals, isDraftGoalsDirty, markDraftGoalsDirty, setDraftGoals } from "@/lib/draft-store";
 import { getCurrentMember } from "@/lib/member-store";
 import { readJsonResponse } from "@/lib/read-json-response";
 
 function normalizeStoredGoals(goals: GoalChoice[]): GoalChoice[] {
   return goals.map((goal) => ({
-    university: normalizeUniversityName(goal.university),
+    university: matchUniversityToDropdownKey(goal.university),
     major: (goal.major ?? "").trim(),
     priority: typeof goal.priority === "number" ? goal.priority : null,
     strategyType: goal.strategyType ?? null,

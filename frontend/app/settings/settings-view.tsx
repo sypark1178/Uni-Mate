@@ -211,14 +211,14 @@ export function SettingsView() {
         <section className="mb-5">
           <h2 className="app-section-title mb-3">성적정보</h2>
           <div className="overflow-hidden rounded-[22px] border border-line bg-white">
-            <div className="grid grid-cols-[1fr_1fr_auto] items-stretch max-sm:grid-cols-1">
+            <div className="grid grid-cols-[1fr_1fr_auto] items-stretch">
               <div className="p-5">
                 <div className="text-[18px] font-medium">내신</div>
                 <div className="mt-2 text-xl font-medium text-accent">
                   {summary.settingsSchoolFromDb ?? summary.schoolAverage}
                 </div>
               </div>
-              <div className="border-l border-slate-100 p-5 max-sm:border-l-0 max-sm:border-t">
+              <div className="border-l border-slate-100 p-5">
                 <div className="text-[18px] font-medium">모의고사</div>
                 <div className="mt-2 text-xl font-medium text-accent">
                   {summary.settingsMockFromDb ?? summary.mockAverage}
@@ -227,7 +227,7 @@ export function SettingsView() {
                   생기부 {summary.studentRecordCount}건 / 업로드 {summary.uploadCount}건
                 </div>
               </div>
-              <div className="flex items-center justify-center border-l border-slate-100 p-4 max-sm:border-l-0 max-sm:border-t">
+              <div className="flex items-center justify-center border-l border-slate-100 p-4">
                 <Link href={gradesHref} prefetch className={editButtonClass}>
                   수정
                 </Link>
@@ -238,34 +238,35 @@ export function SettingsView() {
 
         <section className="mb-5">
           <h2 className="app-section-title mb-3">목표정보</h2>
-          {goalAnalyses.length > 0 ? (
-            <div className="overflow-hidden rounded-[22px] border border-line bg-white">
-              {goalAnalyses.map((item, index) => (
-                <div key={item.id} className="border-t border-slate-100 p-4 first:border-t-0">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${goalRankNumberToneClass(index)}`}
-                    >
-                      {index + 1}
-                    </div>
-                    <div>
-                      <div className="font-semibold">{compactGoalLine(item.university, item.major)}</div>
-                      <div className="mt-1 text-sm text-muted">
-                        {item.category} {item.fitScore}% 기준 목표 대학 분석 카드
-                      </div>
+          <div className="space-y-3">
+            {goalAnalyses.length > 0 ? (
+              goalAnalyses.map((item, index) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-3 rounded-[22px] border border-line bg-white p-4"
+                >
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${goalRankNumberToneClass(index)}`}
+                  >
+                    {index + 1}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{compactGoalLine(item.university, item.major)}</div>
+                    <div className="mt-1 text-sm text-muted">
+                      {item.category} {item.fitScore}% 기준 목표 대학 분석 카드
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-[22px] border border-line bg-white p-4 text-sm text-muted">
-              저장된 목표대학/학과가 없습니다. 목표설정에서 먼저 선택해 주세요.
-            </div>
-          )}
-          <Link href={goalsFullHref} prefetch className={`${wideEditButtonClass} mt-3 text-center`}>
-            + 목표대학 추가 / 전체 수정
-          </Link>
+              ))
+            ) : (
+              <div className="rounded-[22px] border border-line bg-white p-4 text-sm text-muted">
+                저장된 목표대학/학과가 없습니다. 목표설정에서 먼저 선택해 주세요.
+              </div>
+            )}
+            <Link href={goalsFullHref} prefetch className={`${wideEditButtonClass} mt-3 text-center`}>
+              + 목표대학 추가 / 전체 수정
+            </Link>
+          </div>
         </section>
 
         <section className="mb-5">

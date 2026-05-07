@@ -65,8 +65,12 @@ function NavIcon({ icon, active }: { icon: string; active: boolean }) {
   );
 }
 
-const navClass =
+const navClassFixed =
   "pointer-events-auto fixed bottom-0 left-1/2 z-[70] flex h-[58px] w-full max-w-[393px] -translate-x-1/2 items-stretch border-t border-[#F0F0F0] bg-white px-0";
+
+/** ?wf=1 일 때 고정 해제해 본문 아래 한 덩어리로 스크린샷 가능 */
+const navClassWireframe =
+  "pointer-events-auto relative z-[70] mx-auto mt-0 flex h-[58px] w-full max-w-[393px] shrink-0 items-stretch border-t border-[#F0F0F0] bg-white px-0";
 
 const itemClass = (active: boolean) =>
   `flex h-full w-1/5 min-w-0 flex-col items-center justify-center gap-0.5 bg-white px-0 text-[11px] font-medium leading-none no-underline ${
@@ -75,7 +79,7 @@ const itemClass = (active: boolean) =>
 
 function BottomNavFallback() {
   return (
-    <nav className={navClass} aria-label="하단 메뉴">
+    <nav className={navClassFixed} aria-label="하단 메뉴">
       {items.map((item) => {
         return (
           <Link key={item.href} href={item.href} className={itemClass(false)} prefetch>
@@ -93,6 +97,9 @@ function BottomNavFallback() {
 function BottomNavInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const wireframe =
+    searchParams.get("wf") === "1" || searchParams.get("wireframe") === "1";
+  const navClass = wireframe ? navClassWireframe : navClassFixed;
 
   return (
     <nav className={navClass} aria-label="하단 메뉴">

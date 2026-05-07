@@ -10,6 +10,7 @@ type OnboardingStepProps = {
   title: string;
   subtitle: string;
   subtitleClassName?: string;
+  showStepIndicator?: boolean;
   children: React.ReactNode;
   prevHref?: string;
   prevLabel?: string;
@@ -48,6 +49,7 @@ export function OnboardingStep({
   title,
   subtitle,
   subtitleClassName,
+  showStepIndicator = true,
   children,
   prevHref,
   prevLabel = "뒤로가기",
@@ -99,15 +101,17 @@ export function OnboardingStep({
       subtitle={subtitle}
       subtitleClassName={subtitleClassName}
       topSlot={
-        <>
-          <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-200">
-            <div
-              className="h-full rounded-full bg-navy"
-              style={{ width: step === "1/3" ? "33%" : step === "2/3" ? "66%" : "100%" }}
-            />
-          </div>
-          <div className="mb-4 text-xs leading-5 text-muted">{step} 단계</div>
-        </>
+        showStepIndicator ? (
+          <>
+            <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full rounded-full bg-navy"
+                style={{ width: step === "1/3" ? "33%" : step === "2/3" ? "66%" : "100%" }}
+              />
+            </div>
+            <div className="mb-4 text-xs leading-5 text-muted">{step} 단계</div>
+          </>
+        ) : undefined
       }
     >
       <div className="space-y-4">{children}</div>

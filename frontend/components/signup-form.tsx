@@ -51,6 +51,53 @@ export function SignupForm({
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const loadProfileFromLocalStorage = (): StudentProfile | null => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(`${profileStorageKey}:local-user`);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") return null;
+      const candidate = parsed as Partial<StudentProfile>;
+      const name = typeof candidate.name === "string" ? candidate.name : "";
+      const gradeLabel = typeof candidate.gradeLabel === "string" ? candidate.gradeLabel : "";
+      const schoolName = typeof candidate.schoolName === "string" ? candidate.schoolName : "";
+      const district = typeof candidate.district === "string" ? candidate.district : "";
+      const targetYear =
+        typeof candidate.targetYear === "number" && Number.isFinite(candidate.targetYear) ? candidate.targetYear : 0;
+      return {
+        name,
+        gradeLabel,
+        schoolName,
+        district,
+        track: typeof candidate.track === "string" ? candidate.track : "미정",
+        targetYear,
+        hasRequiredInfo: false,
+        hasScores: false
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const handleLoadMyInfo = () => {
+    const profile = loadProfileFromLocalStorage();
+    if (!profile) {
+      setErrorMessage("저장된 기본 정보가 없습니다. 먼저 온보딩에서 기본 정보를 입력해 주세요.");
+      return;
+    }
+    setErrorMessage("");
+    setForm((prev) => ({
+      ...prev,
+      name: profile.name?.trim() ?? "",
+      school: profile.schoolName?.trim() ?? "",
+      grade: profile.gradeLabel?.trim() ?? "",
+      examYear: profile.targetYear ? String(profile.targetYear) : "",
+      district: profile.district?.trim() ?? "",
+      email: prev.email || (guestSaveType === "email" ? guestSaveId : prev.email)
+    }));
+  };
+
   const handleToggleAll = (checked: boolean) => {
     setAgreements({
       privacy: checked,
@@ -141,15 +188,6 @@ export function SignupForm({
   return (
     <PhoneFrame title={title} subtitle={subtitle}>
       <div className="space-y-5">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-navy"
-        >
-          <span aria-hidden="true">←</span>
-          <span>이전 화면으로 돌아가기</span>
-        </button>
-
         <section>
           <div className="mb-2 text-sm font-bold text-ink">아이디</div>
           <input
@@ -169,7 +207,16 @@ export function SignupForm({
         </section>
 
         <section className="rounded-[18px] border border-line bg-white p-4">
-          <div className="mb-3 text-sm font-bold text-ink">기본 정보</div>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="text-sm font-bold text-ink">기본 정보</div>
+            <button
+              type="button"
+              onClick={handleLoadMyInfo}
+              className="shrink-0 text-xs font-semibold text-muted hover:text-ink"
+            >
+              내 정보 불러오기
+            </button>
+          </div>
           <div className="space-y-3">
             <input
               className={onboardingFormFieldClass}
@@ -274,7 +321,7 @@ export function SignupForm({
           <button
             type="button"
             onClick={handleBack}
-            className="w-full rounded-xl border border-line px-4 py-4 text-base font-semibold text-muted"
+            className="mx-auto w-fit text-sm font-semibold text-muted underline underline-offset-4 hover:text-ink"
           >
             뒤로가기
           </button>
