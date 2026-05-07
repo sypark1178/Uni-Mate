@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -7,7 +7,6 @@ import { BottomNav } from "@/components/bottom-nav";
 import { PhoneFrame } from "@/components/phone-frame";
 import { mergeHrefWithSearchParams } from "@/lib/navigation";
 import { compactGoalLine, goalRankNumberToneClass } from "@/lib/goal-display";
-import { examYears } from "@/lib/admission-data";
 import { buildGoalAnalyses, goalStorageKey, parseSeededGoals } from "@/lib/planning";
 import { profileStorageKey, useStudentProfile } from "@/lib/profile-storage";
 import { scoreStorageKey, useScoreRecords } from "@/lib/score-storage";
@@ -41,7 +40,6 @@ export function SettingsView() {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [avatarSaveError, setAvatarSaveError] = useState<string | null>(null);
 
   const cleanedSearchParams = useMemo(() => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -53,17 +51,14 @@ export function SettingsView() {
 
   const settingsReturnHref = moveTo("/settings");
   const basicEditHref = moveTo(`/onboarding/basic?returnTo=${encodeURIComponent(settingsReturnHref)}`);
-  const gradesHref = moveTo(`/onboarding/grades?returnTo=${encodeURIComponent(settingsReturnHref)}`);
+  const gradesHref = moveTo("/onboarding/grades");
   const privacyHref = moveTo("/settings/privacy");
-  const goalsFullHref = moveTo(`/onboarding/goals?returnTo=${encodeURIComponent(settingsReturnHref)}`);
+  const goalsFullHref = moveTo("/onboarding/goals");
 
-  const chips = useMemo(() => {
-    const parts = [studentProfile.gradeLabel].filter((item) => Boolean(item && String(item).trim()));
-    if (examYears.includes(studentProfile.targetYear)) {
-      parts.push(`${String(studentProfile.targetYear).slice(2)}학년도 입시`);
-    }
-    return parts;
-  }, [studentProfile.gradeLabel, studentProfile.targetYear]);
+  const chips = useMemo(
+    () => [studentProfile.gradeLabel, `${String(studentProfile.targetYear).slice(2)}학년도 입시`],
+    [studentProfile.gradeLabel, studentProfile.targetYear]
+  );
   const isHydrated = goalsHydrated && scoresHydrated && profileHydrated;
 
   const toggle = (key: keyof typeof toggles) => {
@@ -73,15 +68,10 @@ export function SettingsView() {
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    setAvatarSaveError(null);
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        void updateProfileImageAndSync(reader.result).then((result) => {
-          if (!result.saved) {
-            setAvatarSaveError("이미지 저장에 실패했어요. 잠시 후 다시 시도해 주세요.");
-          }
-        });
+        void updateProfileImageAndSync(reader.result);
       }
     };
     reader.readAsDataURL(file);
@@ -90,7 +80,6 @@ export function SettingsView() {
 
   const completeLogout = () => {
     setShowLogoutModal(false);
-    clearAllDrafts();
     logoutMember();
     window.location.replace(`${window.location.origin}/login`);
   };
@@ -100,7 +89,6 @@ export function SettingsView() {
     if (userKey && typeof window !== "undefined") {
       window.localStorage.removeItem(`${profileStorageKey}:${userKey}`);
       window.localStorage.removeItem(`${scoreStorageKey}:${userKey}`);
-      window.localStorage.removeItem(`${scoreStorageKey}:${userKey.toLowerCase()}`);
       window.localStorage.removeItem(`${goalStorageKey}:${userKey}`);
     }
     clearAllDrafts();
@@ -188,17 +176,9 @@ export function SettingsView() {
                   <div className="text-xl font-medium">{isHydrated ? studentProfile.name : "불러오는 중..."}</div>
                   <div className="mt-1 text-sm text-muted">
                     {isHydrated
-                      ? (() => {
-                          const parts = [
-                            studentProfile.region,
-                            studentProfile.district,
-                            studentProfile.schoolName ? shortenSchoolName(studentProfile.schoolName) : ""
-                          ].filter((item) => Boolean(item && String(item).trim()));
-                          return parts.length > 0 ? parts.join(" / ") : "미입력";
-                        })()
+                      ? `${studentProfile.region || "서울"} / ${studentProfile.district || "강남구"} / ${shortenSchoolName(studentProfile.schoolName || "대치고등학교")}`
                       : "기본정보를 불러오는 중입니다."}
                   </div>
-                  {avatarSaveError ? <div className="mt-1 text-xs text-[#b42318]">{avatarSaveError}</div> : null}
                 </div>
               </div>
               <Link href={basicEditHref} prefetch className={editButtonClass}>
@@ -211,14 +191,14 @@ export function SettingsView() {
         <section className="mb-5">
           <h2 className="app-section-title mb-3">성적정보</h2>
           <div className="overflow-hidden rounded-[22px] border border-line bg-white">
-            <div className="grid grid-cols-[1fr_1fr_auto] items-stretch">
+            <div className="grid grid-cols-[1fr_1fr_auto] items-stretch max-sm:grid-cols-1">
               <div className="p-5">
                 <div className="text-[18px] font-medium">내신</div>
                 <div className="mt-2 text-xl font-medium text-accent">
                   {summary.settingsSchoolFromDb ?? summary.schoolAverage}
                 </div>
               </div>
-              <div className="border-l border-slate-100 p-5">
+              <div className="border-l border-slate-100 p-5 max-sm:border-l-0 max-sm:border-t">
                 <div className="text-[18px] font-medium">모의고사</div>
                 <div className="mt-2 text-xl font-medium text-accent">
                   {summary.settingsMockFromDb ?? summary.mockAverage}
@@ -227,7 +207,7 @@ export function SettingsView() {
                   생기부 {summary.studentRecordCount}건 / 업로드 {summary.uploadCount}건
                 </div>
               </div>
-              <div className="flex items-center justify-center border-l border-slate-100 p-4">
+              <div className="flex items-center justify-center border-l border-slate-100 p-4 max-sm:border-l-0 max-sm:border-t">
                 <Link href={gradesHref} prefetch className={editButtonClass}>
                   수정
                 </Link>
@@ -243,19 +223,28 @@ export function SettingsView() {
               goalAnalyses.map((item, index) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3 rounded-[22px] border border-line bg-white p-4"
+                  className="flex items-center justify-between gap-3 rounded-[22px] border border-line bg-white p-4"
                 >
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${goalRankNumberToneClass(index)}`}
-                  >
-                    {index + 1}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold">{compactGoalLine(item.university, item.major)}</div>
-                    <div className="mt-1 text-sm text-muted">
-                      {item.category} {item.fitScore}% 기준 목표 대학 분석 카드
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${goalRankNumberToneClass(index)}`}
+                    >
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div className="font-semibold">{compactGoalLine(item.university, item.major)}</div>
+                      <div className="mt-1 text-sm text-muted">
+                        {item.category} {item.fitScore}% 기준 목표 대학 분석 카드
+                      </div>
                     </div>
                   </div>
+                  <Link
+                    href={moveTo(`/onboarding/goals?focus=${index + 1}`)}
+                    prefetch
+                    className={editButtonClass}
+                  >
+                    수정
+                  </Link>
                 </div>
               ))
             ) : (
@@ -263,14 +252,14 @@ export function SettingsView() {
                 저장된 목표대학/학과가 없습니다. 목표설정에서 먼저 선택해 주세요.
               </div>
             )}
-            <Link href={goalsFullHref} prefetch className={`${wideEditButtonClass} mt-3 text-center`}>
+            <Link href={goalsFullHref} prefetch className={`${wideEditButtonClass} text-center`}>
               + 목표대학 추가 / 전체 수정
             </Link>
           </div>
         </section>
 
         <section className="mb-5">
-          <h2 className="app-section-title mb-3">알림</h2>
+          <h2 className="app-section-title mb-3">알림 설정</h2>
           <div className="space-y-3">
             {[
               { key: "guideline" as const, title: "입시 정보 변경 알림", sub: "관심 대학 모집요강 변경 내용" },
@@ -304,12 +293,12 @@ export function SettingsView() {
         </section>
 
         <section className="mb-5">
-          <h2 className="app-section-title mb-3">데이터와 권한</h2>
+          <h2 className="app-section-title mb-3">정보 공유 설정</h2>
           <div className="rounded-[22px] border border-line bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="font-medium">공개 정보 설정</div>
-                <div className="mt-1 text-sm text-muted">기본정보, 성적, 목표정보의 공개 범위를 조정해요.</div>
+                <div className="font-medium">항목 설정 및 공유</div>
+                <div className="mt-1 text-sm text-muted">기본 정보, 성적, 목표 정보를 공개하고 공유할 수 있어요.</div>
               </div>
               <div className="flex items-center gap-2">
                 <Link href={privacyHref} prefetch className={editButtonClass}>

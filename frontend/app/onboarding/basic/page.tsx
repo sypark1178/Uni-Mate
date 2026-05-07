@@ -255,8 +255,6 @@ export default function OnboardingBasicPage() {
       subtitle="학년, 지역, 수능 응시 연도 정보는 전형과 일정 계산의 기준이 됩니다."
       subtitleClassName="text-xs leading-5 whitespace-nowrap"
       showStepIndicator={!isSettingsEditMode}
-      prevHref={isSettingsEditMode ? undefined : returnTo ?? undefined}
-      prevLabel={isSettingsEditMode ? undefined : returnTo ? "호출한 메뉴로 돌아가기" : undefined}
       helperLink={isSettingsEditMode ? undefined : { href: "/login", label: "뒤로가기", plainHref: true }}
       nextHref={isSettingsEditMode ? (returnTo ?? "/settings") : "/onboarding/grades"}
       nextLabel={isSettingsEditMode ? "뒤로가기" : hydrated ? "2단계 성적 입력 →" : "불러오는 중..."}

@@ -738,7 +738,6 @@ export default function OnboardingGradesPage() {
   const router = useRouter();
 
   const searchParams = useSearchParams() ?? new URLSearchParams();
-  const returnTo = searchParams.get("returnTo");
 
   const {
 
@@ -1340,9 +1339,25 @@ export default function OnboardingGradesPage() {
 
   }, [activeScoreRecord?.subjects]);
 
+  const returnTo = searchParams.get("returnTo");
+  const isSettingsEditMode = Boolean(returnTo && returnTo.startsWith("/settings"));
+
+  const searchParamsWithoutReturnTo = useMemo(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("returnTo");
+    return next;
+  }, [searchParams]);
+
   const goalsHref = mergeHrefWithSearchParams("/onboarding/goals", searchParams);
 
   const basicHref = mergeHrefWithSearchParams("/onboarding/basic", searchParams);
+
+  const settingsReturnHref = useMemo(() => {
+    if (!isSettingsEditMode || !returnTo) {
+      return null;
+    }
+    return mergeHrefWithSearchParams(returnTo, searchParamsWithoutReturnTo);
+  }, [isSettingsEditMode, returnTo, searchParamsWithoutReturnTo]);
 
 
 
@@ -1359,6 +1374,11 @@ export default function OnboardingGradesPage() {
   const handleBack = async () => {
 
     flushStore();
+
+    if (settingsReturnHref) {
+      safeNavigate(router, settingsReturnHref);
+      return;
+    }
 
     safeNavigate(router, basicHref);
 
@@ -1545,13 +1565,19 @@ export default function OnboardingGradesPage() {
 
     <PhoneFrame
 
-      title="성적을 입력해 주세요"
+      title={isSettingsEditMode ? "성적 정보 수정하기" : "성적을 입력해 주세요"}
 
       subtitle="성적 정보는 자세히 입력할수록 분석이 정확해요."
 
       subtitleClassName="text-xs leading-5 whitespace-nowrap"
 
       topSlot={
+
+        isSettingsEditMode
+
+          ? undefined
+
+          : (
 
         <>
 
@@ -1564,6 +1590,8 @@ export default function OnboardingGradesPage() {
           <div className="mb-4 text-xs leading-5 text-muted">2/3 단계</div>
 
         </>
+
+            )
 
       }
 
@@ -2187,35 +2215,61 @@ export default function OnboardingGradesPage() {
 
       <div className="mt-6 space-y-3">
 
-        <button type="button" onClick={() => void handleMoveNext(goalsHref)} className={onboardingPrimaryCtaClass}>
+        {isSettingsEditMode ? (
 
-          3단계 목표 대학 / 학과 설정 →
+          <>
 
-        </button>
+            <button
 
-        <button
+              type="button"
 
-          type="button"
+              onClick={() => void handleSaveGrades()}
 
-          onClick={() => void handleBack()}
+              disabled={gradeSavePending}
 
-          className="block w-full bg-transparent py-1 text-center text-sm font-normal text-muted underline underline-offset-4"
+              className={`${onboardingPrimaryCtaClass} disabled:cursor-not-allowed disabled:opacity-60`}
 
-        >
+            >
 
-          뒤로가기
+              {gradeSavePending ? "저장 중..." : "저장하기"}
 
-        </button>
-        {returnTo && returnTo.startsWith("/") ? (
-          <button
-            type="button"
-            onClick={() => safeNavigate(router, returnTo)}
-            className="block w-full bg-transparent py-1 text-center text-sm font-normal text-muted underline underline-offset-4"
-          >
-            호출한 메뉴로 돌아가기
-          </button>
-        ) : null}
+            </button>
 
+            <button type="button" onClick={() => void handleBack()} className={onboardingPrimaryCtaClass}>
+
+              뒤로가기
+
+            </button>
+
+          </>
+
+        ) : (
+
+          <>
+
+            <button type="button" onClick={() => void handleMoveNext(goalsHref)} className={onboardingPrimaryCtaClass}>
+
+              3단계 목표 대학 / 학과 설정 →
+
+            </button>
+
+            <button
+
+              type="button"
+
+              onClick={() => void handleBack()}
+
+              className="block w-full bg-transparent py-1 text-center text-sm font-normal text-muted underline underline-offset-4"
+
+            >
+
+              뒤로가기
+
+            </button>
+
+          </>
+
+        )}
       </div>
 
         </>

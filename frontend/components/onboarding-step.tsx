@@ -5,6 +5,14 @@ import { PhoneFrame } from "@/components/phone-frame";
 import { onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
 import { safeNavigate } from "@/lib/navigation";
 
+/** 설정에서 들어온 수정 화면: 위·아래 모두 네이비 primary(저장 / 뒤로) */
+export type OnboardingSettingsEditFooter = {
+  onSave: () => Promise<void> | void;
+  onBack: () => void;
+  savePending?: boolean;
+  saveDisabled?: boolean;
+};
+
 type OnboardingStepProps = {
   step: string;
   title: string;
@@ -14,13 +22,15 @@ type OnboardingStepProps = {
   children: React.ReactNode;
   prevHref?: string;
   prevLabel?: string;
-  nextHref: string;
-  nextLabel: string;
+  /** `settingsEditFooter`가 없을 때만 필수 */
+  nextHref?: string;
+  nextLabel?: string;
   /** plainHref: 현재 URL 쿼리를 붙이지 않고 href 그대로 이동(예: /login) */
   helperLink?: { href: string; label: string; plainHref?: boolean };
   postPrevLink?: { href: string; label: string; plainHref?: boolean };
   onNext?: () => Promise<void> | void;
   nextDisabled?: boolean;
+  settingsEditFooter?: OnboardingSettingsEditFooter;
 };
 
 function mergeSearchParams(href: string, currentParams: URLSearchParams) {
@@ -58,12 +68,13 @@ export function OnboardingStep({
   helperLink,
   postPrevLink,
   onNext,
-  nextDisabled = false
+  nextDisabled = false,
+  settingsEditFooter
 }: OnboardingStepProps) {
   const router = useRouter();
   const searchParams = useSearchParams() ?? new URLSearchParams();
   const resolvedPrevHref = prevHref ? mergeSearchParams(prevHref, searchParams) : undefined;
-  const resolvedNextHref = mergeSearchParams(nextHref, searchParams);
+  const resolvedNextHref = nextHref ? mergeSearchParams(nextHref, searchParams) : "";
   const resolvedHelperHref = helperLink
     ? helperLink.plainHref
       ? helperLink.href
@@ -86,6 +97,9 @@ export function OnboardingStep({
   };
 
   const handleNext = async () => {
+    if (settingsEditFooter || !nextHref || !nextLabel) {
+      return;
+    }
     if (nextDisabled) {
       return;
     }
@@ -116,6 +130,22 @@ export function OnboardingStep({
     >
       <div className="space-y-4">{children}</div>
       <div className="mt-8 space-y-3">
+        {settingsEditFooter ? (
+          <>
+            <button
+              type="button"
+              onClick={() => void settingsEditFooter!.onSave()}
+              disabled={Boolean(settingsEditFooter.saveDisabled || settingsEditFooter.savePending)}
+              className={`${onboardingPrimaryCtaClass} disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              {settingsEditFooter.savePending ? "저장 중..." : "저장하기"}
+            </button>
+            <button type="button" onClick={() => settingsEditFooter!.onBack()} className={onboardingPrimaryCtaClass}>
+              뒤로가기
+            </button>
+          </>
+        ) : (
+          <>
         <button
           type="button"
           onClick={() => void handleNext()}
@@ -124,6 +154,8 @@ export function OnboardingStep({
         >
           {nextLabel}
         </button>
+          </>
+        )}
         {helperLink && resolvedHelperHref ? (
           <button
             type="button"
@@ -155,3 +187,4 @@ export function OnboardingStep({
     </PhoneFrame>
   );
 }
+

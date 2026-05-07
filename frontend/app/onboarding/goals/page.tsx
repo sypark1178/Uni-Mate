@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { OnboardingStep } from "@/components/onboarding-step";
+import { mergeHrefWithSearchParams, safeNavigate } from "@/lib/navigation";
 import {
   getMajorsByUniversity,
   matchUniversityToDropdownKey,
@@ -147,10 +148,24 @@ function resolveRanksFromStoredGoals(sortedInput: GoalChoice[]): GoalRankState[]
 }
 
 export default function OnboardingGoalsPage() {
+  const router = useRouter();
   const searchParams = useSearchParams() ?? new URLSearchParams();
   const focus = Number(searchParams.get("focus") ?? "1");
   const returnTo = searchParams.get("returnTo");
   const isSettingsEditMode = Boolean(returnTo && returnTo.startsWith("/settings"));
+
+  const searchParamsWithoutReturnTo = useMemo(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("returnTo");
+    return next;
+  }, [searchParams]);
+
+  const settingsReturnHref = useMemo(() => {
+    if (!isSettingsEditMode || !returnTo) {
+      return null;
+    }
+    return mergeHrefWithSearchParams(returnTo, searchParamsWithoutReturnTo);
+  }, [isSettingsEditMode, returnTo, searchParamsWithoutReturnTo]);
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
   const hasSeededGoals = seededGoals.length > 0;
   const { goals, updateGoals, hydrated, flushGoalsToServer } = useGoals(seededGoals);
@@ -222,28 +237,55 @@ export default function OnboardingGoalsPage() {
     updateGoals(ranksToGoalChoices(next));
   };
 
+  const [goalSavePending, setGoalSavePending] = useState(false);
+
   const handleNext = async () => {
     await flushGoalsToServer(ranksToGoalChoices(goalRanks));
+  };
+
+  const handleSaveGoals = async () => {
+    if (!hydrated) {
+      return;
+    }
+    setGoalSavePending(true);
+    try {
+      await flushGoalsToServer(ranksToGoalChoices(goalRanks));
+    } catch {
+      window.alert("저장에 실패했어요. 네트워크를 확인한 뒤 다시 시도해 주세요.");
+    } finally {
+      setGoalSavePending(false);
+    }
+  };
+
+  const handleBackToSettings = () => {
+    if (!settingsReturnHref) {
+      return;
+    }
+    safeNavigate(router, settingsReturnHref);
   };
 
   return (
     <OnboardingStep
       step="3/3"
-      title={isSettingsEditMode ? "목표 설정 수정하기" : "목표를 설정해 주세요"}
+      title={isSettingsEditMode ? "목표 정보 수정하기" : "목표를 설정해 주세요"}
       subtitle="우선순위를 정리하면 바로 AI 분석·추천이 진행됩니다."
       showStepIndicator={!isSettingsEditMode}
-      prevHref={isSettingsEditMode ? undefined : "/onboarding/grades"}
-      postPrevLink={
-        isSettingsEditMode
-          ? undefined
-          : returnTo && returnTo.startsWith("/")
-            ? { href: returnTo, label: "호출한 메뉴로 돌아가기", plainHref: true }
-            : undefined
-      }
-      nextHref={isSettingsEditMode ? (returnTo ?? "/settings") : "/analysis/loading?source=goals"}
-      nextLabel={isSettingsEditMode ? "뒤로가기" : hydrated ? "AI 분석 시작" : "불러오는 중..."}
-      nextDisabled={!hydrated}
-      onNext={handleNext}
+      {...(isSettingsEditMode
+        ? {
+            settingsEditFooter: {
+              onSave: handleSaveGoals,
+              onBack: handleBackToSettings,
+              savePending: goalSavePending,
+              saveDisabled: !hydrated
+            }
+          }
+        : {
+            prevHref: "/onboarding/grades",
+            nextHref: "/analysis/loading?source=goals",
+            nextLabel: hydrated ? "AI 분석 시작" : "불러오는 중...",
+            nextDisabled: !hydrated,
+            onNext: handleNext
+          })}
     >
       <div className="grid grid-cols-3 gap-2">
         {onboardingTabs.map((label) => (
