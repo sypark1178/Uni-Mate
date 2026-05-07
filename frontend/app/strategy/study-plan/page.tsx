@@ -95,7 +95,7 @@ function studyPlanTasksFor(rec: Recommendation, slot: Slot): string[] {
 }
 
 export default function StrategyStudyPlanPage() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams]);
   const { goals } = useGoals(seededGoals);
   const recommendations = useMemo(() => buildStrategyRecommendations(goals), [goals]);

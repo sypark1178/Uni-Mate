@@ -30,7 +30,7 @@ const defaultState: VisibilityState = {
 };
 
 export default function SettingsPrivacyPage() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const settingsHref = mergeHrefWithSearchParams("/settings", searchParams);
   const [visibility, setVisibility] = useState<VisibilityState>(defaultState);
 

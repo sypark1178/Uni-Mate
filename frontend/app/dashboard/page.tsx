@@ -69,33 +69,33 @@ function getLatestEnglishMockGrade(store: ScoreMemoryStore): number | null {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const query = useSearchParams() ?? new URLSearchParams();
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [analysisNotice, setAnalysisNotice] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
   const [guestSaveType, setGuestSaveType] = useState<"email" | "kakao">("email");
   const [guestSaveId, setGuestSaveId] = useState("");
 
-  const isEmpty = searchParams.get("empty") === "1";
-  const analysisDone = searchParams.get("analysis") === "done";
+  const isEmpty = query.get("empty") === "1";
+  const analysisDone = query.get("analysis") === "done";
   const { studentProfile, hydrated: profileHydrated, flushProfileToServer } = useStudentProfile();
   const { store, summary: scoreSummary, flushStoreToServer } = useScoreRecords();
   const currentProfile = isEmpty ? emptyProfile : studentProfile;
   const currentMember = getCurrentMember();
   const isGuestSession = Boolean(currentMember?.userId?.startsWith("guest:"));
   const isLoggedInMember = Boolean(currentMember?.userId) && !isGuestSession;
-  const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
+  const seededGoals = useMemo(() => parseSeededGoals(query), [query.toString()]);
   const { goals, flushGoalsToServer } = useGoals(seededGoals);
   const goalAnalyses = useMemo(() => buildGoalAnalyses(goals), [goals]);
   const strategyRecommendations = useMemo(() => buildStrategyRecommendations(goals), [goals]);
   const primaryGoal = goals[0];
 
-  const currentSearch = searchParams.toString();
+  const currentSearch = query.toString();
   const dashboardCurrentHref = currentSearch ? `/dashboard?${currentSearch}` : "/dashboard";
-  const strategyHref = mergeHrefWithSearchParams("/strategy", searchParams);
-  const analysisLoadingHref = mergeHrefWithSearchParams("/analysis/loading?source=dashboard", searchParams);
-  const gradesReanalysisHref = mergeHrefWithSearchParams("/onboarding/grades", searchParams);
-  const simulationHref = mergeHrefWithSearchParams("/analysis/simulation", searchParams);
+  const strategyHref = mergeHrefWithSearchParams("/strategy", query);
+  const analysisLoadingHref = mergeHrefWithSearchParams("/analysis/loading?source=dashboard", query);
+  const gradesReanalysisHref = mergeHrefWithSearchParams("/onboarding/grades", query);
+  const simulationHref = mergeHrefWithSearchParams("/analysis/simulation", query);
   const goalsHref = useMemo(() => {
     const params = new URLSearchParams(currentSearch);
     // 홈에서 "수정"은 설정에서 편집하는 플로우로 통일한다.

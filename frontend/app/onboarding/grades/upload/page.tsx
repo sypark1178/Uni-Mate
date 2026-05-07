@@ -32,7 +32,7 @@ function isGradeTerm(value: string | null): value is GradeTerm {
 
 export default function GradeUploadPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const { store, registerUploads, flushStore } = useScoreRecords();
   const requestedTab = searchParams.get("tab");
   const requestedYear = searchParams.get("year");

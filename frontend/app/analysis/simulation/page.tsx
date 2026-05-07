@@ -11,7 +11,7 @@ import { buildGoalAnalyses, defaultGoals, parseSeededGoals } from "@/lib/plannin
 import { useGoals } from "@/lib/use-goals";
 
 function AnalysisSimulationPageInner() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams]);
   const { goals } = useGoals(seededGoals);
   const [selectedGoalIndex, setSelectedGoalIndex] = useState(0);

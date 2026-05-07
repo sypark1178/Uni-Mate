@@ -147,7 +147,7 @@ function resolveRanksFromStoredGoals(sortedInput: GoalChoice[]): GoalRankState[]
 }
 
 export default function OnboardingGoalsPage() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const focus = Number(searchParams.get("focus") ?? "1");
   const returnTo = searchParams.get("returnTo");
   const isSettingsEditMode = Boolean(returnTo && returnTo.startsWith("/settings"));

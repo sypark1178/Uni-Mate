@@ -22,7 +22,7 @@ export function SignupForm({
   subtitle = "분석 결과를 계속 보고 다시 이어볼 수 있도록 계정을 연결해 주세요."
 }: SignupFormProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const returnTo = searchParams.get("returnTo") ?? "/dashboard";
   const guestSaveType = searchParams.get("guestSaveType")?.trim() ?? "";
   const guestSaveId = searchParams.get("guestSaveId")?.trim() ?? "";

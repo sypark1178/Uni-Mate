@@ -180,7 +180,8 @@ export function buildStrategyRecommendations(goals: GoalChoice[]): Recommendatio
   return deduped.slice(0, 6);
 }
 
-export function parseSeededGoals(searchParams: URLSearchParams): GoalChoice[] {
+export function parseSeededGoals(searchParams: Pick<URLSearchParams, "get"> | null | undefined): GoalChoice[] {
+  if (!searchParams) return [];
   return [1, 2, 3]
     .map((index) => searchParams.get(`g${index}`))
     .filter((value): value is string => Boolean(value))

@@ -13,7 +13,7 @@ import { useGoals } from "@/lib/use-goals";
 import type { Recommendation } from "@/lib/types";
 
 export default function AnalysisPage() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const [selected, setSelected] = useState<Recommendation | null>(null);
   const [universitySearch, setUniversitySearch] = useState("");
   const [majorSearch, setMajorSearch] = useState("");

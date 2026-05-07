@@ -201,7 +201,7 @@ function buildRecommendedSubjects(university: string, majorText: string, store: 
 }
 
 function StrategySubjectsPageInner() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams.toString()]);
   const { goals } = useGoals(seededGoals);
   const { store, summary } = useScoreRecords();

@@ -55,7 +55,7 @@ function getSchoolKeywordByGrade(gradeLabel: string): "초등학교" | "중학�
 
 export default function OnboardingBasicPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const returnTo = searchParams.get("returnTo");
   const isSettingsEditMode = Boolean(returnTo && returnTo.startsWith("/settings"));
   const demoAppliedRef = useRef(false);

@@ -24,7 +24,7 @@ function keywordGapLine(majorRaw: string): string {
 }
 
 function GapAnalysisViewInner() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams]);
   const { goals } = useGoals(seededGoals);
   const { summary } = useScoreRecords();

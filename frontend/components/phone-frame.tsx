@@ -140,7 +140,7 @@ function PhoneFrameLayout({
 }
 
 function PhoneFrameWithSearchParams(props: PhoneFrameProps) {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const wireframe =
     Boolean(props.wireframe) ||
     searchParams.get("wf") === "1" ||

@@ -8,19 +8,16 @@ import { getCurrentMember } from "@/lib/member-store";
 
 export default function AnalysisLoadingPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const query = useSearchParams() ?? new URLSearchParams();
   const [progress, setProgress] = useState(0);
   const [matchingCount, setMatchingCount] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
-  const source = searchParams.get("source") ?? "goals";
+  const source = query.get("source") ?? "goals";
   const currentUserKey = useMemo(() => getCurrentMember()?.userId?.trim() || "local-user", []);
   const analysisStorageKey = useMemo(() => `uni-mate-analysis-result:${currentUserKey}`, [currentUserKey]);
   const totalScreenings = 3427;
 
-  const dashboardHref = useMemo(() => {
-    const mergedHref = mergeHrefWithSearchParams("/dashboard?analysis=done", searchParams);
-    return mergedHref;
-  }, [searchParams]);
+  const dashboardHref = useMemo(() => mergeHrefWithSearchParams("/dashboard?analysis=done", query), [query]);
 
   useEffect(() => {
     const startedAt = Date.now();

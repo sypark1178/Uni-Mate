@@ -81,7 +81,7 @@ const CHART_MIN_VALUE = 0;
 const CHART_MAX_VALUE = 100;
 
 export default function ExecutionPage() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const seededGoals = parseSeededGoals(searchParams);
   useGoals(seededGoals);
   const [mode, setMode] = useState<"week" | "month">("week");

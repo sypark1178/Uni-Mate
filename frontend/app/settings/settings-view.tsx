@@ -26,7 +26,7 @@ const wideEditButtonClass = `${editButtonClass} w-full`;
 const AVATAR_INPUT_ID = "settings-avatar-file";
 
 export function SettingsView() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const seededGoals = useMemo(() => parseSeededGoals(searchParams), [searchParams]);
   const { goals, hydrated: goalsHydrated, flushGoalsToServer } = useGoals(seededGoals);
   const { summary, hydrated: scoresHydrated, flushStoreToServer } = useScoreRecords();

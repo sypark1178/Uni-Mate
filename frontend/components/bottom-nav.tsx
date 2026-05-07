@@ -95,8 +95,8 @@ function BottomNavFallback() {
 }
 
 function BottomNavInner() {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const wireframe =
     searchParams.get("wf") === "1" || searchParams.get("wireframe") === "1";
   const navClass = wireframe ? navClassWireframe : navClassFixed;

@@ -35,8 +35,8 @@ function SectionTabsFallback({ tabs }: SectionTabsProps) {
 }
 
 function SectionTabsInner({ tabs }: SectionTabsProps) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams() ?? new URLSearchParams();
 
   return (
     <div className="mb-4 flex gap-2 overflow-x-auto pr-2">

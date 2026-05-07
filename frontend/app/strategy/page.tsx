@@ -14,7 +14,7 @@ import { useGoals } from "@/lib/use-goals";
 import type { Recommendation } from "@/lib/types";
 
 export default function StrategyPage() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const [selected, setSelected] = useState<Recommendation | null>(null);
   const activeFilter = (searchParams.get("filter") as "전체" | "도전" | "적정" | "안정" | null) ?? "전체";
   const seededGoals = parseSeededGoals(searchParams);

@@ -737,7 +737,7 @@ export default function OnboardingGradesPage() {
 
   const router = useRouter();
 
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams() ?? new URLSearchParams();
   const returnTo = searchParams.get("returnTo");
 
   const {
