@@ -8,6 +8,7 @@ frontend/.next-dev.stderr.log
 frontend/frontend-dev.log
 frontend/tsconfig.tsbuildinfo
 frontend/.env.local
+backend/.env
 
 # Local databases and Python caches
 # backend/data/
