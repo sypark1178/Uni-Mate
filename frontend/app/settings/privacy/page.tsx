@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PhoneFrame } from "@/components/phone-frame";
 
 type PrivacySettings = {
@@ -71,6 +72,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 }
 
 export default function SettingsPrivacyPage() {
+  const router = useRouter();
   const [settings, setSettings] = useState<PrivacySettings>(defaultSettings);
   const [connect, setConnect] = useState<ConnectState>(() => ({ code: generateConnectCode(), issuedAt: Date.now() }));
   const [copied, setCopied] = useState(false);
@@ -122,7 +124,7 @@ export default function SettingsPrivacyPage() {
   const saveAll = () => {
     window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
     window.localStorage.setItem(connectStorageKey, JSON.stringify(connect));
-    window.alert("공개 설정이 저장됐어요.");
+    router.push("/settings");
   };
 
   const timeLeft = useMemo(() => formatTimeLeftFrom(Date.now(), connect.issuedAt), [connect.issuedAt]);
@@ -184,13 +186,6 @@ export default function SettingsPrivacyPage() {
           className="mt-2 box-border flex w-full min-w-0 items-center justify-center rounded-xl border border-navy bg-navy px-4 py-3 text-sm font-semibold text-white"
         >
           저장하기
-        </button>
-        <button
-          type="button"
-          onClick={() => window.history.back()}
-          className="block w-full bg-transparent py-1 text-center text-sm font-normal text-muted underline underline-offset-4"
-        >
-          뒤로가기
         </button>
       </div>
     </PhoneFrame>

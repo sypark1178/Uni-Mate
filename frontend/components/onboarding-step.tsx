@@ -5,10 +5,9 @@ import { PhoneFrame } from "@/components/phone-frame";
 import { onboardingPrimaryCtaClass } from "@/lib/onboarding-buttons";
 import { safeNavigate } from "@/lib/navigation";
 
-/** 설정에서 들어온 수정 화면: 위·아래 모두 네이비 primary(저장 / 뒤로) */
+/** 설정에서 들어온 수정 화면: 저장하기 한 개만 노출 */
 export type OnboardingSettingsEditFooter = {
   onSave: () => Promise<void> | void;
-  onBack: () => void;
   savePending?: boolean;
   saveDisabled?: boolean;
 };
@@ -131,19 +130,14 @@ export function OnboardingStep({
       <div className="space-y-4">{children}</div>
       <div className="mt-8 space-y-3">
         {settingsEditFooter ? (
-          <>
-            <button
-              type="button"
-              onClick={() => void settingsEditFooter!.onSave()}
-              disabled={Boolean(settingsEditFooter.saveDisabled || settingsEditFooter.savePending)}
-              className={`${onboardingPrimaryCtaClass} disabled:cursor-not-allowed disabled:opacity-60`}
-            >
-              {settingsEditFooter.savePending ? "저장 중..." : "저장하기"}
-            </button>
-            <button type="button" onClick={() => settingsEditFooter!.onBack()} className={onboardingPrimaryCtaClass}>
-              뒤로가기
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => void settingsEditFooter!.onSave()}
+            disabled={Boolean(settingsEditFooter.saveDisabled || settingsEditFooter.savePending)}
+            className={`${onboardingPrimaryCtaClass} disabled:cursor-not-allowed disabled:opacity-60`}
+          >
+            {settingsEditFooter.savePending ? "저장 중..." : "저장하기"}
+          </button>
         ) : (
           <>
         <button

@@ -1386,7 +1386,7 @@ export default function OnboardingGradesPage() {
 
 
 
-  const handleSaveGrades = async (options?: { closeSubjectModalOnSuccess?: boolean }) => {
+  const handleSaveGrades = async (options?: { closeSubjectModalOnSuccess?: boolean; navigateToSettings?: boolean }) => {
 
     setGradeSavePending(true);
 
@@ -1404,6 +1404,12 @@ export default function OnboardingGradesPage() {
       if (options?.closeSubjectModalOnSuccess) {
 
         setSubjectManageModalOpen(false);
+
+      }
+
+      if (options?.navigateToSettings && settingsReturnHref) {
+
+        safeNavigate(router, settingsReturnHref);
 
       }
 
@@ -2217,31 +2223,21 @@ export default function OnboardingGradesPage() {
 
         {isSettingsEditMode ? (
 
-          <>
+          <button
 
-            <button
+            type="button"
 
-              type="button"
+            onClick={() => void handleSaveGrades({ navigateToSettings: true })}
 
-              onClick={() => void handleSaveGrades()}
+            disabled={gradeSavePending}
 
-              disabled={gradeSavePending}
+            className={`${onboardingPrimaryCtaClass} disabled:cursor-not-allowed disabled:opacity-60`}
 
-              className={`${onboardingPrimaryCtaClass} disabled:cursor-not-allowed disabled:opacity-60`}
+          >
 
-            >
+            {gradeSavePending ? "저장 중..." : "저장하기"}
 
-              {gradeSavePending ? "저장 중..." : "저장하기"}
-
-            </button>
-
-            <button type="button" onClick={() => void handleBack()} className={onboardingPrimaryCtaClass}>
-
-              뒤로가기
-
-            </button>
-
-          </>
+          </button>
 
         ) : (
 

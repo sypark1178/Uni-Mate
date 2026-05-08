@@ -65,7 +65,8 @@ export default function OnboardingBasicPage() {
     () => Object.keys(regionDistrictSchoolMap).sort((left, right) => left.localeCompare(right, "ko-KR")),
     []
   );
-  const { studentProfile, updateField, hydrated, setStudentProfile } = useStudentProfile();
+  const { studentProfile, updateField, hydrated, setStudentProfile, flushProfileToServer } = useStudentProfile();
+  const [profileSavePending, setProfileSavePending] = useState(false);
 
   const selectedGrade = studentProfile.gradeLabel || "";
   const selectedRegion = studentProfile.region || "";
@@ -248,6 +249,21 @@ export default function OnboardingBasicPage() {
     updateField("schoolName", "");
   };
 
+  const handleSaveProfile = async () => {
+    if (!hydrated) {
+      return;
+    }
+    setProfileSavePending(true);
+    try {
+      await flushProfileToServer();
+      router.push(returnTo ?? "/settings");
+    } catch {
+      window.alert("저장에 실패했어요. 네트워크를 확인한 뒤 다시 시도해 주세요.");
+    } finally {
+      setProfileSavePending(false);
+    }
+  };
+
   return (
     <OnboardingStep
       step="1/3"
@@ -256,9 +272,19 @@ export default function OnboardingBasicPage() {
       subtitleClassName="text-xs leading-5 whitespace-nowrap"
       showStepIndicator={!isSettingsEditMode}
       helperLink={isSettingsEditMode ? undefined : { href: "/login", label: "뒤로가기", plainHref: true }}
-      nextHref={isSettingsEditMode ? (returnTo ?? "/settings") : "/onboarding/grades"}
-      nextLabel={isSettingsEditMode ? "뒤로가기" : hydrated ? "2단계 성적 입력 →" : "불러오는 중..."}
-      nextDisabled={!hydrated}
+      {...(isSettingsEditMode
+        ? {
+            settingsEditFooter: {
+              onSave: handleSaveProfile,
+              savePending: profileSavePending,
+              saveDisabled: !hydrated
+            }
+          }
+        : {
+            nextHref: "/onboarding/grades",
+            nextLabel: hydrated ? "2단계 성적 입력 →" : "불러오는 중...",
+            nextDisabled: !hydrated
+          })}
     >
       {!hydrated ? (
         <div className="rounded-[22px] border border-line bg-white p-5 text-sm leading-6 text-muted">

@@ -23,11 +23,10 @@ type GoalRankState = {
   note?: string | null;
 };
 
-const initialUniversities = universityOptions.slice(0, 3);
-
 function normalizeGoalRanks(input: GoalRankState[]): GoalRankState[] {
   return input.map((item) => {
-    const university = matchUniversityToDropdownKey(item.university);
+    const rawUniversity = (item.university ?? "").trim();
+    const university = rawUniversity ? matchUniversityToDropdownKey(rawUniversity) : "";
     const major = item.major ?? "";
     return {
       university,
@@ -41,7 +40,7 @@ function normalizeGoalRanks(input: GoalRankState[]): GoalRankState[] {
 
 function emptyRankTemplate(): GoalRankState {
   return {
-    university: universityOptions[0] ?? "",
+    university: "",
     major: "",
     strategyType: null,
     status: null,
@@ -64,10 +63,9 @@ function goalChoiceToRank(goal: GoalChoice): GoalRankState {
   };
 }
 
-function appendEmptyRank(slotIndex: number): GoalRankState {
-  const university = initialUniversities[slotIndex] ?? universityOptions[slotIndex] ?? universityOptions[0] ?? "";
+function appendEmptyRank(_slotIndex: number): GoalRankState {
   return {
-    university,
+    university: "",
     major: "",
     strategyType: null,
     status: null,
@@ -140,11 +138,12 @@ function resolveRanksFromStoredGoals(sortedInput: GoalChoice[]): GoalRankState[]
       break;
     }
   }
-  const last = n[n.length - 1];
-  if (last && isRankComplete(last) && n.length < 3 && n.length === 1 && sorted.length === 1) {
-    return normalizeGoalRanks([...n, appendEmptyRank(n.length)]);
+  const trimmed = n.slice(0, 3);
+  const last = trimmed[trimmed.length - 1];
+  if (last && isRankComplete(last) && trimmed.length < 3) {
+    return normalizeGoalRanks([...trimmed, appendEmptyRank(trimmed.length)]);
   }
-  return normalizeGoalRanks(n.slice(0, 3));
+  return normalizeGoalRanks(trimmed);
 }
 
 export default function OnboardingGoalsPage() {
@@ -250,18 +249,14 @@ export default function OnboardingGoalsPage() {
     setGoalSavePending(true);
     try {
       await flushGoalsToServer(ranksToGoalChoices(goalRanks));
+      if (settingsReturnHref) {
+        safeNavigate(router, settingsReturnHref);
+      }
     } catch {
       window.alert("저장에 실패했어요. 네트워크를 확인한 뒤 다시 시도해 주세요.");
     } finally {
       setGoalSavePending(false);
     }
-  };
-
-  const handleBackToSettings = () => {
-    if (!settingsReturnHref) {
-      return;
-    }
-    safeNavigate(router, settingsReturnHref);
   };
 
   return (
@@ -274,7 +269,6 @@ export default function OnboardingGoalsPage() {
         ? {
             settingsEditFooter: {
               onSave: handleSaveGoals,
-              onBack: handleBackToSettings,
               savePending: goalSavePending,
               saveDisabled: !hydrated
             }
@@ -327,10 +321,14 @@ export default function OnboardingGoalsPage() {
             </div>
             <div className="space-y-3">
               <select
+                required
                 className={onboardingSelectFieldClass}
                 value={goalRank.university}
                 onChange={(event) => handleUniversityChange(index, event.target.value)}
               >
+                <option value="" disabled>
+                  학교를 선택해 주세요
+                </option>
                 {!universityOptions.includes(goalRank.university) && goalRank.university ? (
                   <option key="__saved-university" value={goalRank.university}>
                     {goalRank.university}
