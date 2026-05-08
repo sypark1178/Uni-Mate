@@ -54,6 +54,11 @@ def calc_weighted_avg(grades_by_year, subject):
         return None
     return total_score / total_weight
 
+def calc_simple_avg(grades_list):
+    if not grades_list:
+        return None
+    return sum(grades_list) / len(grades_list)
+
 def score_to_grade(total_score):
     for low, high, grade in RECORD_GRADE_TABLE:
         if low <= total_score <= high:
@@ -67,6 +72,78 @@ def calc_pass_prob(composite, cutoff_50, worst_grade=None):
         return 0.0
     prob = 1 - (composite - cutoff_50) / (worst_grade - cutoff_50)
     return round(max(0.0, min(0.90, prob)), 3)
+
+def get_weighted_grade(student_id: int, cur):
+    cur.execute("""
+        SELECT school_year, subject_name, grade
+        FROM TB_ACADEMIC_SCORE
+        WHERE student_id = ?
+        AND subject_name IN ('국어', '수학', '영어',
+            '생활과윤리', '윤리와사상', '한국지리', '세계지리',
+            '동아시아사', '세계사', '경제', '정치와법', '사회문화', '사회·문화')
+    """, (student_id,))
+    rows = cur.fetchall()
+
+    grades_by_year = {}
+    simple_grades = {}
+
+    for row in rows:
+        year = row["school_year"]
+        subject = row["subject_name"]
+        try:
+            grade = float(row["grade"])
+        except:
+            continue
+
+        if year is None:
+            if subject not in simple_grades:
+                simple_grades[subject] = []
+            simple_grades[subject].append(grade)
+        else:
+            if year not in grades_by_year:
+                grades_by_year[year] = {}
+            if subject not in grades_by_year[year]:
+                grades_by_year[year][subject] = []
+            grades_by_year[year][subject].append(grade)
+
+    sattam_key = None
+    all_subjects = {}
+    for year_data in grades_by_year.values():
+        for subj in year_data:
+            if subj not in all_subjects:
+                all_subjects[subj] = True
+    for subj in simple_grades:
+        if subj not in all_subjects:
+            all_subjects[subj] = True
+
+    for subj in all_subjects:
+        if subj in SATTAM_SUBJECTS:
+            sattam_key = subj
+            break
+
+    def get_grade(subject):
+        if grades_by_year:
+            return calc_weighted_avg(grades_by_year, subject)
+        elif subject in simple_grades:
+            return calc_simple_avg(simple_grades[subject])
+        return None
+
+    korean = get_grade('국어')
+    math = get_grade('수학')
+    english = get_grade('영어')
+    sattam = get_grade(sattam_key) if sattam_key else None
+
+    missing = []
+    if korean is None: missing.append('국어')
+    if math is None: missing.append('수학')
+    if english is None: missing.append('영어')
+    if sattam is None: missing.append('사탐')
+
+    if missing:
+        return None, missing, None
+
+    weighted = round(korean * 0.25 + math * 0.30 + english * 0.20 + sattam * 0.25, 2)
+    return weighted, [], sattam_key
 
 @app.get("/api/recommendations/{student_id}")
 def get_recommendations(student_id: int):
@@ -138,58 +215,17 @@ def get_evidence(admission_id: int):
 def get_smart_recommendations(student_id: int):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT school_year, subject_name, grade
-        FROM TB_ACADEMIC_SCORE
-        WHERE student_id = ?
-        AND subject_name IN ('국어', '수학', '영어',
-            '생활과윤리', '윤리와사상', '한국지리', '세계지리',
-            '동아시아사', '세계사', '경제', '정치와법', '사회문화', '사회·문화')
-    """, (student_id,))
-    rows = cur.fetchall()
-    grades_by_year = {}
-    for row in rows:
-        year = row["school_year"]
-        subject = row["subject_name"]
-        try:
-            grade = float(row["grade"])
-        except:
-            continue
-        if year not in grades_by_year:
-            grades_by_year[year] = {}
-        if subject not in grades_by_year[year]:
-            grades_by_year[year][subject] = []
-        grades_by_year[year][subject].append(grade)
 
-    sattam_key = None
-    for year_data in grades_by_year.values():
-        for subj in year_data:
-            if subj in SATTAM_SUBJECTS:
-                sattam_key = subj
-                break
-        if sattam_key:
-            break
-
-    korean = calc_weighted_avg(grades_by_year, '국어')
-    math = calc_weighted_avg(grades_by_year, '수학')
-    english = calc_weighted_avg(grades_by_year, '영어')
-    sattam = calc_weighted_avg(grades_by_year, sattam_key) if sattam_key else None
-
-    missing = []
-    if korean is None: missing.append('국어')
-    if math is None: missing.append('수학')
-    if english is None: missing.append('영어')
-    if sattam is None: missing.append('사탐')
+    weighted, missing, sattam_key = get_weighted_grade(student_id, cur)
 
     if missing:
         conn.close()
         return {"error": f"내신 환산 불가 — {', '.join(missing)} 데이터 없음"}
 
-    weighted = round(korean * 0.25 + math * 0.30 + english * 0.20 + sattam * 0.25, 2)
-
     cur.execute("""
         SELECT at.admission_id, u.univ_name, d.dept_name,
-               at.admission_method, ac.cutoff_50, ac.worst_grade, ac.competition_ratio
+               at.admission_method, at.csat_required,
+               ac.cutoff_50, ac.worst_grade, ac.competition_ratio
         FROM TB_ADMISSION_TYPE at
         JOIN TB_DEPARTMENT d ON at.dept_id = d.dept_id
         JOIN TB_UNIVERSITY u ON d.univ_id = u.univ_id
@@ -216,6 +252,7 @@ def get_smart_recommendations(student_id: int):
             "univ_name": row["univ_name"],
             "dept_name": row["dept_name"],
             "admission_method": val(row["admission_method"]),
+            "csat_required": 1 if row["csat_required"] else 0,
             "cutoff_50": cutoff,
             "competition_ratio": val(row["competition_ratio"]),
             "strategy_type": strategy,
@@ -232,51 +269,12 @@ def get_full_analysis(student_id: int, admission_id: int):
     conn = get_db()
     cur = conn.cursor()
 
-    # 1. 내신 환산
-    cur.execute("""
-        SELECT school_year, subject_name, grade
-        FROM TB_ACADEMIC_SCORE
-        WHERE student_id = ?
-        AND subject_name IN ('국어', '수학', '영어',
-            '생활과윤리', '윤리와사상', '한국지리', '세계지리',
-            '동아시아사', '세계사', '경제', '정치와법', '사회문화', '사회·문화')
-    """, (student_id,))
-    rows = cur.fetchall()
-    grades_by_year = {}
-    for row in rows:
-        year = row["school_year"]
-        subject = row["subject_name"]
-        try:
-            grade = float(row["grade"])
-        except:
-            continue
-        if year not in grades_by_year:
-            grades_by_year[year] = {}
-        if subject not in grades_by_year[year]:
-            grades_by_year[year][subject] = []
-        grades_by_year[year][subject].append(grade)
+    weighted, missing, _ = get_weighted_grade(student_id, cur)
 
-    sattam_key = None
-    for year_data in grades_by_year.values():
-        for subj in year_data:
-            if subj in SATTAM_SUBJECTS:
-                sattam_key = subj
-                break
-        if sattam_key:
-            break
-
-    korean = calc_weighted_avg(grades_by_year, '국어')
-    math = calc_weighted_avg(grades_by_year, '수학')
-    english = calc_weighted_avg(grades_by_year, '영어')
-    sattam = calc_weighted_avg(grades_by_year, sattam_key) if sattam_key else None
-
-    if None in [korean, math, english, sattam]:
+    if missing:
         conn.close()
         return {"error": "내신 환산 불가"}
 
-    weighted_grade = round(korean * 0.25 + math * 0.30 + english * 0.20 + sattam * 0.25, 2)
-
-    # 2. 생기부 텍스트 수집
     cur.execute("""
         SELECT record_type, content_body
         FROM TB_STUDENT_RECORD
@@ -284,7 +282,6 @@ def get_full_analysis(student_id: int, admission_id: int):
     """, (student_id,))
     records = cur.fetchall()
 
-    # 3. 전형 입결 데이터
     cur.execute("""
         SELECT u.univ_name, d.dept_name, at.admission_method,
                ac.cutoff_50, ac.worst_grade, ac.source_doc
@@ -300,11 +297,10 @@ def get_full_analysis(student_id: int, admission_id: int):
     if not adm:
         return {"error": "전형 데이터 없음"}
 
-    # 4. GPT로 생기부 4대 항목 채점
     record_text = "\n".join([
-    f"[{r['record_type']}] {r['content_body'][:200]}" 
-    for r in records[:10]
-])
+        f"[{r['record_type']}] {r['content_body'][:200]}"
+        for r in records[:10]
+    ])
 
     prompt = f"""
 아래는 경영학과 지원 학생의 생활기록부 내용입니다.
@@ -339,14 +335,10 @@ def get_full_analysis(student_id: int, admission_id: int):
     except Exception as e:
         return {"error": f"GPT 분석 실패: {str(e)}"}
 
-    # 5. 생기부 총점 → 등급
     total_score = major_fit + depth + continuity + leadership + bonus
     record_grade = score_to_grade(total_score)
+    composite = round(weighted * 0.7 + record_grade * 0.3, 2)
 
-    # 6. 종합등급 = 내신 70% + 생기부 30%
-    composite = round(weighted_grade * 0.7 + record_grade * 0.3, 2)
-
-    # 7. 합격가능성 산출
     cutoff_50 = adm["cutoff_50"]
     worst_grade = adm["worst_grade"]
     if cutoff_50 is None:
@@ -354,8 +346,6 @@ def get_full_analysis(student_id: int, admission_id: int):
 
     pass_prob = calc_pass_prob(composite, cutoff_50, worst_grade)
     pass_pct = round(pass_prob * 100, 1)
-
-    # 8. 요약 문장 생성
     summary = f"경영학과 기준 최근 모집요강과 학생부 반영 비율, 최저 기준을 근거로 {pass_pct}%의 합격 가능성을 산출했습니다."
 
     return {
@@ -363,7 +353,7 @@ def get_full_analysis(student_id: int, admission_id: int):
         "admission_id": admission_id,
         "univ_name": adm["univ_name"],
         "dept_name": adm["dept_name"],
-        "weighted_grade": weighted_grade,
+        "weighted_grade": weighted,
         "record_scores": {
             "전공적합성": major_fit,
             "활동깊이": depth,
@@ -378,3 +368,66 @@ def get_full_analysis(student_id: int, admission_id: int):
         "summary": summary,
         "source_doc": val(adm["source_doc"])
     }
+
+@app.get("/api/search-admissions")
+def search_admissions(
+    univ_name: str = "",
+    dept_name: str = "",
+    filter_type: str = "학종"
+):
+    conn = get_db()
+    cur = conn.cursor()
+
+    query = """
+        SELECT
+            at.admission_id,
+            u.univ_name,
+            d.dept_name,
+            at.admission_name,
+            at.admission_method,
+            at.csat_required,
+            ac.cutoff_50,
+            ac.competition_ratio
+        FROM TB_ADMISSION_TYPE at
+        JOIN TB_DEPARTMENT d ON at.dept_id = d.dept_id
+        JOIN TB_UNIVERSITY u ON d.univ_id = u.univ_id
+        LEFT JOIN TB_ADMISSION_CUTOFF ac ON at.admission_id = ac.admission_id
+        WHERE ac.cutoff_50 IS NOT NULL
+    """
+    params = []
+
+    if univ_name:
+        query += " AND u.univ_name LIKE ?"
+        params.append(f"%{univ_name}%")
+    if dept_name:
+        query += " AND d.dept_name LIKE ?"
+        params.append(f"%{dept_name}%")
+
+    if filter_type == "학종":
+        query += " AND (at.admission_method LIKE '%서류%' OR at.admission_name LIKE '%학종%' OR at.admission_name LIKE '%종합%')"
+    elif filter_type == "교과":
+        query += " AND (at.admission_method LIKE '%교과%' OR at.admission_name LIKE '%교과%')"
+    elif filter_type == "논술":
+        query += " AND (at.admission_method LIKE '%논술%' OR at.admission_name LIKE '%논술%')"
+    elif filter_type == "수능최저 없음":
+        query += " AND (at.csat_required = 0 OR at.csat_required IS NULL)"
+
+    query += " ORDER BY ac.cutoff_50 ASC LIMIT 20"
+
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    conn.close()
+
+    return [
+        {
+            "admission_id": row["admission_id"],
+            "univ_name": row["univ_name"],
+            "dept_name": row["dept_name"],
+            "admission_name": val(row["admission_name"]),
+            "admission_method": val(row["admission_method"]),
+            "csat_required": row["csat_required"],
+            "cutoff_50": val(row["cutoff_50"]),
+            "competition_ratio": val(row["competition_ratio"]),
+        }
+        for row in rows
+    ]

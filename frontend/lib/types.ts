@@ -16,6 +16,7 @@ export type Recommendation = {
   fitScore: number;
   notes: string;
   evidence: Evidence;
+  admissionId?: number;
 };
 
 export type ChecklistItem = {
@@ -84,7 +85,6 @@ export type UploadedRecordFile = {
   year: GradeYear;
   term: GradeTerm;
   uploadedAt: string;
-  /** 생기부 탭: TB_STUDENT_RECORD (학년·학기·기록유형)과 동일 키로 필터 */
   studentSchoolYear?: StudentRecordSchoolYear;
   studentSemester?: StudentRecordSemester;
   studentRecordType?: StudentRecordType;
@@ -117,7 +117,6 @@ export type ScoreMemoryStore = {
   selectedStudentSemester: StudentRecordSemester;
   selectedStudentRecordType: StudentRecordType;
   updatedAt: string;
-  /** 성적 스키마 마이그레이션 (예: 고정 사탐·과탐 제거) */
   scoreSchemaVersion?: number;
 };
 
